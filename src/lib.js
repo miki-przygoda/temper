@@ -506,13 +506,17 @@ function acceptancePrompt(group, behaviours, args) {
   ]);
 }
 
-function greenPrompt(failing, round, args) {
+// markedToo: some acceptance groups ran in an earlier run, so their failures are known only from the repo.
+function greenPrompt(failing, round, args, markedToo = false) {
   const list = failing
     .map((f) => (typeof f === 'string' ? `- ${f}` : `- ${f.id}: ${f.observed}`))
     .join('\n');
   return withRules(args, [
     `You run to-green round ${round} of at most 2 for epic ${args.epic}, on \`${args.branch}\`. The spec is ${args.spec}; the behaviour spec is ${epicDir(args.epic)}/behaviour.md.`,
-    `The failing behaviours:\n${list}`,
+    `The failing behaviours:\n${list || '- (none listed)'}`,
+    markedToo
+      ? 'Some acceptance groups ran in an earlier run, so their failures are not listed: every test still marked `acceptance-failing: <id>` in the repo is a failing behaviour too.'
+      : '',
     'Each failing behaviour is one of:\n' +
       '- **the product is wrong:** the smallest fix;\n' +
       '- **the test is wrong:** correct it, citing the spec line;\n' +

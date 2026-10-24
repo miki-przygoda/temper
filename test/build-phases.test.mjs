@@ -164,7 +164,7 @@ test('done acceptance groups are skipped', async () => {
     args: buildArgs({ done: ['a', 'b', 'checkpoint', 'behaviour-spec', 'acceptance:g1'], behaviour: GROUPS }),
     respond: responder(),
   });
-  assert.deepEqual(labels(calls), ['acceptance:g2']);
+  assert.deepEqual(labels(calls).filter((l) => l.startsWith('acceptance:')), ['acceptance:g2']);
 });
 
 test('behaviour-spec done without args.behaviour is blocked', async () => {
@@ -201,4 +201,41 @@ test('a phase agent that returns nothing is blocked, never done (Review Focus 1)
     assert.deepEqual(result.blocked, [{ id: label, reason: 'agent returned nothing' }], label);
     assert.equal(labels(calls).at(-1), label, `nothing runs after ${label}`);
   }
+});
+
+// CONTROL-FLOW-1: a resume whose acceptance groups are in args.done doesn't know their failures,
+// so to-green still runs and takes every test still marked acceptance-failing.
+test('a resume with its acceptance groups done still runs to-green over the marked failing tests', async () => {
+  const { result, calls } = await runWorkflow(WF, {
+    args: buildArgs({ done: ['a', 'b', 'checkpoint', 'behaviour-spec', 'acceptance:g1', 'acceptance:g2'], behaviour: GROUPS }),
+    respond: responder({ 'green:1': { fixed: ['G1-01'], corrected: [], questions: [], still_failing: [] } }),
+  });
+  assert.deepEqual(labels(calls), ['green:1']);
+  assert.match(calls[0].prompt, /acceptance-failing: <id>/);
+  assert.match(calls[0].prompt, /earlier run/);
+  assert.equal(result.status, 'mvp');
+  assert.deepEqual(result.green, { rounds: 1, fixed: ['G1-01'], corrected: [] });
+});
+
+test('a resume with one acceptance group done sends the live failures and the marked ones to to-green', async () => {
+  const stuck = { fixed: [], corrected: [], questions: [], still_failing: ['G1-01'] };
+  const { result, calls } = await runWorkflow(WF, {
+    args: buildArgs({ done: ['a', 'b', 'checkpoint', 'behaviour-spec', 'acceptance:g1'], behaviour: GROUPS }),
+    respond: responder({
+      'acceptance:g2': { group: 'g2', passing: [], failing: [{ id: 'G2-01', observed: 'exit 1' }], untestable: [], commit: 'c' },
+      'green:1': stuck,
+      'green:2': stuck,
+    }),
+  });
+  assert.deepEqual(labels(calls), ['acceptance:g2', 'green:1', 'green:2']);
+  const first = calls.find((c) => c.opts.label === 'green:1');
+  assert.match(first.prompt, /G2-01/);
+  assert.match(first.prompt, /acceptance-failing: <id>/);
+  assert.match(calls.find((c) => c.opts.label === 'green:2').prompt, /G1-01/);
+  assert.deepEqual(result.questions, [{ id: 'G1-01', question: 'still failing after 2 rounds' }]);
+});
+
+test('a run that ran every acceptance group itself does not ask to-green for marked tests', async () => {
+  const { calls } = await runWorkflow(WF, { args: buildArgs(), respond: responder(g1Fails) });
+  assert.doesNotMatch(calls.find((c) => c.opts.label === 'green:1').prompt, /earlier run/);
 });

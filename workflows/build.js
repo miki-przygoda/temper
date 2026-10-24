@@ -512,13 +512,17 @@ function acceptancePrompt(group, behaviours, args) {
   ]);
 }
 
-function greenPrompt(failing, round, args) {
+// markedToo: some acceptance groups ran in an earlier run, so their failures are known only from the repo.
+function greenPrompt(failing, round, args, markedToo = false) {
   const list = failing
     .map((f) => (typeof f === 'string' ? `- ${f}` : `- ${f.id}: ${f.observed}`))
     .join('\n');
   return withRules(args, [
     `You run to-green round ${round} of at most 2 for epic ${args.epic}, on \`${args.branch}\`. The spec is ${args.spec}; the behaviour spec is ${epicDir(args.epic)}/behaviour.md.`,
-    `The failing behaviours:\n${list}`,
+    `The failing behaviours:\n${list || '- (none listed)'}`,
+    markedToo
+      ? 'Some acceptance groups ran in an earlier run, so their failures are not listed: every test still marked `acceptance-failing: <id>` in the repo is a failing behaviour too.'
+      : '',
     'Each failing behaviour is one of:\n' +
       '- **the product is wrong:** the smallest fix;\n' +
       '- **the test is wrong:** correct it, citing the spec line;\n' +
@@ -753,13 +757,14 @@ async function runBehaviourSpec(doneNow) {
 }
 
 // One agent per behaviour group, in order. Returns {blocked} or {passing, failing, untestable}
-// over the groups run now; failing is [{id, observed}].
+// over the groups run now; failing is [{id, observed}]. earlier is true when a group was done in an earlier run.
 async function runAcceptance(groups, doneNow) {
-  const out = { passing: 0, failing: [], untestable: [] };
+  const out = { passing: 0, failing: [], untestable: [], earlier: false };
   for (const group of args.behaviour_groups) {
     const id = `acceptance:${group.key}`;
     if (isDone(id)) {
       log(`${id}: already done`);
+      out.earlier = true;
       continue;
     }
     const spec = groups.find((g) => g && g.key === group.key);
@@ -774,19 +779,22 @@ async function runAcceptance(groups, doneNow) {
 }
 
 // At most two rounds while anything still fails. An id that became a question is not retried.
+// markedToo: an earlier run's acceptance failures are unknown here, so until a round runs, the
+// round also takes the tests still marked acceptance-failing (CONTROL-FLOW-1).
 // Returns {blocked} or {rounds, fixed, corrected, questions}.
-async function runGreen(failing, doneNow) {
+async function runGreen(failing, markedToo, doneNow) {
   const out = { rounds: 0, fixed: [], corrected: [], questions: [] };
   let left = failing;
-  for (let r = 1; r <= MAX_GREEN_ROUNDS && left.length > 0; r++) {
+  for (let r = 1; r <= MAX_GREEN_ROUNDS && (left.length > 0 || markedToo); r++) {
     if (r === 1) phase('Green');
     const id = `green:${r}`;
     if (isDone(id)) {
       log(`${id}: already done`);
       continue;
     }
-    const g = await agent(greenPrompt(left, r, args), { schema: GREEN_SCHEMA, label: id, phase: 'Green' });
+    const g = await agent(greenPrompt(left, r, args, markedToo), { schema: GREEN_SCHEMA, label: id, phase: 'Green' });
     if (g === null || g === undefined) return { blocked: phaseBlocked(id, NOTHING, doneNow) };
+    markedToo = false;
     out.rounds = r;
     out.fixed.push(...arr(g.fixed));
     out.corrected.push(...arr(g.corrected));
@@ -817,7 +825,7 @@ if (behaviourSpec.blocked) return behaviourSpec.blocked;
 const acc = await runAcceptance(behaviourSpec.groups, done_now);
 if (acc.blocked) return acc.blocked;
 
-const green = await runGreen(acc.failing, done_now);
+const green = await runGreen(acc.failing, acc.earlier, done_now);
 if (green.blocked) return green.blocked;
 
 return {
