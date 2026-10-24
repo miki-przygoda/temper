@@ -489,7 +489,7 @@ function checkerPrompt(task, implResult, args) {
       "- the plan's tests are present and not weakened;\n" +
       '- the quick gate passes;\n' +
       '- deliberately breaking the code makes the tests fail (a spot-check).',
-    `The diff is \`git diff ${args.base}...${branch}\`. The quick gate is \`${args.gates.quick}\`. Undo your spot-check break; commit nothing.`,
+    `The diff is \`git diff ${args.branch}...${branch}\`. The quick gate is \`${args.gates.quick}\`. Undo your spot-check break; commit nothing.`,
     'Return pass true when all four hold; otherwise pass false, with one problem per failed check in problems, each precise enough for the implementer to fix.',
   ]);
 }

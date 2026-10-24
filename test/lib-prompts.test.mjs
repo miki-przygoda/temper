@@ -128,7 +128,9 @@ test('the implementer prompt has the trailer, the branch and the task contract',
 
 test('the checker prompt has the four checks and the diff command', () => {
   const t = local.checker;
-  assert.ok(t.includes('git diff main...temper/e/a'));
+  // A11: the diff is against the epic branch, not the base, so earlier waves' files don't count.
+  assert.ok(t.includes('git diff temper/e...temper/e/a'));
+  assert.ok(!t.includes('git diff main...'));
   assert.ok(t.includes("the plan's tests are present and not weakened"));
   assert.ok(t.includes('deliberately breaking the code makes the tests fail (a spot-check)'));
   assert.ok(t.includes('the quick gate passes'));
