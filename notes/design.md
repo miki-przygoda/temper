@@ -82,3 +82,34 @@ Every arrow is a file. Any stage can start from a file a person wrote by hand, a
 - anything privileged, or outside the project.
 
 Anything the task text, the contracts and the tests already settle is the implementer's to decide.
+
+## Section 3: stage 4, `/temper:stabilise` (approved 24 Oct 2026)
+
+It runs in two parts, with a pause between them so the user can choose what gets fixed.
+
+### 4a: sweep, then the list
+
+1. **Sweep.** Reviewers run in parallel, each in its own throwaway worktree, each with one lens.
+   - Default lenses: security; failure paths and lifecycle; test strength and docs. `.temper/project.md` can add lenses for the language.
+   - A finding needs an input and the wrong result it produces. Style points don't count.
+2. **Verify.** A separate agent tries to disprove each finding. It reproduces the finding and re-rates its severity against the rubric plus the project's notes. Duplicates are merged.
+3. **The list, ordered by severity.** The run ends here.
+   - With the user present, the head shows the list as a multiple-choice box and the user picks what gets fixed.
+   - Overnight, the head picks according to the user's preferences (by default everything Critical and Important) and logs its choice. Minor findings go to the open items.
+
+### 4b: careful fixes, one at a time, in severity order
+
+For each fix:
+1. **Trace its origin.** `git blame` leads to the `Temper-Task` trailer, which leads to the task and its contract. If the contract itself is wrong, the change goes to the user or the spec, never into a quiet code fix.
+2. Write a failing test first.
+3. Make the smallest fix.
+4. **Check the impact.** Look at what depends on the changed code, using the plan's contract graph. Then run the whole acceptance suite and the quick gate.
+5. If anything else breaks, revert and rethink. Move on to the next item only once this one is clean.
+
+### The second sweep and the stop
+
+1. **The second sweep** uses fresh agents. They are given the list of what was fixed, so they don't report it again.
+2. **What happens next:**
+   - **Nothing severe:** the stage is done. Non-severe findings go to the open items, not into the code.
+   - **Something severe:** fix it with the same five steps, then check only those fixes' own diffs. Then stop and hand over to the user. There is never a third sweep.
+3. **It returns** the fixed branch, plus open items in `log.md`.
