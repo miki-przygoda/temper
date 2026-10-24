@@ -106,7 +106,7 @@ test('a check that fails once gets exactly one retry and one recheck', async () 
   assert.deepEqual(result.done_now, ['a', 'c', 'b']);
 });
 
-test('a check that fails twice blocks the task, finishes the wave and skips the merge', async () => {
+test('a check that fails twice blocks the task, finishes the wave and merges only the tasks that passed (A9)', async () => {
   const { result, calls } = await runWorkflow(WF, {
     args: buildArgs(),
     respond: responder({
@@ -121,9 +121,36 @@ test('a check that fails twice blocks the task, finishes the wave and skips the 
   assert.equal(result.blocked[0].id, 'a');
   assert.ok(result.blocked[0].reason.startsWith('failed the check twice'), result.blocked[0].reason);
   assert.match(result.blocked[0].reason, /still missing test x/);
-  assert.ok(!ls.includes('merge:wave0'));
   assert.ok(ls.includes('impl:c') && ls.includes('check:c'), 'the wave-0 sibling still ran');
+  assert.equal(ls.filter((l) => l === 'merge:wave0').length, 1, 'the passed task is merged before returning');
+  const merge = calls.find((c) => c.opts.label === 'merge:wave0');
+  assert.ok(merge.prompt.includes('temper/e/c'), 'c is merged');
+  assert.ok(!merge.prompt.includes('temper/e/a'), 'the blocked task is not merged');
   assert.ok(!ls.includes('impl:b'), 'no later wave');
+  assert.deepEqual(result.done_now, ['c']);
+});
+
+test('a wave with no passed task runs no merge (A9)', async () => {
+  const { result, calls } = await runWorkflow(WF, {
+    args: buildArgs({ tasks: [taskA, taskB] }),
+    respond: responder({ 'impl:a': null }),
+  });
+  assert.equal(result.status, 'blocked');
+  assert.ok(!labels(calls).includes('merge:wave0'));
+  assert.deepEqual(result.done_now, []);
+});
+
+test('a blocked wave whose merge of the passed tasks also blocks lists both, and marks nothing done (A9)', async () => {
+  const { result, calls } = await runWorkflow(WF, {
+    args: buildArgs(),
+    respond: responder({
+      'impl:a': null,
+      'merge:wave0': { status: 'blocked', merged: [], conflict: { task: 'c', files: ['x'] }, gate_passed: true },
+    }),
+  });
+  assert.equal(result.status, 'blocked');
+  assert.deepEqual(result.blocked.map((b) => b.id), ['a', 'merge:wave0']);
+  assert.ok(!labels(calls).includes('impl:b'));
   assert.deepEqual(result.done_now, []);
 });
 
@@ -144,7 +171,9 @@ test('an implementer that returns null is blocked, never done (Review Focus 1)',
   assert.equal(result.blocked[0].id, 'a');
   assert.equal(result.blocked[0].reason, 'agent returned nothing');
   assert.ok(!labels(calls).includes('check:a'));
-  assert.ok(!labels(calls).includes('merge:wave0'));
+  const merge = calls.find((c) => c.opts.label === 'merge:wave0');
+  assert.ok(!merge.prompt.includes('temper/e/a`'), 'the task that returned nothing is not merged (A9)');
+  assert.ok(!result.done_now.includes('a'));
 });
 
 test('a null at any later step is blocked with agent returned nothing', async () => {

@@ -397,7 +397,9 @@ test('BUILD-14 a resume with done and answers skips finished tasks and reruns bl
       g.git('checkout', '--quiet', 'main');
       return { status: 'done', branch: `temper/e/${id}`, commit: 'x', summary: `did ${id}` };
     };
-    const mergeWave = (ids) => () => {
+    // The merge agent merges the task branches its prompt names (A9: only the tasks that passed).
+    const mergeWave = (ids) => (call) => {
+      ids = ids.filter((id) => call.prompt.includes(`temper/e/${id}\``));
       g.git('checkout', '--quiet', EPIC_BRANCH);
       for (const id of ids) g.git('merge', '--quiet', '--no-ff', '-m', `merge ${id}`, `temper/e/${id}`);
       g.git('checkout', '--quiet', 'main');
@@ -416,14 +418,17 @@ test('BUILD-14 a resume with done and answers skips finished tasks and reruns bl
     assert.equal(first.result.status, 'blocked');
     assert.ok(first.result.blocked.some((b) => b.id === 'b'));
 
+    // A9: d passed in the blocked wave, so it was merged and reported before the run returned.
+    assert.deepEqual(first.result.done_now, ['a', 'd']);
+
     // The head refreshes args.done from the trailers and writes the answer.
     const done = g.doneIds();
-    assert.deepEqual(done, ['a']);
+    assert.deepEqual(done, ['a', 'd']);
     const second = await run({ ...args, done, answers: { b: answer } }, over(false));
     assert.deepEqual(taskLabels(second.calls, 'a'), [], 'a ran again');
+    assert.deepEqual(taskLabels(second.calls, 'd'), [], 'd ran again: only the blocked task reruns');
     assert.ok(!second.calls.some((c) => c.prompt.includes('TASK-TEXT-a')), 'a\'s work was redone');
     assert.ok(promptOf(second.calls, 'impl:b').includes(answer), 'b ran without its answer');
-    assert.ok(!promptOf(second.calls, 'impl:d').includes(answer));
     assert.equal(second.result.status, 'mvp');
     assert.deepEqual(g.doneIds(), ['a', 'b', 'd']);
   } finally {

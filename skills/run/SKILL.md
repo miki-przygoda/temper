@@ -51,7 +51,7 @@ To resume a run after answering blocked items, or after a usage-limit stop, laun
 
 The return value's `status`:
 - `invalid`: `errors` lists what's wrong with `args.json`. No agent ran. Fix `args.json` from the plan (or go back to the `plan` skill if the plan itself is wrong) and launch again.
-- `blocked`: `blocked` is a list of `{id, reason}`, and `done_now` the tasks merged in this run. Go to "Blocked items".
+- `blocked`: `blocked` is a list of `{id, reason}`, and `done_now` the tasks merged in this run. A blocked wave still merges its tasks that passed their checks before returning, so they are in `done_now` and their trailers are on the epic branch; only the blocked tasks run again on resume. Go to "Blocked items".
 - `mvp`: record the build report in `log.md` (the checkpoint flows and gaps, the acceptance pass and fail counts, the green rounds, the questions). Treat each entry in `questions` as a blocked question (below). Then go to stage 4.
 
 ## Blocked items

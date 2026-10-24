@@ -71,6 +71,7 @@ function mergeBlocked(id, merge) {
 }
 
 // Runs every wave in order. Returns a blocked result, or null when all waves merged.
+// A blocked wave still merges the tasks that passed and lists them in done_now (A9).
 async function runWaves(doneNow) {
   phase('Waves');
   for (const { wave, tasks } of wavesOf(args.tasks)) {
@@ -88,13 +89,14 @@ async function runWaves(doneNow) {
       else if (s.blocked) blocked.push(s.blocked);
       else passed.push(s.task);
     });
+    if (passed.length > 0) {
+      const id = `merge:wave${wave}`;
+      const merge = await agent(mergePrompt(passed, args), { schema: MERGE_SCHEMA, label: id, phase: 'Waves' });
+      const mergeIssue = mergeBlocked(id, merge);
+      if (mergeIssue) blocked.push(mergeIssue);
+      else doneNow.push(...passed.map((t) => t.id));
+    }
     if (blocked.length > 0) return { status: 'blocked', wave, blocked, done_now: doneNow };
-
-    const id = `merge:wave${wave}`;
-    const merge = await agent(mergePrompt(passed, args), { schema: MERGE_SCHEMA, label: id, phase: 'Waves' });
-    const mergeIssue = mergeBlocked(id, merge);
-    if (mergeIssue) return { status: 'blocked', wave, blocked: [mergeIssue], done_now: doneNow };
-    doneNow.push(...passed.map((t) => t.id));
   }
   return null;
 }
