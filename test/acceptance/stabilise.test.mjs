@@ -180,7 +180,7 @@ test('STABILISE-02 the default lenses run, and extra lenses from project.md run 
   });
 });
 
-test('STABILISE-03 a finding without an input and the wrong result it produces is not accepted', { skip: 'acceptance-failing: STABILISE-03' }, async () => {
+test('STABILISE-03 a finding without an input and the wrong result it produces is not accepted', async () => {
   const good = finding('security-01', 'critical');
   const vague = finding('security-02', 'critical', { input: '', wrong_result: '', summary: 'looks risky' });
   const { calls, result } = await runWorkflow(WF, {

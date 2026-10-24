@@ -613,6 +613,11 @@ function gatePrompt(args) {
 // One sweep: a review per lens, then a verify per finding. Keeps the findings the verifier
 // reproduced, with the verifier's severity, merged and ordered. A verdict of real:false or
 // null (the agent died or was skipped) counts as refuted.
+// A finding needs an input and the wrong result it produces (spec 7 4a.1); one without is not accepted.
+const hasInputAndWrongResult = (f) => !!f
+  && typeof f.input === 'string' && f.input.trim() !== ''
+  && typeof f.wrong_result === 'string' && f.wrong_result.trim() !== '';
+
 async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
   const second = labelPrefix !== '';
   const reviewPhase = second ? 'Second sweep' : 'Sweep';
@@ -625,7 +630,7 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
       schema: FINDINGS_SCHEMA,
     }),
     async (review) => {
-      const found = review && Array.isArray(review.findings) ? review.findings : [];
+      const found = (review && Array.isArray(review.findings) ? review.findings : []).filter(hasInputAndWrongResult);
       const verdicts = await parallel(found.map((f) => () => agent(verifyPrompt(f, args), {
         label: `${labelPrefix}verify:${f.id}`,
         phase: verifyPhase,
