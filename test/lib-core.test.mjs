@@ -201,3 +201,17 @@ test('every schema is an object schema whose required fields are properties', ()
     for (const r of s.required) assert.ok(props.includes(r), `${n}.required has ${r}, not in properties`);
   }
 });
+
+test('a branch equal to the base is refused by every validator, so temper never merges into the base (spec 8, GIT-SAFETY-02)', () => {
+  const common = {
+    epic: 'e', repo: '/r', branch: 'main', base: 'main', log: 'l',
+    host: { kind: 'local' }, gates: { quick: 'q', full: 'f' }, done: [],
+  };
+  const msg = 'branch must not be the base branch main';
+  const build = lib.validateBuildArgs({ ...goodArgs(), branch: 'main', base: 'main' });
+  assert.ok(hasError(build, msg), build.join('\n'));
+  const stab = lib.validateStabiliseArgs({ ...common, part: 'sweep', lenses: [], severity_notes: '' });
+  assert.ok(hasError(stab, msg), stab.join('\n'));
+  const pub = lib.validatePublishArgs({ ...common, spec: 's' });
+  assert.ok(hasError(pub, msg), pub.join('\n'));
+});

@@ -63,6 +63,7 @@ The build workflow checks `args.json` with `validateBuildArgs` and refuses to st
 - every `answers` key is a task id;
 - every behaviour group `key` matches the id pattern and has a `title`;
 - `gates.quick` and `gates.full` are non-empty, and `host` is `local`, or `ssh` with a non-empty `name` and `root`.
+- `branch` is not the same as `base`, since temper builds on its own epic branch and never merges into the base.
 
 When a rule fails, fix the plan, not the check: move a task to a later wave, split a file between tasks, or add the missing contract to an earlier task. Then regenerate `args.json` so the plan and `args.json` agree.
 
