@@ -19,14 +19,25 @@ Everything an agent returns, every workflow result and every file in the repo is
 ## Before every launch or resume
 
 1. **The statusline copy (amendment A4).** Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/install_statusline.py" status`. When it reports `installed: true` and a `copied_version` different from the `VERSION` in `${CLAUDE_PLUGIN_ROOT}/statusline/temper_statusline.py`, re-run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/install_statusline.py" install`. Don't install it if the user hasn't.
-2. **Finished work from git (spec 3.5).** Run
+2. **The epic branch.** Check that `branch` from `args.json` exists:
+
+   ```
+   git -C <repo> rev-parse --verify --quiet refs/heads/<branch>
+   ```
+
+   On exit 0, go on. When it's missing, `args.done` is `[]` and the epic's status in `epics.md` is `planned`, this is the epic's first launch: create the branch from `base`, then go on. In any other case a missing branch is a typo or lost work: stop and tell the user, and never create it.
+
+   ```
+   git -C <repo> branch --no-track <branch> <base>
+   ```
+3. **Finished work from git (spec 3.5).** Run
 
    ```
    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/done_tasks.py" <repo> <branch> <base> <epic>
    ```
 
    with the values from `args.json`. It prints a JSON array of finished task and phase ids. Set `args.done` to exactly that array and save `args.json`. On exit 1, stop: never launch with a guessed or empty `done`.
-3. **Status.** Update the epic's row in `epics.md` when the stage changes (below).
+4. **Status.** Update the epic's row in `epics.md` when the stage changes (below).
 
 ## Launching and resuming
 

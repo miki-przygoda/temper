@@ -140,6 +140,39 @@ class TestSkillsPackaging(Sandbox):
         self.assertEqual(proc.returncode, 1)
         self.assertEqual(proc.stdout.strip(), '')
 
+    def test_SKILLS_PACKAGING_16_a_new_epic_gets_its_branch_from_base_before_the_first_launch(self):
+        # Straight from the plan skill: args.json names epic/e, done is [], and epic/e doesn't
+        # exist yet. The run skill's steps before a launch must get done_tasks.py to exit 0.
+        before = RUN_SKILL[RUN_SKILL.index('## Before every launch or resume'):
+                           RUN_SKILL.index('## Launching and resuming')]
+        blocks = [b.strip() for b in before.split('```')[1::2]]
+        check = next((b for b in blocks if 'rev-parse' in b), None)
+        create = next((b for b in blocks if b.startswith('git -C <repo> branch ')), None)
+        self.assertIsNotNone(check, 'the run skill never checks that the epic branch exists')
+        self.assertIsNotNone(create, 'the run skill never creates the epic branch from base')
+        self.assertLess(before.index(create), before.index('done_tasks.py'))
+        # Only a first launch creates it; a missing branch later is a typo or lost work.
+        self.assertIn('`planned`', before[:before.index('done_tasks.py')])
+
+        repo, _origin = self.remote()
+        a = {'epic': 'e', 'repo': str(repo), 'branch': 'epic/e', 'base': 'main',
+             'done': [], 'answers': {}}
+
+        def run(block):
+            cmd = (block.replace('<repo>', a['repo']).replace('<branch>', a['branch'])
+                   .replace('<base>', a['base']))
+            return subprocess.run(cmd.split(), env=self.env, capture_output=True, text=True,
+                                  check=False)
+
+        self.assertNotEqual(run(check).returncode, 0)  # missing, so the first launch creates it
+        self.assertEqual(run(create).returncode, 0)
+        self.assertEqual(run(check).returncode, 0)
+        self.assertEqual(self.git(repo, 'rev-parse', 'epic/e'), self.git(repo, 'rev-parse', 'main'))
+
+        proc = self.script(DONE, a['repo'], a['branch'], a['base'], a['epic'])
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(json.loads(proc.stdout), [])
+
     def test_SKILLS_PACKAGING_28_cleanup_removes_only_what_the_check_passes(self):
         skill = flat(CLEANUP_SKILL)
         self.assertIn('cleanup_check.py" <repo> <branch> --worktree <path>', CLEANUP_SKILL)
