@@ -279,7 +279,7 @@ test('STABILISE-08 overnight the head picks by the preferences (default Critical
   assert.match(read('skills/setup/SKILL.md'), /`overnight_fix_default`[^\n]*`critical\+important`/);
 });
 
-test('STABILISE-09 a Minor finding is never fixed in the code in 4b; it goes to the open items', { skip: 'acceptance-failing: STABILISE-09' }, async () => {
+test('STABILISE-09 a Minor finding is never fixed in the code in 4b; it goes to the open items', async () => {
   const c = finding('security-01', 'critical');
   const m = finding('security-02', 'minor');
   const { calls, result } = await runWorkflow(WF, { args: fixArgs({ selected: [c, m] }), respond: responder() });

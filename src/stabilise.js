@@ -77,11 +77,15 @@ const doneIds = (findings) => findings.filter((f) => args.done.includes(`fix:${f
 
 const out = { fixed: [], reverted: [], contract_items: [], blocked: [] };
 
+// A Minor finding is never fixed in the code; it goes to the open items (spec 7.1).
+const selectedMinor = args.selected.filter((f) => f.severity === 'minor');
+const toFix = args.selected.filter((f) => f.severity !== 'minor');
+
 phase('Fix');
-await fixLoop(args.selected, out);
+await fixLoop(toFix, out);
 
 phase('Second sweep');
-const alreadyFixed = [...doneIds(args.selected), ...out.fixed];
+const alreadyFixed = [...doneIds(toFix), ...out.fixed];
 const second = await sweepAndVerify(lensesOr(args.lenses), alreadyFixed, 'second:');
 const severe = second.findings.filter((f) => f.severity === 'severe');
 const others = second.findings.filter((f) => f.severity !== 'severe');
@@ -107,7 +111,7 @@ return {
   reverted: out.reverted,
   contract_items: out.contract_items,
   blocked: out.blocked,
-  open_items: others,
+  open_items: [...selectedMinor, ...others],
   second_sweep: { severe: severe.length, others: others.length },
   regressions,
 };
