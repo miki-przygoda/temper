@@ -94,7 +94,7 @@ Args: `epic`, `repo`, `branch`, `base`, `log`, `spec`, `host`, `gates` and `done
 - `blocked`: resume once, as above.
 - `ready`: it carries `pr.title` and `pr.body_file`. Push and open the PR (amendment A5) only when all of these hold:
   - `status` is `ready` and `gate.passed` is true;
-  - `may_push` is `yes` in `preferences.md`, or it is `ask` and the user says yes now. With `may_push: no`, don't push; tell the user the branch is ready.
+  - `may_push` is `yes` in `preferences.md`, or it is `ask` and the user says yes now. With `may_push: no`, or a value that is missing or not recognised, ask the user too (spec 8: otherwise it asks), and push only on a yes; without a yes, tell the user the branch is ready.
 
   Then:
 

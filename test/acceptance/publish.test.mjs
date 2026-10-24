@@ -235,7 +235,7 @@ test('PUBLISH-05 may_push not yes: the head asks the user, and pushes and opens 
     assert.match(STAGE5, /or it is `ask` and the user says yes now/);
     assert.match(read('templates/preferences.md'), /^may_push: ask$/m);
   });
-  await t.test('every value other than yes asks (spec 8: "Otherwise it asks"; A5: "or the user says yes")', { skip: 'acceptance-failing: PUBLISH-05' }, () => {
+  await t.test('every value other than yes asks (spec 8: "Otherwise it asks"; A5: "or the user says yes")', () => {
     // The setup skill offers ask, yes and no. With `no` the behaviour still says the head asks.
     const noRule = STAGE5.match(/With `may_push: no`[^\n]*/);
     if (noRule) assert.match(noRule[0], /ask/i, `may_push: no does not ask: "${noRule[0]}"`);
