@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "test": "node --test 'test/**/*.test.mjs' && python3 -m unittest discover -s tests_py -t ."
+  }
+}
