@@ -100,7 +100,7 @@ async function runWaves(doneNow) {
 }
 
 // ---- after the waves: checkpoint, behaviour spec, acceptance groups, to-green ----
-// Each phase id ('checkpoint', 'behaviour-spec', 'acceptance:<key>') in args.done is skipped (A6).
+// Each phase id ('checkpoint', 'behaviour-spec', 'acceptance:<key>', 'green:<n>') in args.done is skipped (A6).
 // A null phase result is blocked with "agent returned nothing", like a task.
 
 const MAX_GREEN_ROUNDS = 2;
@@ -168,6 +168,10 @@ async function runGreen(failing, doneNow) {
   for (let r = 1; r <= MAX_GREEN_ROUNDS && left.length > 0; r++) {
     if (r === 1) phase('Green');
     const id = `green:${r}`;
+    if (isDone(id)) {
+      log(`${id}: already done`);
+      continue;
+    }
     const g = await agent(greenPrompt(left, r, args), { schema: GREEN_SCHEMA, label: id, phase: 'Green' });
     if (g === null || g === undefined) return { blocked: phaseBlocked(id, NOTHING, doneNow) };
     out.rounds = r;

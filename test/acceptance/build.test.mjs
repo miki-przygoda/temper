@@ -307,7 +307,7 @@ test('BUILD-11 a phase id in args.done is skipped when the run reaches it', asyn
     assert.ok(labels(calls).includes('acceptance:g2'));
   });
 
-  await t.test('a to-green round', { skip: 'acceptance-failing: BUILD-11' }, async () => {
+  await t.test('a to-green round', async () => {
     // green:1 committed in an earlier run; the run reaches to-green again with a failure.
     const { calls } = await run(buildArgs({ done: [...tasksDone, 'checkpoint', 'green:1'] }), {
       'acceptance:g1': { group: 'g1', passing: ['G1-02'], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'c' },
