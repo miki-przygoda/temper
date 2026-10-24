@@ -43,7 +43,9 @@ def _default_branch(repo, remote):
 def check(repo: str, branch: str, worktree=None, remote: str = 'origin', fetch: bool = True):
     """Return (ok, reasons). Every failed condition adds one reason."""
     if fetch:
-        proc = _git(repo, 'fetch', '--quiet', '--end-of-options', remote)
+        # --prune: a remote branch deleted unmerged must not leave a stale tracking ref
+        # that still equals the local tip (spec 8: never delete work not on the remote).
+        proc = _git(repo, 'fetch', '--quiet', '--prune', '--end-of-options', remote)
         if proc.returncode != 0:
             return (False, [f'could not fetch {remote}; not deleting'])
 

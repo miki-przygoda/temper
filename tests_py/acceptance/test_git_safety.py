@@ -132,7 +132,6 @@ class GitSandbox(unittest.TestCase):
 
 class TestGitSafety(GitSandbox):
 
-    @unittest.skip('acceptance-failing: GIT-SAFETY-04')
     def test_GIT_SAFETY_04_work_not_on_the_remote_is_never_deleted(self):
         repo, origin = self.remote()
 
