@@ -10,7 +10,7 @@ Status: design. Nothing is built yet; the design is being agreed section by sect
 - `notes/lessons-from-cairn.md`: what running real milestones as workflows on Cairn taught, written without Cairn specifics.
 - `notes/discovery.md`: the owner's idea and every round of answers.
 - `notes/design.md`: the design, one approved section at a time.
-- `docs/specs/`: the spec, once every design section is approved.
+- `docs/specs/2026-10-24-temper-design.md`: the spec, written from the approved sections.
 
 ## Origin
 

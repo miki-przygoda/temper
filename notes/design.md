@@ -209,3 +209,7 @@ It also tells the user that the session has to stay open, a documented limit of 
 ### Morning report
 
 A summary written into `log.md`, plus a push notification if the preferences ask for one.
+
+## Section 6: proving temper works, and the repo layout (approved 24 Oct 2026)
+
+See the spec, sections 10 and 11: `docs/specs/2026-10-24-temper-design.md`.
