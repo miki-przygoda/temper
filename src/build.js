@@ -99,6 +99,91 @@ async function runWaves(doneNow) {
   return null;
 }
 
+// ---- after the waves: checkpoint, behaviour spec, acceptance groups, to-green ----
+// Each phase id ('checkpoint', 'behaviour-spec', 'acceptance:<key>') in args.done is skipped (A6).
+// A null phase result is blocked with "agent returned nothing", like a task.
+
+const MAX_GREEN_ROUNDS = 2;
+const isDone = (id) => args.done.includes(id);
+const arr = (v) => (Array.isArray(v) ? v : []);
+
+function phaseBlocked(id, reason, doneNow) {
+  return { status: 'blocked', blocked: [blockedEntry(id, reason)], done_now: doneNow };
+}
+
+// Returns {blocked} or {checkpoint}; checkpoint is null when it was done in an earlier run.
+async function runCheckpoint(doneNow) {
+  if (isDone('checkpoint')) {
+    log('checkpoint: already done');
+    return { checkpoint: null };
+  }
+  phase('Checkpoint');
+  const cp = await agent(checkpointPrompt(args), { schema: CHECKPOINT_SCHEMA, label: 'checkpoint', phase: 'Checkpoint' });
+  if (cp === null || cp === undefined) return { blocked: phaseBlocked('checkpoint', NOTHING, doneNow) };
+  if (cp.gate_passed !== true) return { blocked: phaseBlocked('checkpoint', 'full gate failed: ' + cp.gate_log, doneNow) };
+  return { checkpoint: cp };
+}
+
+// Returns {blocked} or {groups}: the behaviour spec's [{key, behaviours}].
+async function runBehaviourSpec(doneNow) {
+  if (isDone('behaviour-spec')) {
+    if (!Array.isArray(args.behaviour)) {
+      return { blocked: phaseBlocked('behaviour-spec', 'done but args.behaviour missing', doneNow) };
+    }
+    log('behaviour-spec: already done, using args.behaviour');
+    return { groups: args.behaviour };
+  }
+  phase('Behaviour');
+  const b = await agent(behaviourSpecPrompt(args), { schema: BEHAVIOUR_SCHEMA, label: 'behaviour-spec', phase: 'Behaviour' });
+  if (b === null || b === undefined) return { blocked: phaseBlocked('behaviour-spec', NOTHING, doneNow) };
+  return { groups: arr(b.groups) };
+}
+
+// One agent per behaviour group, in order. Returns {blocked} or {passing, failing, untestable}
+// over the groups run now; failing is [{id, observed}].
+async function runAcceptance(groups, doneNow) {
+  const out = { passing: 0, failing: [], untestable: [] };
+  for (const group of args.behaviour_groups) {
+    const id = `acceptance:${group.key}`;
+    if (isDone(id)) {
+      log(`${id}: already done`);
+      continue;
+    }
+    const spec = groups.find((g) => g && g.key === group.key);
+    const behaviours = spec ? arr(spec.behaviours) : [];
+    const r = await agent(acceptancePrompt(group, behaviours, args), { schema: ACCEPTANCE_SCHEMA, label: id, phase: 'Behaviour' });
+    if (r === null || r === undefined) return { blocked: phaseBlocked(id, NOTHING, doneNow) };
+    out.passing += arr(r.passing).length;
+    out.failing.push(...arr(r.failing));
+    out.untestable.push(...arr(r.untestable));
+  }
+  return out;
+}
+
+// At most two rounds while anything still fails. An id that became a question is not retried.
+// Returns {blocked} or {rounds, fixed, corrected, questions}.
+async function runGreen(failing, doneNow) {
+  const out = { rounds: 0, fixed: [], corrected: [], questions: [] };
+  let left = failing;
+  for (let r = 1; r <= MAX_GREEN_ROUNDS && left.length > 0; r++) {
+    if (r === 1) phase('Green');
+    const id = `green:${r}`;
+    const g = await agent(greenPrompt(left, r, args), { schema: GREEN_SCHEMA, label: id, phase: 'Green' });
+    if (g === null || g === undefined) return { blocked: phaseBlocked(id, NOTHING, doneNow) };
+    out.rounds = r;
+    out.fixed.push(...arr(g.fixed));
+    out.corrected.push(...arr(g.corrected));
+    out.questions.push(...arr(g.questions));
+    const asked = new Set(out.questions.map((q) => q.id));
+    const prev = left;
+    left = arr(g.still_failing)
+      .filter((fid) => !asked.has(fid))
+      .map((fid) => prev.find((f) => f.id === fid) || { id: fid, observed: 'still failing' });
+  }
+  for (const f of left) out.questions.push({ id: f.id, question: `still failing after ${MAX_GREEN_ROUNDS} rounds` });
+  return out;
+}
+
 const errors = validateBuildArgs(args);
 if (errors.length > 0) return { status: 'invalid', errors };
 
@@ -106,5 +191,23 @@ const done_now = [];
 const wavesBlocked = await runWaves(done_now);
 if (wavesBlocked) return wavesBlocked;
 
-// Task 6 continues here with the checkpoint, the behaviour spec, acceptance and green.
-return { status: 'waves-done', done_now };
+const cp = await runCheckpoint(done_now);
+if (cp.blocked) return cp.blocked;
+
+const behaviourSpec = await runBehaviourSpec(done_now);
+if (behaviourSpec.blocked) return behaviourSpec.blocked;
+
+const acc = await runAcceptance(behaviourSpec.groups, done_now);
+if (acc.blocked) return acc.blocked;
+
+const green = await runGreen(acc.failing, done_now);
+if (green.blocked) return green.blocked;
+
+return {
+  status: 'mvp',
+  checkpoint: cp.checkpoint,
+  acceptance: { passing: acc.passing, failing: acc.failing.map((f) => f.id), untestable: acc.untestable },
+  green: { rounds: green.rounds, fixed: green.fixed, corrected: green.corrected },
+  questions: green.questions,
+  done_now,
+};
