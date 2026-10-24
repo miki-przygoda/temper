@@ -1,0 +1,1 @@
+export const meta = { name: 'stabilise', description: 'temper stage 4: sweep, then careful fixes and one more sweep', phases: [{ title: 'Sweep' }, { title: 'Verify' }, { title: 'Fix' }, { title: 'Second sweep' }] };
