@@ -18,20 +18,20 @@ For the epic (or each epic the user names, or each epic in `epics.md` whose stat
 
 ## The check
 
-Run it once for each branch, with its worktree when it has one:
+Run it once for each branch, with its worktree when it has one, and with one `--disposable <pattern>` for each comma-separated pattern on the `disposable:` line of `.temper/project.md` (amendment A10):
 
 ```
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup_check.py" <repo> <branch> --worktree <path>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup_check.py" <repo> <branch> --worktree <path> --disposable 'target/' --disposable 'node_modules/'
 ```
 
-Leave out `--worktree` for a branch without a worktree. For a worktree on an ssh host, run the same script there, fed on stdin, against the host's clone:
+Leave out `--worktree` for a branch without a worktree, and `--disposable` when the `disposable:` line is empty. Single-quote each pattern so no shell expands it; over ssh the host's shell reads the line again, so wrap each one once more, as `"'target/'"`. For a worktree on an ssh host, run the same script there, fed on stdin, against the host's clone, with the same `--disposable` options:
 
 ```
-ssh <host> python3 - <host repo> <branch> --worktree <path> < "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup_check.py"
+ssh <host> python3 - <host repo> <branch> --worktree <path> --disposable "'target/'" < "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup_check.py"
 ```
 
 It fetches the remote first, then prints `{"ok": bool, "reasons": [...]}`:
-- **exit 0:** the branch is reachable from the remote's default branch, or matches its own remote ref, and the worktree has nothing uncommitted or untracked. It is safe to delete.
+- **exit 0:** the branch is reachable from the remote's default branch, or matches its own remote ref, and the worktree has nothing uncommitted or untracked, and no ignored file (`git status --porcelain --ignored --untracked-files=all`) except those matching a `disposable` pattern, because `git worktree remove` deletes ignored files. It is safe to delete.
 - **exit 1:** not safe. Nothing is deleted for that branch or its worktree. Show the user the `reasons` as they are.
 
 Any other exit status, a crash, or output you can't parse counts as exit 1.

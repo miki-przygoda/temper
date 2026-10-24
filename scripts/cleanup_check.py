@@ -4,12 +4,15 @@
 Safe means the work is on the remote: the branch tip is reachable from the
 remote's default branch, or equals `<remote>/<branch>`; and the worktree, when
 given, is a worktree of the repo whose HEAD is on the remote too and has nothing
-uncommitted or untracked.
+uncommitted or untracked, and no ignored file except those matching a disposable pattern
+(amendment A10: `git worktree remove` deletes ignored files without asking).
 
 CLI: python3 scripts/cleanup_check.py <repo> <branch> [--worktree P] [--remote R] [--no-fetch]
+                                      [--disposable PATTERN]...
 Prints {"ok": bool, "reasons": [...]} and exits 0 when ok, 1 when not.
 """
 import argparse
+import fnmatch
 import json
 import os
 import subprocess
@@ -42,7 +45,31 @@ def _default_branch(repo, remote):
     return None
 
 
-def check(repo: str, branch: str, worktree=None, remote: str = 'origin', fetch: bool = True):
+def _disposable(path, patterns):
+    """Does an ignored path match one of the `disposable:` patterns from project.md?
+
+    gitignore-style, simplified: a trailing `/` matches a directory only; a pattern with a
+    leading or inner `/` is anchored at the worktree root; any other pattern matches one path
+    component at any depth. `*`, `?` and `[...]` are fnmatch wildcards.
+    """
+    parts = path.rstrip('/').split('/')
+    for pat in patterns:
+        name = pat.strip('/')
+        if not name:
+            continue
+        dir_only = pat.endswith('/')
+        # A directory pattern matches the parents of a file, never the file's own name.
+        last = len(parts) - 1 if dir_only and not path.endswith('/') else len(parts)
+        if pat.startswith('/') or '/' in name:
+            if any(fnmatch.fnmatchcase('/'.join(parts[:i]), name) for i in range(1, last + 1)):
+                return True
+        elif any(fnmatch.fnmatchcase(part, name) for part in parts[:last]):
+            return True
+    return False
+
+
+def check(repo: str, branch: str, worktree=None, remote: str = 'origin', fetch: bool = True,
+          disposable=()):
     """Return (ok, reasons). Every failed condition adds one reason."""
     if fetch:
         # --prune: a remote branch deleted unmerged must not leave a stale tracking ref
@@ -97,17 +124,37 @@ def check(repo: str, branch: str, worktree=None, remote: str = 'origin', fetch: 
                     f'worktree {worktree} HEAD {shown} is not on {remote}: it is not reachable '
                     f'from {default or "its default branch"} or {remote}/{branch}'
                 )
-            proc = _git(worktree, 'status', '--porcelain', '--untracked-files=all')
+            proc = _git(worktree, 'status', '--porcelain', '-z', '--ignored',
+                        '--untracked-files=all')
             if proc.returncode != 0:
                 reasons.append(f'could not read the status of worktree {worktree}')
             else:
-                lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
-                if lines:
-                    untracked = sum(1 for ln in lines if ln.startswith('??'))
-                    changed = len(lines) - untracked
+                changed = untracked = 0
+                ignored = []
+                entries = iter(proc.stdout.split('\0'))
+                for entry in entries:
+                    if not entry.strip():
+                        continue
+                    code, path = entry[:2], entry[3:]
+                    if code == '??':
+                        untracked += 1
+                    elif code == '!!':
+                        if not _disposable(path, disposable):
+                            ignored.append(path)
+                    else:
+                        changed += 1
+                        if code[0] in 'RC':
+                            next(entries, None)  # a rename's or copy's source path
+                if changed or untracked:
                     reasons.append(
                         f'worktree {worktree} has {changed} uncommitted and '
                         f'{untracked} untracked file(s)'
+                    )
+                if ignored:
+                    shown = ', '.join(ignored[:5]) + (', ...' if len(ignored) > 5 else '')
+                    reasons.append(
+                        f'worktree {worktree} has {len(ignored)} ignored file(s) that match no '
+                        f'disposable pattern: {shown}'
                     )
 
     return (not reasons, reasons)
@@ -120,10 +167,14 @@ def main(argv=None) -> int:
     parser.add_argument('--worktree', default=None)
     parser.add_argument('--remote', default='origin')
     parser.add_argument('--no-fetch', dest='fetch', action='store_false')
+    parser.add_argument('--disposable', action='append', default=[], metavar='PATTERN',
+                        help='an ignored-file pattern safe to delete with the worktree '
+                             '(repeatable; from the disposable line of .temper/project.md)')
     opts = parser.parse_args(argv)
     try:
         ok, reasons = check(opts.repo, opts.branch, worktree=opts.worktree,
-                            remote=opts.remote, fetch=opts.fetch)
+                            remote=opts.remote, fetch=opts.fetch,
+                            disposable=opts.disposable)
     except Exception as exc:  # any surprise means "not safe"
         ok, reasons = False, [f'cleanup check failed: {exc}; not deleting']
     print(json.dumps({'ok': ok, 'reasons': reasons}))

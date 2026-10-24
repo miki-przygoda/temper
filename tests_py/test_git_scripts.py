@@ -205,6 +205,72 @@ class CleanupCheckTest(GitRepoCase):
         self.assertEqual(accepted.returncode, 0, accepted.stderr)
         self.assertEqual(json.loads(accepted.stdout), {'ok': True, 'reasons': []})
 
+    def ignored_worktree(self):
+        """A clean worktree of a pushed branch that ignores target/ and .env, holding both."""
+        self.git(self.repo, 'checkout', '--quiet', '-b', 'feat')
+        (self.repo / '.gitignore').write_text('target/\n.env\n', encoding='utf-8')
+        self.git(self.repo, 'add', '.gitignore')
+        self.commit('ignore build output', 'Temper-Task: e/1')
+        self.git(self.repo, 'checkout', '--quiet', 'main')
+        self.git(self.repo, 'push', '--quiet', 'origin', 'feat')
+        wt = self.tmp / 'wt'
+        self.git(self.repo, 'worktree', 'add', '--quiet', str(wt), 'feat')
+        (wt / 'target' / 'debug').mkdir(parents=True)
+        (wt / 'target' / 'debug' / 'app').write_text('x', encoding='utf-8')
+        (wt / '.env').write_text('SECRET=1\n', encoding='utf-8')
+        return wt
+
+    def test_ignored_file_not_disposable_is_refused(self):
+        # A10: `git worktree remove` deletes ignored files, so an ignored file (a local .env)
+        # blocks cleanup unless it matches a disposable pattern from project.md.
+        wt = self.ignored_worktree()
+        ok, reasons = cleanup_check.check(str(self.repo), 'feat', worktree=str(wt), fetch=True)
+        self.assertFalse(ok)
+        self.assertTrue(any('ignored' in r and '.env' in r for r in reasons), reasons)
+
+        ok, reasons = cleanup_check.check(str(self.repo), 'feat', worktree=str(wt), fetch=True,
+                                          disposable=['target/'])
+        self.assertFalse(ok)
+        self.assertTrue(any('ignored' in r and '.env' in r for r in reasons), reasons)
+        self.assertFalse(any('target/' in r for r in reasons), reasons)
+
+    def test_ignored_files_all_disposable_are_ok(self):
+        wt = self.ignored_worktree()
+        self.assertEqual(
+            cleanup_check.check(str(self.repo), 'feat', worktree=str(wt), fetch=True,
+                                disposable=['target/', '.env']),
+            (True, []),
+        )
+
+    def test_disposable_patterns_match_names_and_directories(self):
+        match = cleanup_check._disposable
+        self.assertTrue(match('target/debug/app', ['target/']))
+        self.assertTrue(match('crates/x/target/debug/app', ['target/']))
+        self.assertTrue(match('pkg/__pycache__/m.cpython-312.pyc', ['__pycache__/']))
+        self.assertTrue(match('a/b.pyc', ['*.pyc']))
+        self.assertFalse(match('target', ['target/']))  # a file named target is not the dir
+        self.assertFalse(match('src/.env', ['target/', 'node_modules/']))
+        self.assertTrue(match('build/out.o', ['/build/']))
+        self.assertFalse(match('sub/build/out.o', ['/build/']))
+        self.assertFalse(match('a', []))
+
+    def test_cli_passes_repeated_disposable_patterns(self):
+        wt = self.ignored_worktree()
+        script = str(SCRIPTS / 'cleanup_check.py')
+        refused = subprocess.run(
+            [sys.executable, script, str(self.repo), 'feat', '--worktree', str(wt),
+             '--disposable', 'target/'],
+            check=False, capture_output=True, text=True,
+        )
+        self.assertEqual(refused.returncode, 1, refused.stdout + refused.stderr)
+        accepted = subprocess.run(
+            [sys.executable, script, str(self.repo), 'feat', '--worktree', str(wt),
+             '--disposable', 'target/', '--disposable', '.env'],
+            check=False, capture_output=True, text=True,
+        )
+        self.assertEqual(accepted.returncode, 0, accepted.stdout + accepted.stderr)
+        self.assertEqual(json.loads(accepted.stdout), {'ok': True, 'reasons': []})
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -26,7 +26,7 @@ const SKILLS = {
     'never merge',
     'stays open',
   ],
-  cleanup: ['cleanup_check.py', 'exit 1', 'nothing is deleted'],
+  cleanup: ['cleanup_check.py', 'exit 1', 'nothing is deleted', '--disposable'],
   temper: ['setup', 'ground', 'plan', 'run', 'cleanup', 'preferences.md'],
   ground: [
     'superpowers:brainstorming',

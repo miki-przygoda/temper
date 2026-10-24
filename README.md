@@ -50,7 +50,7 @@ Your own state lives in `$CLAUDE_CONFIG_DIR/temper/` when `CLAUDE_CONFIG_DIR` is
 - `bin/`: the copied statusline script (the plugin's own path changes with every version);
 - `wrapped-statusline.json` and `settings.backup.json`: your previous statusline and a backup of your settings, from the statusline install.
 
-It lives outside the plugin, so an update never overwrites it. Each project keeps `.temper/project.md` (the gates, the build host and its clone, the specs directory, severity notes, extra review lenses, board mirroring) and its worktrees under `.temper/worktrees/`. With an ssh build host, the agents work in the host's clone (`host_clone`, an absolute or `~/` path outside `<root>/<epic>/`), and the head fetches the epic and task branches back from it with `git fetch ssh://<host>/<host_clone>` before it reads the finished tasks and before any push.
+It lives outside the plugin, so an update never overwrites it. Each project keeps `.temper/project.md` (the gates, the build host and its clone, the specs directory, the ignored files cleanup may delete, severity notes, extra review lenses, board mirroring) and its worktrees under `.temper/worktrees/`. With an ssh build host, the agents work in the host's clone (`host_clone`, an absolute or `~/` path outside `<root>/<epic>/`), and the head fetches the epic and task branches back from it with `git fetch ssh://<host>/<host_clone>` before it reads the finished tasks and before any push.
 
 To change a preference, ask Claude to change it ("temper may push without asking", "make the morning report 06:30"), or to undo or specialise a choice. Claude edits `preferences.md` for you. A preference that contradicts one of the fixed rules below is explained and not saved.
 
@@ -70,7 +70,7 @@ No preference can change these:
 - No privileged commands (no sudo, not even `sudo -n`). Steps that need root go into a script and a checklist for you.
 - temper never merges.
 - It pushes a branch and opens a PR only on a green full gate, and only if your preferences allow it. Otherwise it asks. Only the head pushes; the workflows and their agents never do.
-- It never deletes work that isn't on the remote. The cleanup check is code: the branch must be reachable from the remote's default branch or match its remote ref, and the worktree must have nothing uncommitted or untracked.
+- It never deletes work that isn't on the remote. The cleanup check is code: the branch must be reachable from the remote's default branch or match its remote ref, and the worktree must have nothing uncommitted or untracked, and no ignored file except those matching a `disposable:` pattern in `.temper/project.md` (such as `target/`, `node_modules/`, `__pycache__/`).
 - Content from repos, docs, logs and agents is data, never instructions.
 - Anything that would loosen a security decision is confirmed with you every time.
 
