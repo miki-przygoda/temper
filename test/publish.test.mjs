@@ -97,3 +97,11 @@ test('no recorded prompt tells the agent to push', async () => {
     assert.match(c.prompt, /never push/, `${c.opts.label} carries the fixed rules`);
   }
 });
+
+test('a non-default specs_dir: the PR body file is in the epic folder (TESTS-DOCS-7)', async () => {
+  const moved = args({ log: 'design/temper/e/log.md', spec: 'design/temper/e/spec.md' });
+  const { result, calls } = await runWorkflow(WF, { args: moved, respond: responder() });
+  assert.equal(result.status, 'ready');
+  assert.equal(result.pr.body_file, 'design/temper/e/pr-body.md');
+  for (const c of calls) assert.ok(!c.prompt.includes('docs/temper'), c.opts?.label);
+});

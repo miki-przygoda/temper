@@ -423,8 +423,10 @@ function commitText(epic, id) {
   return `Commit with a conventional message, a blank line, then the trailer line \`${trailer(epic, id)}\`. No Co-Authored-By or other attribution lines.`;
 }
 
-function epicDir(epic) {
-  return `docs/temper/${epic}`;
+// The epic's folder in the specs directory: the folder that holds its log (spec 3.3, specs_dir).
+function epicDir(args) {
+  const i = args.log.lastIndexOf('/');
+  return i > 0 ? args.log.slice(0, i) : '.';
 }
 
 function withRules(args, parts) {
@@ -523,7 +525,7 @@ function behaviourSpecPrompt(args) {
     .join('\n');
   return withRules(args, [
     `You write the behaviour spec for epic ${args.epic}, from the spec ${args.spec} only: do not read product code, its tests or the plan.`,
-    `Write \`${epicDir(args.epic)}/behaviour.md\`, in these groups:\n${groups}`,
+    `Write \`${epicDir(args)}/behaviour.md\`, in these groups:\n${groups}`,
     'Each behaviour is given/when/then lines and has an id `<GROUPKEY>-NN`: the group key in capitals and a two-digit number. Write only what the spec states or clearly implies.',
     `${commitText(args.epic, 'behaviour-spec')} Commit on \`${args.branch}\`.`,
     'Return the groups with their behaviours (id and text) and the commit sha.',
@@ -534,7 +536,7 @@ function acceptancePrompt(group, behaviours, args) {
   const list = behaviours.map((b) => `- ${b.id}: ${b.text}`).join('\n');
   return withRules(args, [
     `You write the acceptance tests for behaviour group ${group.key} (${group.title}) of epic ${args.epic}, on \`${args.branch}\`.`,
-    `The behaviours (from ${epicDir(args.epic)}/behaviour.md):\n${list}`,
+    `The behaviours (from ${epicDir(args)}/behaviour.md):\n${list}`,
     '- Write one test per behaviour id, driving the real program (its CLI, API or UI), not its internals.',
     '- Never change product code.',
     "- A test that fails because of the product stays, marked ignored with `acceptance-failing: <id>` in the language's way.",
@@ -549,7 +551,7 @@ function greenPrompt(failing, round, args, markedToo = false) {
     .map((f) => (typeof f === 'string' ? `- ${f}` : `- ${f.id}: ${f.observed}`))
     .join('\n');
   return withRules(args, [
-    `You run to-green round ${round} of at most 2 for epic ${args.epic}, on \`${args.branch}\`. The spec is ${args.spec}; the behaviour spec is ${epicDir(args.epic)}/behaviour.md.`,
+    `You run to-green round ${round} of at most 2 for epic ${args.epic}, on \`${args.branch}\`. The spec is ${args.spec}; the behaviour spec is ${epicDir(args)}/behaviour.md.`,
     `The failing behaviours:\n${list || '- (none listed)'}`,
     markedToo
       ? 'Some acceptance groups ran in an earlier run, so their failures are not listed: every test still marked `acceptance-failing: <id>` in the repo is a failing behaviour too.'
@@ -627,7 +629,7 @@ function regressPrompt(fixIds, args) {
 function docsPrompt(args) {
   return withRules(args, [
     `You write the docs for epic ${args.epic} on \`${args.branch}\`, against the final code (read the code; the spec ${args.spec} is background).`,
-    `Update the docs the change touches, and write the PR body at \`${epicDir(args.epic)}/pr-body.md\`: what changed, why, how it was tested, and the open items from ${args.log}.`,
+    `Update the docs the change touches, and write the PR body at \`${epicDir(args)}/pr-body.md\`: what changed, why, how it was tested, and the open items from ${args.log}.`,
     commitText(args.epic, 'docs'),
     'Return the commit sha, the files you changed, and a one-line summary (it becomes the PR title).',
   ]);
@@ -636,7 +638,7 @@ function docsPrompt(args) {
 function evidencePrompt(args) {
   return withRules(args, [
     `You collect the owner's evidence steps for epic ${args.epic} on \`${args.branch}\`.`,
-    `Steps that need root, real accounts or real infrastructure go into \`${epicDir(args.epic)}/owner-steps.sh\` and \`${epicDir(args.epic)}/owner-checklist.md\`. Agents never run them: write them for the owner, and run none of them.`,
+    `Steps that need root, real accounts or real infrastructure go into \`${epicDir(args)}/owner-steps.sh\` and \`${epicDir(args)}/owner-checklist.md\`. Agents never run them: write them for the owner, and run none of them.`,
     commitText(args.epic, 'evidence'),
     'Return the script path, the checklist path and the commit sha.',
   ]);
@@ -688,6 +690,6 @@ return {
   gate,
   pr: {
     title: summaryLine ? `${args.epic}: ${summaryLine}` : args.epic,
-    body_file: `docs/temper/${args.epic}/pr-body.md`,
+    body_file: `${epicDir(args)}/pr-body.md`,
   },
 };

@@ -211,3 +211,28 @@ test('no builder output contains undefined or tells an agent to git push', () =>
     assert.ok(!/\bgit push\b/.test(text), name);
   }
 });
+
+test('a non-default specs_dir: the epic files go next to the spec, plan and log (TESTS-DOCS-7)', () => {
+  const moved = (a) => ({
+    ...a,
+    log: 'design/temper/e/log.md',
+    ...(a.spec ? { spec: 'design/temper/e/spec.md' } : {}),
+    ...(a.plan ? { plan: 'design/temper/e/plan.md' } : {}),
+  });
+  const b = moved(buildArgs());
+  const p = moved(publishArgs());
+  const prompts = {
+    behaviourSpec: lib.behaviourSpecPrompt(b),
+    acceptance: lib.acceptancePrompt(group, behaviours, b),
+    green: lib.greenPrompt(failing, 1, b),
+    docs: lib.docsPrompt(p),
+    evidence: lib.evidencePrompt(p),
+  };
+  for (const [name, t] of Object.entries(prompts)) assert.ok(!t.includes('docs/temper'), name);
+  assert.ok(prompts.behaviourSpec.includes('design/temper/e/behaviour.md'));
+  assert.ok(prompts.acceptance.includes('design/temper/e/behaviour.md'));
+  assert.ok(prompts.green.includes('design/temper/e/behaviour.md'));
+  assert.ok(prompts.docs.includes('design/temper/e/pr-body.md'));
+  assert.ok(prompts.evidence.includes('design/temper/e/owner-steps.sh'));
+  assert.ok(prompts.evidence.includes('design/temper/e/owner-checklist.md'));
+});

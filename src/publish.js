@@ -37,6 +37,6 @@ return {
   gate,
   pr: {
     title: summaryLine ? `${args.epic}: ${summaryLine}` : args.epic,
-    body_file: `docs/temper/${args.epic}/pr-body.md`,
+    body_file: `${epicDir(args)}/pr-body.md`,
   },
 };

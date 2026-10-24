@@ -40,7 +40,7 @@ A list of the behaviour groups the stage 3 behaviour spec is written in, each a 
 |---|---|
 | the epic's name | `epic` |
 | the repo, epic branch and base branch | `repo`, `branch`, `base` |
-| the spec, plan and log paths | `spec`, `plan`, `log` (`docs/temper/<epic>/spec.md`, `plan.md`, `log.md`) |
+| the spec, plan and log paths | `spec`, `plan`, `log` (`<specs_dir>/<epic>/spec.md`, `plan.md`, `log.md`) |
 | `host` in `.temper/project.md` | `host`: `{"kind":"local"}` or `{"kind":"ssh","name":…,"root":…}` |
 | `gate_quick` and `gate_full` in `.temper/project.md` | `gates`: `{"quick":…,"full":…}` |
 | each task's id and heading | `tasks[].id`, `tasks[].title` |
