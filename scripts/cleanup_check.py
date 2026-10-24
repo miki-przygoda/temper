@@ -3,13 +3,15 @@
 
 Safe means the work is on the remote: the branch tip is reachable from the
 remote's default branch, or equals `<remote>/<branch>`; and the worktree, when
-given, has nothing uncommitted or untracked.
+given, is a worktree of the repo whose HEAD is on the remote too and has nothing
+uncommitted or untracked.
 
 CLI: python3 scripts/cleanup_check.py <repo> <branch> [--worktree P] [--remote R] [--no-fetch]
 Prints {"ok": bool, "reasons": [...]} and exits 0 when ok, 1 when not.
 """
 import argparse
 import json
+import os
 import subprocess
 import sys
 
@@ -69,18 +71,44 @@ def check(repo: str, branch: str, worktree=None, remote: str = 'origin', fetch: 
             )
 
     if worktree is not None:
-        proc = _git(worktree, 'status', '--porcelain', '--untracked-files=all')
-        if proc.returncode != 0:
-            reasons.append(f'could not read the status of worktree {worktree}')
+        # The path must be a worktree of <repo> itself: inside a plain directory, git status
+        # reports the enclosing repo, and a worktree of another repo says nothing about <branch>.
+        top = _git(worktree, 'rev-parse', '--show-toplevel')
+        common = _git(worktree, 'rev-parse', '--git-common-dir')
+        repo_common = _git(repo, 'rev-parse', '--git-common-dir')
+        if (any(p.returncode != 0 for p in (top, common, repo_common))
+                or os.path.realpath(top.stdout.strip()) != os.path.realpath(worktree)
+                or os.path.realpath(os.path.join(worktree, common.stdout.strip()))
+                != os.path.realpath(os.path.join(repo, repo_common.stdout.strip()))):
+            reasons.append(f'{worktree} is not a worktree of {repo}; not deleting')
         else:
-            lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
-            if lines:
-                untracked = sum(1 for ln in lines if ln.startswith('??'))
-                changed = len(lines) - untracked
+            # The worktree's HEAD must be on the remote too: a detached HEAD (a stopped rebase,
+            # a `checkout --detach`) can hold commits that are on no branch.
+            head = _rev(worktree, 'HEAD')
+            default = _default_branch(repo, remote)
+            refs = [f'refs/remotes/{default}'] if default is not None else []
+            if _rev(repo, f'refs/remotes/{remote}/{branch}'):
+                refs.append(f'refs/remotes/{remote}/{branch}')
+            if head is None or not any(
+                    _git(repo, 'merge-base', '--is-ancestor', head, ref).returncode == 0
+                    for ref in refs):
+                shown = head[:12] if head else '(none)'
                 reasons.append(
-                    f'worktree {worktree} has {changed} uncommitted and '
-                    f'{untracked} untracked file(s)'
+                    f'worktree {worktree} HEAD {shown} is not on {remote}: it is not reachable '
+                    f'from {default or "its default branch"} or {remote}/{branch}'
                 )
+            proc = _git(worktree, 'status', '--porcelain', '--untracked-files=all')
+            if proc.returncode != 0:
+                reasons.append(f'could not read the status of worktree {worktree}')
+            else:
+                lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
+                if lines:
+                    untracked = sum(1 for ln in lines if ln.startswith('??'))
+                    changed = len(lines) - untracked
+                    reasons.append(
+                        f'worktree {worktree} has {changed} uncommitted and '
+                        f'{untracked} untracked file(s)'
+                    )
 
     return (not reasons, reasons)
 

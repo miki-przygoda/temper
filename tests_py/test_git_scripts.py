@@ -147,6 +147,32 @@ class CleanupCheckTest(GitRepoCase):
             (True, []),
         )
 
+    def test_clean_detached_worktree_with_an_unpushed_commit_is_refused(self):
+        # SAFETY-1: the branch is pushed, but its worktree's HEAD holds a commit on no branch
+        # (a stopped rebase, an agent's `checkout --detach`). Removing it would lose that commit.
+        self.make_feat(('Temper-Task: e/1',))
+        self.git(self.repo, 'checkout', '--quiet', 'main')
+        self.git(self.repo, 'push', '--quiet', 'origin', 'feat')
+        wt = self.tmp / 'wt'
+        self.git(self.repo, 'worktree', 'add', '--quiet', str(wt), 'feat')
+        self.git(wt, 'checkout', '--quiet', '--detach')
+        self.git(wt, 'commit', '--quiet', '--allow-empty', '-m', 'on no branch')
+        ok, reasons = cleanup_check.check(str(self.repo), 'feat', worktree=str(wt), fetch=True)
+        self.assertFalse(ok)
+        self.assertTrue(any('HEAD' in r and 'not on' in r for r in reasons), reasons)
+
+    def test_a_path_that_is_not_a_worktree_of_the_repo_is_refused(self):
+        # SAFETY-1: a plain directory inside the repo; git status there reports the clean repo.
+        self.make_feat(('Temper-Task: e/1',))
+        self.git(self.repo, 'push', '--quiet', 'origin', 'feat')
+        (self.repo / '.git' / 'info' / 'exclude').write_text('.temper/\n', encoding='utf-8')
+        plain = self.repo / '.temper' / 'worktrees' / 'wt'
+        plain.mkdir(parents=True)
+        (plain / 'notes.txt').write_text('x', encoding='utf-8')
+        ok, reasons = cleanup_check.check(str(self.repo), 'feat', worktree=str(plain), fetch=True)
+        self.assertFalse(ok)
+        self.assertTrue(any('not a worktree' in r for r in reasons), reasons)
+
     def test_failed_fetch_refuses(self):
         self.make_feat(('Temper-Task: e/1',))
         self.assertEqual(
