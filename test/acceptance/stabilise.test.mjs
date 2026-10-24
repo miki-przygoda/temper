@@ -463,6 +463,34 @@ test('STABILISE-19 there is never a third sweep', async (t) => {
     assert.ok(sweeps <= 2, `${sweeps} sweeps ran across the stage`);
   });
 
+  await t.test('with the ids the reviewers are told to use, a resume after the second sweep does not sweep again', async () => {
+    // A real reviewer names its finding as its prompt says, and the resume guard relies on that id,
+    // so here the security reviewer takes the id from its prompt instead of a scripted one.
+    const asTold = () => {
+      const seen = {};
+      return (call) => {
+        const r = call.label.match(/^(second:)?review:security$/);
+        if (r) {
+          const m = call.prompt.match(/Give each finding an id `([^`]*)-NN`/);
+          assert.ok(m, 'the review prompt says how to name the ids');
+          const f = finding(`${m[1]}-01`, r[1] ? 'severe' : 'critical');
+          seen[f.id] = f;
+          return { findings: [f] };
+        }
+        return responder({ reviews: { security: Object.values(seen) } })(call);
+      };
+    };
+    const first = await runWorkflow(WF, { args: args(), respond: asTold() });
+    const selected = first.result.findings;
+    const second = await runWorkflow(WF, { args: fixArgs({ selected }), respond: asTold() });
+    assert.equal(second.result.status, 'handover');
+    // The head refreshes args.done from the fix trailers the two runs committed.
+    const done = [...new Set([first, second].flatMap((r) => labels(r.calls).filter((l) => /^fix:/.test(l))))];
+    const resumed = await runWorkflow(WF, { args: fixArgs({ selected, done }), respond: asTold() });
+    const sweeps = [first, second, resumed].reduce((n, r) => n + (reviewsOf(r.calls).length > 0 ? 1 : 0), 0);
+    assert.ok(sweeps <= 2, `${sweeps} sweeps ran across the stage`);
+  });
+
   // The head saves a fix run's second-sweep findings in args and passes them on every resume.
   const resumeAfter = (run, extra) => runWorkflow(WF, {
     args: fixArgs({ second_sweep_findings: run.result.second_sweep_findings, ...extra }),
