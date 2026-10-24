@@ -647,7 +647,8 @@ function gatePrompt(args) {
 
 // One sweep: a review per lens, then a verify per finding. Keeps the findings the verifier
 // reproduced, with the verifier's severity, merged and ordered. A verdict of real:false or
-// null (the agent died or was skipped) counts as refuted.
+// null (the agent died or was skipped) counts as refuted. A review that returns nothing leaves its
+// lens unreviewed: it is blocked ("agent returned nothing"), never a lens with no findings.
 // A finding needs an input and the wrong result it produces (spec 7 4a.1); one without is not accepted.
 const hasInputAndWrongResult = (f) => !!f
   && typeof f.input === 'string' && f.input.trim() !== ''
@@ -665,7 +666,8 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
       schema: FINDINGS_SCHEMA,
     }),
     async (review) => {
-      const found = (review && Array.isArray(review.findings) ? review.findings : []).filter(hasInputAndWrongResult);
+      if (!review) return null;
+      const found = (Array.isArray(review.findings) ? review.findings : []).filter(hasInputAndWrongResult);
       const verdicts = await parallel(found.map((f) => () => agent(verifyPrompt(f, args), {
         label: `${labelPrefix}verify:${f.id}`,
         phase: verifyPhase,
@@ -675,9 +677,14 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
     },
   );
   const kept = [];
+  const blocked = [];
   let refuted = 0;
-  for (const pairs of perLens) {
-    for (const { finding, verdict } of pairs || []) {
+  for (const [i, pairs] of perLens.entries()) {
+    if (!pairs) {
+      blocked.push({ id: `${labelPrefix}review:${lenses[i]}`, reason: 'agent returned nothing' });
+      continue;
+    }
+    for (const { finding, verdict } of pairs) {
       if (!verdict || verdict.real !== true) {
         refuted += 1;
         continue;
@@ -685,7 +692,7 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
       kept.push({ ...finding, severity: verdict.severity ?? finding.severity });
     }
   }
-  return { findings: sortFindings(dedupeFindings(kept)), refuted };
+  return { findings: sortFindings(dedupeFindings(kept)), refuted, blocked };
 }
 
 const errors = validateStabiliseArgs(args);
@@ -693,8 +700,8 @@ if (errors.length > 0) return { status: 'invalid', errors };
 
 if (args.part === 'sweep') {
   phase('Sweep');
-  const { findings, refuted } = await sweepAndVerify(lensesOr(args.lenses), [], '');
-  return { status: 'list', findings, refuted };
+  const { findings, refuted, blocked } = await sweepAndVerify(lensesOr(args.lenses), [], '');
+  return { status: 'list', findings, refuted, blocked };
 }
 
 // part 'fix' (4b): careful fixes one at a time in severity order, one more sweep, then the stop.
@@ -738,11 +745,16 @@ await fixLoop(toFix, out);
 phase('Second sweep');
 // Saved findings stand in for the sweep; their done severe fixes still get the regression check below.
 let secondFindings;
+let unreviewed = false;
 if (savedSecond) {
   secondFindings = sortFindings(savedSecond);
 } else {
   const alreadyFixed = [...doneIds(toFix), ...out.fixed];
-  secondFindings = (await sweepAndVerify(lensesOr(args.lenses), alreadyFixed, 'second:')).findings;
+  const second = await sweepAndVerify(lensesOr(args.lenses), alreadyFixed, 'second:');
+  secondFindings = second.findings;
+  // A lens the second sweep never reviewed means the stage is not done: hand over, never 'stable'.
+  out.blocked.push(...second.blocked);
+  unreviewed = second.blocked.length > 0;
 }
 const severe = secondFindings.filter((f) => f.severity === 'severe');
 const others = secondFindings.filter((f) => f.severity !== 'severe');
@@ -763,7 +775,7 @@ if (severe.length > 0) {
 
 // There is never a third sweep: the run ends here either way.
 return {
-  status: severe.length > 0 ? 'handover' : 'stable',
+  status: severe.length > 0 || unreviewed ? 'handover' : 'stable',
   fixed: out.fixed,
   reverted: out.reverted,
   contract_items: out.contract_items,

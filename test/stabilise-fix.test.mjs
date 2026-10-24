@@ -181,3 +181,17 @@ test("part 'fix' with no selected findings is invalid with no agent calls", asyn
   assert.equal(result.status, 'invalid');
   assert.equal(calls.length, 0);
 });
+
+test('a second-sweep review that returns nothing is blocked, and the stage is not stable', async () => {
+  const base = responder();
+  const respond = (q) => (q.label.startsWith('second:review:') ? null : base(q));
+  const { result, calls } = await runWorkflow(WF, { args: fixArgs(), respond });
+  assert.notEqual(result.status, 'stable');
+  assert.equal(result.status, 'handover');
+  assert.deepEqual(
+    result.blocked,
+    lib.DEFAULT_LENSES.map((l) => ({ id: `second:review:${l}`, reason: 'agent returned nothing' })),
+  );
+  const ls = labels(calls);
+  assert.ok(!ls.slice(ls.lastIndexOf(`second:review:${lib.DEFAULT_LENSES.at(-1)}`) + 1).some((l) => /review:/.test(l)));
+});

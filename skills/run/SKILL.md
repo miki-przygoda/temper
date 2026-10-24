@@ -84,7 +84,7 @@ Other blocked ids (an acceptance group, a green round, `docs`, `evidence`) with 
 
 Set the status to `stabilising`. The args come from `args.json` and `project.md`: `epic`, `repo`, `branch`, `base`, `log`, `host`, `gates`, `done` (refreshed as above), `lenses` (the default lenses `security`, `failure paths and lifecycle` and `test strength and docs`, followed by the extra lenses on the `lenses` line of `project.md`, comma-separated, leaving out repeats; the workflow runs exactly the lenses it's given, so the extras run as well as the defaults), `severity_notes` (the text of `project.md`'s `## Severity notes` section, or `""`) and, for `part: "fix"`, `answers` (the answers to blocked fixes, each keyed by its finding id).
 
-1. **4a.** Launch with `part: "sweep"`. It returns `{status: "list", findings, refuted}`, ordered by severity.
+1. **4a.** Launch with `part: "sweep"`. It returns `{status: "list", findings, refuted, blocked}`, with the findings ordered by severity. Each `blocked` entry (id `review:<lens>`, reason `agent returned nothing`) is a lens that was never reviewed: the list is not clean for it. Record each in `log.md` and tell the user (overnight, in the morning report).
 2. **Choosing the fixes.**
    - User present: show the list as a multi-select AskUserQuestion, grouped by severity, each option with the finding's id, file and summary. AskUserQuestion holds up to 4 options per question and 4 questions per call; use more calls for a longer list.
    - Overnight: select the findings whose severity is in `overnight_fix_default` (for example `critical+important`) and log the choice in `log.md`.
@@ -95,10 +95,10 @@ Set the status to `stabilising`. The args come from `args.json` and `project.md`
 The `fix` return value:
 - `second_sweep_findings`: the second sweep's findings. Save them as `second_sweep_findings` in `args.json` before anything else, and pass them on every later launch or resume of `part: "fix"`, so the second sweep never runs again.
 - `contract_items`: the contract is wrong. Take each to the user or the spec, never into a quiet code fix.
-- `blocked`: handle each as a blocked task question above, but write its answer to `args.answers[<finding id>]`, so it reaches only that fix's prompt; then resume with the same `selected` and the saved `second_sweep_findings`. The id `second-sweep` with `done but args.second_sweep_findings missing` means the second sweep ran but no saved findings came back from it: never sweep again; stop, record it in `log.md`, and hand over to the user.
+- `blocked`: handle each as a blocked task question above, but write its answer to `args.answers[<finding id>]`, so it reaches only that fix's prompt; then resume with the same `selected` and the saved `second_sweep_findings`. The id `second-sweep` with `done but args.second_sweep_findings missing` means the second sweep ran but no saved findings came back from it: never sweep again; stop, record it in `log.md`, and hand over to the user. An id `second:review:<lens>` is not a fix and gets no answer: see `handover` below.
 - `open_items`: append them to the open items in `log.md`.
 - `status: "stable"`: go to stage 5.
-- `status: "handover"`: the second sweep found something severe; its fixes and the regression check ran. Stop, record it in `log.md`, and hand over to the user (per `severe_contact` overnight). There is never a third sweep.
+- `status: "handover"`: the second sweep found something severe, and its fixes and the regression check ran; or a `blocked` entry with id `second:review:<lens>` says that lens's second-sweep reviewer returned nothing, so the stage is not done. Never resume to review it. Stop, record it in `log.md`, and hand over to the user (per `severe_contact` overnight). There is never a third sweep.
 
 ## Stage 5, `temper:publish`
 

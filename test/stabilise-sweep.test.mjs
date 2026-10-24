@@ -141,3 +141,16 @@ test("part 'sweep' makes no fix calls", async () => {
   const { calls } = await runWorkflow(WF, { args: sweepArgs(), respond: responder() });
   assert.ok(!labels(calls).some((l) => l.startsWith('fix:')));
 });
+
+test('a review that returns nothing is reported as blocked, never as a clean lens', async () => {
+  const base = responder();
+  const respond = (q) => (q.label === 'review:failure paths and lifecycle' ? null : base(q));
+  const { result } = await runWorkflow(WF, { args: sweepArgs(), respond });
+  assert.equal(result.status, 'list');
+  assert.deepEqual(result.blocked, [{ id: 'review:failure paths and lifecycle', reason: 'agent returned nothing' }]);
+});
+
+test('a sweep where every review ran has nothing blocked', async () => {
+  const { result } = await runWorkflow(WF, { args: sweepArgs(), respond: responder() });
+  assert.deepEqual(result.blocked, []);
+});
