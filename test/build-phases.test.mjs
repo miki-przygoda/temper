@@ -239,3 +239,16 @@ test('a run that ran every acceptance group itself does not ask to-green for mar
   const { calls } = await runWorkflow(WF, { args: buildArgs(), respond: responder(g1Fails) });
   assert.doesNotMatch(calls.find((c) => c.opts.label === 'green:1').prompt, /earlier run/);
 });
+
+// TESTS-DOCS-3: a resume after green:1 is done, with round 2 still needed, still runs round 2
+// over the tests marked acceptance-failing, and a test still failing becomes a question.
+test('a resume with the acceptance groups and green:1 done still runs green:2 over the marked failing tests', async () => {
+  const { result, calls } = await runWorkflow(WF, {
+    args: buildArgs({ done: ['a', 'b', 'checkpoint', 'behaviour-spec', 'acceptance:g1', 'acceptance:g2', 'green:1'], behaviour: GROUPS }),
+    respond: responder({ 'green:2': { fixed: [], corrected: [], questions: [], still_failing: ['G1-02'] } }),
+  });
+  assert.deepEqual(labels(calls), ['green:2']);
+  assert.match(calls[0].prompt, /acceptance-failing: <id>/);
+  assert.equal(result.status, 'mvp');
+  assert.deepEqual(result.questions, [{ id: 'G1-02', question: 'still failing after 2 rounds' }]);
+});
