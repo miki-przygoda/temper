@@ -16,6 +16,8 @@ You are the head session. This stage turns one epic's `spec.md` into `plan.md` a
 
 ## 1. Write the plan, with temper's additions
 
+If `<specs_dir>/<epic>/plan.md` already exists (a person wrote it by hand, or an earlier plan run did), don't write a new plan and never replace it: check that it has the additions below, add what's missing only with the user's agreement, then go on to step 2 and generate `args.json` from it (spec 1: every stage runs from files a person could have written by hand).
+
 Invoke the `superpowers:writing-plans` skill and follow it, with the additions in `${CLAUDE_PLUGIN_ROOT}/templates/plan-additions.md`. Save the plan to `<specs_dir>/<epic>/plan.md`, not to the location writing-plans would use. Where writing-plans and this skill disagree, this skill wins.
 
 The additions:

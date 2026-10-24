@@ -227,7 +227,7 @@ test('STATE-20 with board mirroring on, the board follows each epics.md change; 
   for (const s of ['building', 'stabilising', 'ready']) assert.match(flat(SKILL.run), new RegExp(`status to \`${s}\``));
 });
 
-test('STATE-21 a hand-written spec.md, plan.md or args.json starts its stage as if an earlier stage had written it', { skip: 'acceptance-failing: STATE-21' }, async (t) => {
+test('STATE-21 a hand-written spec.md, plan.md or args.json starts its stage as if an earlier stage had written it', async (t) => {
   // args.json: the build workflow runs from a file a person typed.
   const dir = mkdtempSync(join(tmpdir(), 'temper-state-hand-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

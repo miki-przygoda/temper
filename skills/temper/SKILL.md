@@ -25,7 +25,7 @@ Look at `<specs_dir>/epics.md` and each epic's folder `<specs_dir>/<epic>/`, and
 |---|---|
 | no `epics.md` | `temper:ground`, to turn the idea into epics and specs |
 | an epic at status `spec` whose `spec.md` is missing or still has open questions | `temper:ground`, to finish that spec |
-| an epic at status `spec` with a finished `spec.md` but no `args.json` | `temper:plan` |
+| an epic at status `spec` with a finished `spec.md` but no `args.json` | `temper:plan` (when `plan.md` already exists, for example written by hand, plan turns it into `args.json` instead of writing a new plan) |
 | an epic at status `planned`, `building`, `stabilising` or `ready` (it has `args.json`) | `temper:run`, which launches or resumes the build, stabilise or publish workflow for that status |
 | an epic at status `merged` whose branch or worktrees still exist | `temper:cleanup` |
 | every epic `merged` and cleaned up | nothing to do; say so, and offer `temper:ground` for new work |
