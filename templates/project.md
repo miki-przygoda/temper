@@ -9,7 +9,7 @@ gate_full:
 host: local
 # Board mirroring of epic status: off, github or jira. A board failure never blocks a run.
 board: off
-# Extra review lenses for stage 4, comma-separated. Empty uses the defaults.
+# Extra review lenses for stage 4, comma-separated. They run as well as the defaults.
 lenses:
 ---
 

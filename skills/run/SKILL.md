@@ -69,7 +69,7 @@ Other blocked ids (an acceptance group, a green round, `docs`, `evidence`) with 
 
 ## Stage 4, `temper:stabilise`
 
-Set the status to `stabilising`. The args come from `args.json` and `project.md`: `epic`, `repo`, `branch`, `base`, `log`, `host`, `gates`, `done` (refreshed as above), `lenses` (the `lenses` line of `project.md`, comma-separated; empty means the defaults) and `severity_notes` (the text of `project.md`'s `## Severity notes` section, or `""`).
+Set the status to `stabilising`. The args come from `args.json` and `project.md`: `epic`, `repo`, `branch`, `base`, `log`, `host`, `gates`, `done` (refreshed as above), `lenses` (the default lenses `security`, `failure paths and lifecycle` and `test strength and docs`, followed by the extra lenses on the `lenses` line of `project.md`, comma-separated, leaving out repeats; the workflow runs exactly the lenses it's given, so the extras run as well as the defaults) and `severity_notes` (the text of `project.md`'s `## Severity notes` section, or `""`).
 
 1. **4a.** Launch with `part: "sweep"`. It returns `{status: "list", findings, refuted}`, ordered by severity.
 2. **Choosing the fixes.**

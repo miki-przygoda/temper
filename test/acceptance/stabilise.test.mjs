@@ -84,11 +84,17 @@ function responder({ reviews = {}, second = {}, verdicts = {}, fixes = {}, regre
   };
 }
 
-// The lenses the head passes, per skills/run/SKILL.md: the `lenses` line of project.md, comma-separated.
-function lensesFromProject(text) {
+// The extra lenses on the `lenses` line of project.md, comma-separated.
+function extraLenses(text) {
   const m = text.match(/^lenses:[ \t]*(.*)$/m);
   if (!m) return [];
   return m[1].split(',').map((s) => s.trim()).filter((s) => s !== '');
+}
+
+// The lenses the head passes, per skills/run/SKILL.md: the default lenses, followed by the
+// extras from project.md, leaving out repeats.
+function lensesFromProject(text) {
+  return [...new Set([...DEFAULTS, ...extraLenses(text)])];
 }
 
 // The same workflow run, but with the runtime's documented concurrency: pipeline() sends every item
@@ -163,10 +169,11 @@ test('STABILISE-02 the default lenses run, and extra lenses from project.md run 
     assert.deepEqual(labels(reviewsOf(calls)).sort(), DEFAULTS.map((l) => `review:${l}`).sort());
   });
 
-  await t.test('extra lenses in project.md run as well as the defaults', { skip: 'acceptance-failing: STABILISE-02' }, async () => {
+  await t.test('extra lenses in project.md run as well as the defaults', async () => {
+    assert.match(STAGE4, /`lenses` \(the default lenses `security`, `failure paths and lifecycle` and `test strength and docs`, followed by the extra lenses on the `lenses` line of `project\.md`/);
     const project = read('templates/project.md').replace(/^lenses:.*$/m, 'lenses: performance, concurrency');
+    assert.deepEqual(extraLenses(project), ['performance', 'concurrency']);
     const lenses = lensesFromProject(project);
-    assert.deepEqual(lenses, ['performance', 'concurrency']);
     const { calls } = await runWorkflow(WF, { args: args({ lenses }), respond: responder() });
     const got = labels(reviewsOf(calls)).sort();
     assert.deepEqual(got, [...DEFAULTS, 'performance', 'concurrency'].map((l) => `review:${l}`).sort());
