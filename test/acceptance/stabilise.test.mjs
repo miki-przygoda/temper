@@ -183,9 +183,11 @@ test('STABILISE-02 the default lenses run, and extra lenses from project.md run 
 test('STABILISE-03 a finding without an input and the wrong result it produces is not accepted', async () => {
   const good = finding('security-01', 'critical');
   const vague = finding('security-02', 'critical', { input: '', wrong_result: '', summary: 'looks risky' });
+  const noWrongResult = finding('security-03', 'critical', { wrong_result: '  ', summary: 'input but no wrong result' });
+  const noInput = finding('security-04', 'critical', { input: '', summary: 'wrong result but no input' });
   const { calls, result } = await runWorkflow(WF, {
     args: args(),
-    respond: responder({ reviews: { security: [good, vague] } }),
+    respond: responder({ reviews: { security: [good, vague, noWrongResult, noInput] } }),
   });
   const schema = reviewsOf(calls)[0].opts.schema;
   const item = schema.properties.findings.items;
@@ -193,6 +195,8 @@ test('STABILISE-03 a finding without an input and the wrong result it produces i
   const ids = result.findings.map((f) => f.id);
   assert.ok(ids.includes('security-01'));
   assert.ok(!ids.includes('security-02'), 'a finding with an empty input and wrong result reached the list');
+  assert.ok(!ids.includes('security-03'), 'a finding with an input but no wrong result reached the list');
+  assert.ok(!ids.includes('security-04'), 'a finding with a wrong result but no input reached the list');
 });
 
 test('STABILISE-04 a separate agent tries to disprove each finding; disproved ones are dropped, duplicates merged', async () => {
