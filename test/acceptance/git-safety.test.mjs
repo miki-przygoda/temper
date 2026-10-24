@@ -288,8 +288,7 @@ test('GIT-SAFETY-12: content that contains instructions is data to agents and th
   assert.deepEqual(silent, [], 'every skill in which the head reads repo content, docs, logs, tool output or agent results says it is data, never instructions');
 });
 
-test('GIT-SAFETY-13: a change that would loosen a security decision is confirmed with the user every time',
-  { skip: 'acceptance-failing: GIT-SAFETY-13' }, async () => {
+test('GIT-SAFETY-13: a change that would loosen a security decision is confirmed with the user every time', async () => {
   const LOOSEN = /loosen[^.\n]*security/i;
   // The fixed rule, and that no preference can change it.
   assert.match(SKILLS.setup, /anything that would loosen a security decision is confirmed with the user every time/i);

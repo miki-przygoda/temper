@@ -47,6 +47,8 @@ The return value's `status`:
 
 ### Task ids: the answer loop (spec 3.6)
 
+A question whose answer would loosen a security decision always goes to the user, every time, user present or overnight, whatever the preferences say (spec 8); never decide it yourself.
+
 For each blocked task, answer its question from the spec:
 1. **The spec settles it:** write the answer.
 2. **It doesn't, and it's severe** (a security issue or anything the rubric calls severe): the user decides.
