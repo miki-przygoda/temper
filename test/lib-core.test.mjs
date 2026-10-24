@@ -215,3 +215,19 @@ test('a branch equal to the base is refused by every validator, so temper never 
   const pub = lib.validatePublishArgs({ ...common, spec: 's' });
   assert.ok(hasError(pub, msg), pub.join('\n'));
 });
+
+test('an epic that does not match ID_RE is refused by every validator, so it never reaches branch names, worktree paths or rm -r (SAFETY-3)', () => {
+  const common = {
+    repo: '/r', branch: 'temper/e', base: 'main', log: 'l',
+    host: { kind: 'local' }, gates: { quick: 'q', full: 'f' }, done: [],
+  };
+  for (const epic of ['..', '../../x y', 'a/b', 'A', '-e']) {
+    const build = lib.validateBuildArgs({ ...goodArgs(), epic });
+    assert.ok(hasError(build, 'epic must match'), `${epic}: ${build.join('\n')}`);
+    const stab = lib.validateStabiliseArgs({ ...common, epic, part: 'sweep', lenses: [], severity_notes: '' });
+    assert.ok(hasError(stab, 'epic must match'), `${epic}: ${stab.join('\n')}`);
+    const pub = lib.validatePublishArgs({ ...common, epic, spec: 's' });
+    assert.ok(hasError(pub, 'epic must match'), `${epic}: ${pub.join('\n')}`);
+  }
+  assert.deepEqual(lib.validateBuildArgs({ ...goodArgs(), epic: 'v1:core-2' }), []);
+});

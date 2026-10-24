@@ -66,6 +66,7 @@ function checkDone(done, errors) {
 
 function checkCommon(args, errors) {
   checkStrings(args, ['epic', 'repo', 'branch', 'base', 'log'], errors);
+  if (isNonEmptyString(args.epic) && !ID_RE.test(args.epic)) errors.push(`epic must match ${ID_RE}`);
   if (isNonEmptyString(args.branch) && args.branch === args.base) {
     errors.push(`branch must not be the base branch ${args.base}`);
   }
