@@ -445,7 +445,7 @@ test('STABILISE-19 there is never a third sweep', async (t) => {
     assert.match(STAGE4, /There is never a third sweep\./);
   });
 
-  await t.test('resuming the stage after the second sweep ran does not sweep again', { skip: 'acceptance-failing: STABILISE-19' }, async () => {
+  await t.test('resuming the stage after the second sweep ran does not sweep again', async () => {
     // Run 1 (4a) and run 2 (4b with a severe second-sweep finding) as the head launches them.
     const sev = finding('second-security-01', 'severe');
     const first = await runWorkflow(WF, { args: args(), respond: responder({ reviews: { security: [finding('security-01', 'critical')] } }) });

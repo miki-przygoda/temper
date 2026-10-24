@@ -85,10 +85,21 @@ phase('Fix');
 await fixLoop(toFix, out);
 
 phase('Second sweep');
-const alreadyFixed = [...doneIds(toFix), ...out.fixed];
-const second = await sweepAndVerify(lensesOr(args.lenses), alreadyFixed, 'second:');
-const severe = second.findings.filter((f) => f.severity === 'severe');
-const others = second.findings.filter((f) => f.severity !== 'severe');
+// A fix:second-<lens>-NN trailer (reviewPrompt's id for a second-sweep finding) means the second
+// sweep already ran in an earlier run of this stage: never sweep again (spec 7, 1, 3.5). Its severe
+// fixes are the done ones; they still get the regression check below.
+const secondDone = args.done.filter((d) => d.startsWith('fix:second-')).map((d) => ({ id: d.slice('fix:'.length), severity: 'severe' }));
+let severe;
+let others;
+if (secondDone.length > 0) {
+  severe = secondDone;
+  others = [];
+} else {
+  const alreadyFixed = [...doneIds(toFix), ...out.fixed];
+  const second = await sweepAndVerify(lensesOr(args.lenses), alreadyFixed, 'second:');
+  severe = second.findings.filter((f) => f.severity === 'severe');
+  others = second.findings.filter((f) => f.severity !== 'severe');
+}
 
 let regressions = [];
 if (severe.length > 0) {
