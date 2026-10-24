@@ -233,7 +233,7 @@ test('a branch equal to the base is refused by every validator, so temper never 
   assert.ok(hasError(pub, msg), pub.join('\n'));
 });
 
-test('an epic that does not match ID_RE is refused by every validator, so it never reaches branch names, worktree paths or rm -r (SAFETY-3)', () => {
+test('an epic that does not match ID_RE is refused by every validator, so it never reaches branch names, worktree paths or rmdir (SAFETY-3)', () => {
   const common = {
     repo: '/r', branch: 'temper/e', base: 'main', log: 'l',
     host: { kind: 'local' }, gates: { quick: 'q', full: 'f' }, done: [],

@@ -12,6 +12,8 @@ A test that fails because of the product is skipped with "acceptance-failing: <i
 
 import json
 import os
+import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -27,6 +29,15 @@ CLEANUP_SKILL = (ROOT / 'skills' / 'cleanup' / 'SKILL.md').read_text(encoding='u
 
 def flat(text):
     return ' '.join(text.split())
+
+
+def epic_dir_command(skill, epic_dir):
+    """The command the cleanup skill runs over ssh to remove the per-epic build directory, with
+    <root>/<epic> filled in, as an argv run locally (no shell)."""
+    m = re.search(r"ssh <host> '([^']*<root>/<epic>[^']*)'", skill)
+    if not m:
+        raise AssertionError('the cleanup skill names no ssh command for <root>/<epic>')
+    return shlex.split(m.group(1).replace('<root>/<epic>', str(epic_dir)))
 
 
 class Sandbox(unittest.TestCase):
@@ -233,7 +244,7 @@ class TestSkillsPackaging(Sandbox):
             else:
                 report[b] = ('kept', (out or {}).get('reasons', []))
         if all(state == 'deleted' for state, _ in report.values()):
-            subprocess.run(['rm', '-r', str(build)], check=True)
+            subprocess.run(epic_dir_command(CLEANUP_SKILL, build), check=True)
 
         self.assertEqual(report['epic/e'][0], 'deleted')
         self.assertEqual(report['temper/e/a'][0], 'deleted')
@@ -260,6 +271,29 @@ class TestSkillsPackaging(Sandbox):
         self.assertIn('temper/e/a', remote)
         self.assertIn('temper/e/c', remote)
 
+
+    def test_A8_cleanup_removes_the_epic_directory_only_with_rmdir(self):
+        # Amendment A8: cleanup never runs `rm -r` on <root>/<epic>/. Once every worktree in it
+        # passed the check and was removed, it runs `rmdir`, which fails unless the directory is
+        # empty, so anything left in it (not a passed worktree) survives.
+        self.assertNotIn("'rm -r", CLEANUP_SKILL)
+        argv = epic_dir_command(CLEANUP_SKILL, self.tmp / 'x')
+        self.assertEqual(argv[0], 'rmdir', argv)
+
+        left = self.tmp / 'build-left' / 'e'
+        (left / 'target').mkdir(parents=True)
+        (left / 'target' / 'out.bin').write_text('left behind\n', encoding='utf-8')
+        proc = subprocess.run(epic_dir_command(CLEANUP_SKILL, left), capture_output=True,
+                              text=True, check=False)
+        self.assertNotEqual(proc.returncode, 0, 'a non-empty epic directory is refused')
+        self.assertTrue((left / 'target' / 'out.bin').exists())
+
+        empty = self.tmp / 'build-empty' / 'e'
+        empty.mkdir(parents=True)
+        proc = subprocess.run(epic_dir_command(CLEANUP_SKILL, empty), capture_output=True,
+                              text=True, check=False)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertFalse(empty.exists())
 
 if __name__ == '__main__':
     unittest.main()

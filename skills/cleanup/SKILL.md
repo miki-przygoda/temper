@@ -41,9 +41,9 @@ Any other exit status, a crash, or output you can't parse counts as exit 1.
 For a branch whose check exited 0, in this order:
 1. `git worktree remove <path>` for its worktree (on the host over ssh for an ssh worktree). Never pass `--force`.
 2. `git branch -d <branch>`. Never `-D`. If `-d` refuses, stop for that branch and tell the user.
-3. When every worktree under the host's `<root>/<epic>/` has passed and been removed, delete that per-epic build directory on the host: `ssh <host> 'rm -r <root>/<epic>'`. If any worktree under it failed its check, nothing is deleted there.
+3. When every worktree under the host's `<root>/<epic>/` has passed and been removed, delete that per-epic build directory on the host with `rmdir`, which fails unless it is empty: `ssh <host> 'rmdir <root>/<epic>'` (amendment A8). If any worktree under it failed its check, nothing is deleted there. Never delete it recursively: if `rmdir` refuses, something other than a passed worktree is still in it, so leave it and tell the user. The host clone lies outside it (A7) and is never deleted.
 
-Never delete a remote branch, and never work around a refusal: no `--force`, no `-D`, no `rm` of a worktree, no `git reset` or `git clean` to make a check pass. When a check says exit 1, nothing is deleted and the user decides what to do with the work.
+Never delete a remote branch, and never work around a refusal: no `--force`, no `-D`, no `rm` of a worktree or of the epic directory, no `git reset` or `git clean` to make a check pass. When a check says exit 1, nothing is deleted and the user decides what to do with the work.
 
 ## The report
 
