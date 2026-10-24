@@ -27,6 +27,24 @@ const SKILLS = {
     'stays open',
   ],
   cleanup: ['cleanup_check.py', 'exit 1', 'nothing is deleted'],
+  temper: ['setup', 'ground', 'plan', 'run', 'cleanup', 'preferences.md'],
+  ground: [
+    'superpowers:brainstorming',
+    'research.md',
+    'epics.md',
+    'templates/spec.md',
+    'no open questions',
+    'question_style',
+  ],
+  plan: [
+    'superpowers:writing-plans',
+    'templates/plan-additions.md',
+    'args.json',
+    'Owns:',
+    'Wave:',
+    'earlier wave',
+    'review the plan',
+  ],
 };
 
 function frontmatter(text) {
