@@ -11,6 +11,12 @@ function firstLine(text) {
   return typeof text === 'string' ? text.split('\n')[0].trim() : '';
 }
 
+// POSIX single-quoted form, each ' written as '\'': the agent's summary is data, and sh
+// must never expand backticks or $(...) in it (SECOND-SAFETY-1).
+function shellQuote(text) {
+  return `'${text.replace(/'/g, `'\\''`)}'`;
+}
+
 phase('Docs');
 let docs = null;
 if (!publishDone.includes('docs')) {
@@ -30,13 +36,15 @@ const gate = await agent(gatePrompt(args), { schema: GATE_SCHEMA, label: 'gate',
 if (!gate || gate.passed !== true || gate.exit_status !== 0) return { status: 'gate_failed', gate };
 
 const summaryLine = firstLine(docs && docs.summary);
+const prTitle = summaryLine ? `${args.epic}: ${summaryLine}` : args.epic;
 return {
   status: 'ready',
   docs,
   evidence,
   gate,
   pr: {
-    title: summaryLine ? `${args.epic}: ${summaryLine}` : args.epic,
+    title: prTitle,
+    title_shell: shellQuote(prTitle),
     body_file: `${epicDir(args)}/pr-body.md`,
   },
 };

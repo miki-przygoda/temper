@@ -222,7 +222,7 @@ test('PUBLISH-04 ready with a green gate and may_push yes: the head pushes the b
   assert.match(STAGE5, /`status` is `ready` and `gate\.passed` is true/);
   assert.match(STAGE5, /`may_push` is `yes` in `preferences\.md`/);
   assert.match(STAGE5, /git push -u origin <branch>/);
-  assert.match(STAGE5, /gh pr create --base <base> --head <branch> --title "<pr\.title>" --body-file <pr\.body_file>/);
+  assert.match(STAGE5, /gh pr create --base <base> --head <branch> --title <pr\.title_shell> --body-file <pr\.body_file>/);
   // `yes` is a value the user can choose, and the preferences file documents it.
   assert.match(read('skills/setup/SKILL.md'), /\| `may_push` \|[^\n]*`yes`/);
   assert.match(read('templates/preferences.md'), /may push branches and open PRs on a green full gate: ask, yes or no/);

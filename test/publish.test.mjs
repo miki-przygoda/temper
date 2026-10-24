@@ -1,5 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { runWorkflow } from './harness.mjs';
 
 const WF = 'workflows/publish.js';
@@ -40,6 +45,25 @@ test('everything passes: ready, with the PR title and body file', async () => {
   assert.deepEqual(result.evidence, REPLIES.evidence);
   assert.deepEqual(result.gate, REPLIES.gate);
   assert.deepEqual(labels(calls), ['docs', 'evidence', 'gate']);
+});
+
+test('the PR title comes with a shell-quoted form that sh never expands (SECOND-SAFETY-1)', async () => {
+  const summary = "Count `touch PWNED` ignored files, $(touch PWNED2) and it's $HOME";
+  const docs = { ...REPLIES.docs, summary };
+  const { result } = await runWorkflow(WF, { args: args(), respond: responder({ docs }) });
+  assert.equal(result.status, 'ready');
+  assert.equal(result.pr.title, `e: ${summary}`);
+  const dir = mkdtempSync(join(tmpdir(), 'temper-title-'));
+  const out = execFileSync('sh', ['-c', `printf '%s' ${result.pr.title_shell}`], { cwd: dir, encoding: 'utf8' });
+  assert.equal(out, result.pr.title);
+  assert.equal(existsSync(join(dir, 'PWNED')), false);
+  assert.equal(existsSync(join(dir, 'PWNED2')), false);
+});
+
+test('the run skill passes the shell-quoted title, never the raw title in double quotes', () => {
+  const skill = readFileSync(fileURLToPath(new URL('../skills/run/SKILL.md', import.meta.url)), 'utf8');
+  assert.ok(!skill.includes('--title "<pr.title>"'), 'the skill puts <pr.title> inside double quotes');
+  assert.ok(skill.includes('--title <pr.title_shell>'), 'the skill lacks --title <pr.title_shell>');
 });
 
 test('the agents get their schemas', async () => {

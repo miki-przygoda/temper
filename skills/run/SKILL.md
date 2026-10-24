@@ -120,8 +120,10 @@ Args: `epic`, `repo`, `branch`, `base`, `log`, `spec`, `host`, `gates` and `done
 
   ```
   git push -u origin <branch>
-  gh pr create --base <base> --head <branch> --title "<pr.title>" --body-file <pr.body_file>
+  gh pr create --base <base> --head <branch> --title <pr.title_shell> --body-file <pr.body_file>
   ```
+
+  `pr.title_shell` is `pr.title` already single-quoted for the shell: paste it exactly as it comes, with no quotes around it. Never put `pr.title` or any other agent text inside double quotes in a command: the shell runs backticks and `$(...)` there.
 
   Set the status to `ready` and record the PR link in `log.md`. You never merge: merging is the user's, always. Never merge a PR, never enable auto-merge, never push to `base`.
 
