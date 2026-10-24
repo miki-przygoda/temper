@@ -328,3 +328,12 @@ docs/specs/ docs/plans/
 ```
 
 Installing from the private repo works through the user's git credentials. Sharing temper means making the repo public, or granting access.
+
+## 12. Amendments (24 Oct 2026, from the spikes)
+
+- **A1, state directory.** User state lives in `$CLAUDE_CONFIG_DIR/temper/` when `CLAUDE_CONFIG_DIR` is set, else `~/.claude/temper/`. Spec 3.3's `~/.claude/temper/...` paths mean this directory.
+- **A2, superpowers.** `superpowers@anthropic-plugin-directory` is a cross-marketplace dependency. It isn't installed automatically, and temper fails to load until it is. The README and `/temper:setup` say to install it first.
+- **A3, keyword matching.** The keyword hook matches only the `prompt` field of the hook input, never the raw JSON.
+- **A4, the statusline lives in the state directory.** The plugin's cache path changes with every version, so setup copies the statusline script to `<state>/bin/` and points the settings there. `/temper:run` re-copies it when the copy's version differs from the plugin's.
+- **A5, who pushes.** `publish.js` never pushes. It returns `ready` with a PR title and body file. The head, following the `run` skill, pushes and opens the PR: only on a green gate, and only when `may_push: yes` or the user says yes. Spec 3.4 and 8 already keep push rights with the head; this makes it explicit.
+- **A6, phase checkpoints.** The phases after the waves (checkpoint, behaviour spec, acceptance groups, to-green rounds, fixes) also commit with a `Temper-Task: <epic>/<phase id>` trailer. So `args.done` covers phases as well as tasks (spec 3.5).

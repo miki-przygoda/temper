@@ -1,0 +1,14 @@
+{
+  "name": "temper",
+  "description": "temper, a Claude Code plugin for the whole lifecycle of a piece of work.",
+  "owner": {
+    "name": "miki-przygoda"
+  },
+  "plugins": [
+    {
+      "name": "temper",
+      "source": "./",
+      "description": "Takes a piece of work from idea, to spec, to plan, to MVP, to stable, to PR, in one fixed order."
+    }
+  ]
+}
