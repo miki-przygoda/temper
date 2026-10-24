@@ -174,6 +174,17 @@ function validateStabiliseArgs(args) {
         }
       });
     }
+    if (args.second_sweep_findings !== undefined) {
+      if (!Array.isArray(args.second_sweep_findings)) {
+        errors.push('second_sweep_findings must be an array of findings');
+      } else {
+        args.second_sweep_findings.forEach((f, i) => {
+          if (!isObject(f) || !isNonEmptyString(f.id) || !SEVERITIES.includes(f.severity)) {
+            errors.push(`second_sweep_findings[${i}] must be a finding with an id and a severity`);
+          }
+        });
+      }
+    }
   }
   return errors;
 }
@@ -669,6 +680,14 @@ if (args.part === 'sweep') {
 
 // part 'fix' (4b): careful fixes one at a time in severity order, one more sweep, then the stop.
 
+// The second sweep's findings from an earlier fix run, saved by the head (args.second_sweep_findings).
+// When given, the second sweep already ran: never sweep again (spec 7, 1, 3.5). A fix:second-* trailer
+// without them means it ran but its findings are unknown: stop rather than guess or sweep again.
+const savedSecond = Array.isArray(args.second_sweep_findings) ? args.second_sweep_findings : null;
+if (!savedSecond && args.done.some((d) => d.startsWith('fix:second-'))) {
+  return { status: 'blocked', blocked: [{ id: 'second-sweep', reason: 'done but args.second_sweep_findings missing' }] };
+}
+
 // One agent per finding, one after another, skipping fixes whose trailer is already in done.
 // A null result (the agent died or was skipped) counts as blocked. Returns the ids it handled.
 async function fixLoop(findings, out) {
@@ -698,21 +717,16 @@ phase('Fix');
 await fixLoop(toFix, out);
 
 phase('Second sweep');
-// A fix:second-<lens>-NN trailer (reviewPrompt's id for a second-sweep finding) means the second
-// sweep already ran in an earlier run of this stage: never sweep again (spec 7, 1, 3.5). Its severe
-// fixes are the done ones; they still get the regression check below.
-const secondDone = args.done.filter((d) => d.startsWith('fix:second-')).map((d) => ({ id: d.slice('fix:'.length), severity: 'severe' }));
-let severe;
-let others;
-if (secondDone.length > 0) {
-  severe = secondDone;
-  others = [];
+// Saved findings stand in for the sweep; their done severe fixes still get the regression check below.
+let secondFindings;
+if (savedSecond) {
+  secondFindings = sortFindings(savedSecond);
 } else {
   const alreadyFixed = [...doneIds(toFix), ...out.fixed];
-  const second = await sweepAndVerify(lensesOr(args.lenses), alreadyFixed, 'second:');
-  severe = second.findings.filter((f) => f.severity === 'severe');
-  others = second.findings.filter((f) => f.severity !== 'severe');
+  secondFindings = (await sweepAndVerify(lensesOr(args.lenses), alreadyFixed, 'second:')).findings;
 }
+const severe = secondFindings.filter((f) => f.severity === 'severe');
+const others = secondFindings.filter((f) => f.severity !== 'severe');
 
 let regressions = [];
 if (severe.length > 0) {
@@ -737,5 +751,6 @@ return {
   blocked: out.blocked,
   open_items: [...selectedMinor, ...others],
   second_sweep: { severe: severe.length, others: others.length },
+  second_sweep_findings: secondFindings,
   regressions,
 };

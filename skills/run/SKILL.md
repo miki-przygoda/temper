@@ -82,8 +82,9 @@ Set the status to `stabilising`. The args come from `args.json` and `project.md`
 3. **4b.** Launch with `part: "fix"` and `selected` set to the chosen findings. If nothing is selected, skip it.
 
 The `fix` return value:
+- `second_sweep_findings`: the second sweep's findings. Save them as `second_sweep_findings` in `args.json` before anything else, and pass them on every later launch or resume of `part: "fix"`, so the second sweep never runs again.
 - `contract_items`: the contract is wrong. Take each to the user or the spec, never into a quiet code fix.
-- `blocked`: handle each as a blocked task question above, then resume.
+- `blocked`: handle each as a blocked task question above, then resume. The id `second-sweep` with `done but args.second_sweep_findings missing` means the second sweep ran but no saved findings came back from it: never sweep again; stop, record it in `log.md`, and hand over to the user.
 - `open_items`: append them to the open items in `log.md`.
 - `status: "stable"`: go to stage 5.
 - `status: "handover"`: the second sweep found something severe; its fixes and the regression check ran. Stop, record it in `log.md`, and hand over to the user (per `severe_contact` overnight). There is never a third sweep.

@@ -458,6 +458,54 @@ test('STABILISE-19 there is never a third sweep', async (t) => {
     const sweeps = [first, second, resumed].reduce((n, r) => n + (reviewsOf(r.calls).length > 0 ? 1 : 0), 0);
     assert.ok(sweeps <= 2, `${sweeps} sweeps ran across the stage`);
   });
+
+  // The head saves a fix run's second-sweep findings in args and passes them on every resume.
+  const resumeAfter = (run, extra) => runWorkflow(WF, {
+    args: fixArgs({ second_sweep_findings: run.result.second_sweep_findings, ...extra }),
+    respond: responder(),
+  });
+
+  await t.test('a severe second-sweep finding left blocked is not lost on resume', async () => {
+    const selected = [finding('security-01', 'critical')];
+    const s1 = finding('second-security-01', 'severe');
+    const s2 = finding('second-security-02', 'severe');
+    const run = await runWorkflow(WF, {
+      args: fixArgs({ selected }),
+      respond: responder({ second: { security: [s1, s2] }, fixes: { 'second-security-02': null } }),
+    });
+    assert.ok(run.result.blocked.some((b) => b.id === 'second-security-02'));
+    assert.match(STAGE4, /`second_sweep_findings`/);
+    const resumed = await resumeAfter(run, { selected, done: ['fix:security-01', 'fix:second-security-01'] });
+    assert.equal(reviewsOf(resumed.calls).length, 0, 'the resume swept again');
+    assert.ok(labels(resumed.calls).includes('fix:second-security-02'), 'the blocked severe finding is fixed on resume');
+    assert.equal(resumed.result.status, 'handover');
+    assert.equal(resumed.result.second_sweep.severe, 2);
+  });
+
+  await t.test('a resume after a second sweep with no committed fix does not sweep again', async () => {
+    const selected = [finding('security-01', 'critical')];
+    const s1 = finding('second-security-01', 'severe');
+    const m1 = finding('second-security-02', 'minor');
+    const run = await runWorkflow(WF, {
+      args: fixArgs({ selected }),
+      respond: responder({ second: { security: [s1, m1] }, fixes: { 'second-security-01': { status: 'blocked', note: 'q' } } }),
+    });
+    assert.equal(run.result.status, 'handover');
+    const resumed = await resumeAfter(run, { selected, done: ['fix:security-01'] });
+    assert.equal(reviewsOf(resumed.calls).length, 0, 'a third sweep ran');
+    assert.ok(labels(resumed.calls).includes('fix:second-security-01'));
+    assert.deepEqual(resumed.result.open_items.map((f) => f.id), ['second-security-02']);
+  });
+
+  await t.test('a second-sweep trailer without the saved findings never sweeps again or guesses', async () => {
+    const { calls, result } = await runWorkflow(WF, {
+      args: fixArgs({ selected: [finding('security-01', 'critical')], done: ['fix:security-01', 'fix:second-security-01'] }),
+      respond: responder(),
+    });
+    assert.equal(calls.length, 0);
+    assert.equal(result.status, 'blocked');
+    assert.deepEqual(result.blocked.map((b) => b.id), ['second-sweep']);
+  });
 });
 
 test('STABILISE-20 a Severe finding contacts the user per severe_contact', async (t) => {

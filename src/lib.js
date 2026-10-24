@@ -172,6 +172,17 @@ function validateStabiliseArgs(args) {
         }
       });
     }
+    if (args.second_sweep_findings !== undefined) {
+      if (!Array.isArray(args.second_sweep_findings)) {
+        errors.push('second_sweep_findings must be an array of findings');
+      } else {
+        args.second_sweep_findings.forEach((f, i) => {
+          if (!isObject(f) || !isNonEmptyString(f.id) || !SEVERITIES.includes(f.severity)) {
+            errors.push(`second_sweep_findings[${i}] must be a finding with an id and a severity`);
+          }
+        });
+      }
+    }
   }
   return errors;
 }
