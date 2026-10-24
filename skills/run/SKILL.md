@@ -76,6 +76,7 @@ Set the status to `stabilising`. The args come from `args.json` and `project.md`
    - User present: show the list as a multi-select AskUserQuestion, grouped by severity, each option with the finding's id, file and summary. AskUserQuestion holds up to 4 options per question and 4 questions per call; use more calls for a longer list.
    - Overnight: select the findings whose severity is in `overnight_fix_default` (for example `critical+important`) and log the choice in `log.md`.
    - Findings not selected, and every minor finding, go to the open items in `log.md`. A finding of kind `owner` goes to the user, not to a fix.
+   - A severe finding in the list reaches the user per `severe_contact` (spec 7.1): user present, tell them now; overnight, `report` → record it in `log.md` for the morning report, `push` or `push-blocking` → also send a push notification naming it.
 3. **4b.** Launch with `part: "fix"` and `selected` set to the chosen findings. If nothing is selected, skip it.
 
 The `fix` return value:

@@ -466,7 +466,7 @@ test('STABILISE-20 a Severe finding contacts the user per severe_contact', async
     assert.match(read('skills/setup/SKILL.md'), /`severe_contact`[^\n]*`report`[^\n]*`push`[^\n]*`push-blocking`/);
   });
 
-  await t.test('a Severe finding in the stage 4 list reaches the user per severe_contact', { skip: 'acceptance-failing: STABILISE-20' }, () => {
+  await t.test('a Severe finding in the stage 4 list reaches the user per severe_contact', () => {
     // From the 4a list to choosing the fixes: what the head does when the list holds a Severe finding.
     const choosing = STAGE4.slice(STAGE4.indexOf('1. **4a.**'), STAGE4.indexOf('3. **4b.**'));
     assert.match(choosing, /severe/i);
