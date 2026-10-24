@@ -714,11 +714,10 @@ if (args.part === 'sweep') {
 
 // The second sweep's findings from an earlier fix run, saved by the head (args.second_sweep_findings).
 // When given, the second sweep already ran: never sweep again (spec 7, 1, 3.5). A fix:second-* trailer
-// without them means it ran but its findings are unknown: stop rather than guess or sweep again.
+// without them means it ran but its findings are unknown: never guess or sweep again; the committed
+// second-sweep fixes still get the regression check, then hand over.
 const savedSecond = Array.isArray(args.second_sweep_findings) ? args.second_sweep_findings : null;
-if (!savedSecond && args.done.some((d) => d.startsWith('fix:second-'))) {
-  return { status: 'blocked', blocked: [{ id: 'second-sweep', reason: 'done but args.second_sweep_findings missing' }] };
-}
+const lostSecondIds = savedSecond ? [] : args.done.filter((d) => d.startsWith('fix:second-')).map((d) => d.slice('fix:'.length));
 
 // One agent per finding, one after another, skipping fixes whose trailer is already in done.
 // A null result (the agent died or was skipped) counts as blocked. Returns the ids it handled.
@@ -749,6 +748,24 @@ phase('Fix');
 await fixLoop(toFix, out);
 
 phase('Second sweep');
+if (lostSecondIds.length > 0) {
+  out.blocked.push({ id: 'second-sweep', reason: 'done but args.second_sweep_findings missing' });
+  const r = await agent(regressPrompt(lostSecondIds, args), {
+    label: 'regress',
+    phase: 'Second sweep',
+    schema: REGRESS_SCHEMA,
+  });
+  return {
+    status: 'handover',
+    fixed: out.fixed,
+    reverted: out.reverted,
+    contract_items: out.contract_items,
+    blocked: out.blocked,
+    open_items: selectedMinor,
+    regressions: r && Array.isArray(r.regressions) ? r.regressions : [],
+  };
+}
+
 // Saved findings stand in for the sweep; their done severe fixes still get the regression check below.
 let secondFindings;
 let unreviewed = false;

@@ -534,9 +534,12 @@ test('STABILISE-19 there is never a third sweep', async (t) => {
       args: fixArgs({ selected: [finding('security-01', 'critical')], done: ['fix:security-01', 'fix:second-security-01'] }),
       respond: responder(),
     });
-    assert.equal(calls.length, 0);
-    assert.equal(result.status, 'blocked');
-    assert.deepEqual(result.blocked.map((b) => b.id), ['second-sweep']);
+    assert.equal(reviewsOf(calls).length, 0, 'the resume swept again');
+    assert.deepEqual(labels(calls), ['regress'], 'the committed severe second-sweep fix got no regression check');
+    assert.ok(calls[0].prompt.includes('Temper-Task: e/fix:second-security-01'));
+    assert.ok(!calls[0].prompt.includes('Temper-Task: e/fix:security-01'), 'only the second-sweep fixes are checked');
+    assert.equal(result.status, 'handover');
+    assert.deepEqual(result.blocked, [{ id: 'second-sweep', reason: 'done but args.second_sweep_findings missing' }]);
   });
 });
 
