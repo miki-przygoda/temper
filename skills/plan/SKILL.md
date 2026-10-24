@@ -38,7 +38,7 @@ Write `<specs_dir>/<epic>/args.json`, following `${CLAUDE_PLUGIN_ROOT}/schemas/a
 
 - `epic`: the epic id from `epics.md`;
 - `repo`: the absolute path of the repository;
-- `branch`: the epic branch (default `temper/<epic>`, unless the repo or the user has a convention), and `base`: the branch it starts from (the repo's default branch unless the user says otherwise);
+- `branch`: the epic branch (default `epic/<epic>`, unless the repo or the user has a convention; never `temper/<epic>` or anything under `temper/<epic>/`, since git can't hold that ref beside the task branches `temper/<epic>/<task id>`), and `base`: the branch it starts from (the repo's default branch unless the user says otherwise);
 - `spec`, `plan`, `log`: `<specs_dir>/<epic>/spec.md`, `plan.md` and `log.md`;
 - `host`: `{"kind":"local"}` when `project.md` says `host: local`, or `{"kind":"ssh","name":"<host>","root":"<root>"}` for `ssh <host> <root>`;
 - `gates`: `{"quick": gate_quick, "full": gate_full}`;

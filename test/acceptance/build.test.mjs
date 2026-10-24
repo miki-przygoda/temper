@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -166,13 +166,18 @@ test('BUILD-04 the implementer works in its own worktree, follows the text, test
   // The other implementer gets its own trailer, not a's.
   assert.ok(promptOf(calls, 'impl:c').includes('Temper-Task: e/c'));
 
-  await t.test('its branch and worktree can be made next to the plan\'s default epic branch', { skip: 'acceptance-failing: BUILD-04' }, async () => {
-    // skills/plan: `branch` defaults to `temper/<epic>`.
-    const g = gitRepo('temper/e');
+  await t.test('its branch and worktree can be made next to the plan\'s default epic branch', async () => {
+    // The epic branch's default as skills/plan states it (`branch`: the epic branch (default `…`).
+    const skill = readFileSync(join(ROOT, 'skills/plan/SKILL.md'), 'utf8');
+    const d = /`branch`: the epic branch \(default `([^`]+)`/.exec(skill);
+    assert.ok(d, 'skills/plan names a default epic branch');
+    const epicBranch = d[1].replace('<epic>', EPIC);
+    const g = gitRepo(epicBranch);
     try {
-      const m = /branch `([^`]+)`, created from `([^`]+)` in its own worktree/.exec(p);
+      const pd = promptOf((await run(buildArgs({ branch: epicBranch }))).calls, 'impl:a');
+      const m = /branch `([^`]+)`, created from `([^`]+)` in its own worktree/.exec(pd);
       assert.ok(m, 'the prompt names the task branch and where it starts');
-      assert.equal(m[2], 'temper/e');
+      assert.equal(m[2], epicBranch);
       g.git('worktree', 'add', '--quiet', '-b', m[1], join(g.dir, 'wt-a'), m[2]);
     } finally {
       g.cleanup();
