@@ -27,7 +27,19 @@ Run on 24 Oct 2026 with Claude Code 2.1.308 on macOS, in a scratch folder. Setti
 - **The notification carries the script's return value** (`{"s1":"done","agent":"ok"}`), agent counts (done, error, skipped, empty) and the journal path. So the head gets `build.js`'s blocked list straight from the notification, with no file to poll.
 - **Not tested:** the same thing when the session is over its usage limit at that moment. That's S4/S6, which waits for the first overnight run.
 
-## S3, S4, S6
+## S3, the statusline script writes `limits.json`: PASS
 
-- S3 needs a test statusline in the user's settings, so it waits for the owner's go-ahead.
-- S4 and S6 need a real usage-limit hit, so they're checked on the first real overnight run, with a fallback in the plan.
+- **Test:** with the owner's go-ahead, a test `statusLine` command was added to the user settings. There was no statusline before, so the script printed nothing. Claude Code picked it up live, without a restart, and ran it within seconds.
+- **What it received:** the statusline input has these keys: `context_window`, `cost`, `cwd`, `effort`, `exceeds_200k_tokens`, `fast_mode`, `model`, `output_style`, `prompt_cache`, `prompt_id`, `rate_limits`, `scratchpad_dir`, `session_id`, `session_name`, `thinking`, `transcript_path`, `version`, `workspace`. There's no `permission_mode`, so the mode check stays in the hook (S2).
+- **`rate_limits`:** `{"five_hour": {"used_percentage": 15, "resets_at": 1792868400}, "seven_day": {"used_percentage": 47, "resets_at": 1793232000}}`. That's Sat 24 Oct 20:00 and Thu 29 Oct 00:00, local time. Both are whole hours.
+- **Cleanup:** the settings file was restored byte for byte from its backup (checked with `diff`).
+- **Design notes:**
+  - The statusline runs only in an interactive session, and only after a reply.
+  - `limits.json` records `seen_at`, so the head can tell when the file is stale. The pre-flight treats anything older than about 10 minutes as not fresh.
+  - The real script writes to `~/.claude/temper/limits.json` (under `$CLAUDE_CONFIG_DIR` when that's set; the owner's is `~/.claude-work`). If the user already has a statusline, the script runs it and passes its output through.
+
+## S4, S6
+
+Both need a real usage-limit hit, so they're checked on the first real overnight run, with a fallback in the plan:
+- **S4:** does a check-in fire, and resume the run, after the limit is hit?
+- **S6:** does `autoContinueAtUsageLimit` wait while a workflow is running?
