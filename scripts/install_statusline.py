@@ -47,8 +47,21 @@ def _read_json(path, default):
 
 def _write_atomic(path, text):
     # Resolve a symlinked file (settings.json in a dotfiles repo) so the
-    # replace lands on its target and the link survives.
-    path = Path(os.path.realpath(str(path)))
+    # replace lands on its target and the link survives. A target in a
+    # directory we cannot write (Nix home-manager links into /nix/store)
+    # falls back to replacing the link itself with the new file.
+    link = Path(path)
+    target = Path(os.path.realpath(str(link)))
+    if target == link:
+        _replace_file(link, text)
+        return
+    try:
+        _replace_file(target, text)
+    except OSError:
+        _replace_file(link, text)
+
+
+def _replace_file(path, text):
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix='.' + path.name + '-', suffix='.tmp', dir=str(path.parent))
     try:

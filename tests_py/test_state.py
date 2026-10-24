@@ -245,6 +245,27 @@ class InstallTest(TempConfig):
         self.assertEqual(json.loads(target.read_text(encoding='utf-8')),
                          {'theme': 'dark', 'statusLine': {'command': 'echo mine'}})
 
+    @unittest.skipIf(hasattr(os, 'geteuid') and os.geteuid() == 0, 'root ignores the read-only modes')
+    def test_settings_linked_into_a_read_only_directory_still_install_and_uninstall(self):
+        # As with Nix home-manager, which links settings.json into /nix/store.
+        store = self.config / 'store'
+        store.mkdir()
+        target = store / 'settings.json'
+        target.write_text(json.dumps({'theme': 'dark'}), encoding='utf-8')
+        self.settings.symlink_to(target)
+        target.chmod(0o444)
+        store.chmod(0o555)
+        try:
+            self.assertEqual(self.install(), {'installed': True, 'wrapped': False, 'version': '0.1.0'})
+            self.assertIn('temper_statusline.py', self.read_settings()['statusLine']['command'])
+            installer.uninstall(self.env)
+            self.assertEqual(self.read_settings(), {'theme': 'dark'})
+            self.assertEqual(json.loads(target.read_text(encoding='utf-8')), {'theme': 'dark'})
+            self.assertEqual(sorted(p.name for p in store.iterdir()), ['settings.json'])
+        finally:
+            store.chmod(0o755)
+            target.chmod(0o644)
+
     def test_install_without_settings_file(self):
         self.install()
         self.assertIn('temper_statusline.py', self.read_settings()['statusLine']['command'])
