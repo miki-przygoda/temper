@@ -825,5 +825,6 @@ return {
   acceptance: { passing: acc.passing, failing: acc.failing.map((f) => f.id), untestable: acc.untestable },
   green: { rounds: green.rounds, fixed: green.fixed, corrected: green.corrected },
   questions: green.questions,
+  blocked: [],
   done_now,
 };

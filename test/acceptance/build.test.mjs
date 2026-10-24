@@ -563,7 +563,7 @@ test('BUILD-23 no third to-green round; what still fails goes into the report', 
   assert.ok(result.questions.some((q) => q.id === 'G1-01'), JSON.stringify(result.questions));
 });
 
-test('BUILD-24 a finished run returns a build report with tasks, gates, flows, counts, questions and blocked items', { skip: 'acceptance-failing: BUILD-24' }, async () => {
+test('BUILD-24 a finished run returns a build report with tasks, gates, flows, counts, questions and blocked items', async () => {
   const { result } = await run(buildArgs(), {
     'acceptance:g1': { group: 'g1', passing: ['G1-02'], failing: [{ id: 'G1-01', observed: 'a' }], untestable: [], commit: 'c' },
     'green:1': { fixed: [], corrected: [], questions: [{ id: 'G1-01', question: 'q?' }], still_failing: [] },
