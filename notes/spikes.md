@@ -20,7 +20,12 @@ Run on 24 Oct 2026 with Claude Code 2.1.308 on macOS, in a scratch folder. Setti
   - An icon (recommended): a square PNG of 512–2048 px. It's locked in the first time the plugin is saved or submitted.
 - **Also found:** `claude plugin eval` runs eval cases (prompt plus graders) against a plugin. It could test the skills, which spec section 10.2 says are "proven by use".
 
-## S1, a workflow finishing wakes an idle session: running
+## S1, a workflow finishing wakes an idle session: PASS
+
+- **Test:** the head session launched a one-agent background workflow (run wf_d217dc3d-3ef), then ended its turn and sat idle.
+- **Result:** about 4 s later, the workflow's completion arrived as a task notification and started a new turn on its own, with no user input.
+- **The notification carries the script's return value** (`{"s1":"done","agent":"ok"}`), agent counts (done, error, skipped, empty) and the journal path. So the head gets `build.js`'s blocked list straight from the notification, with no file to poll.
+- **Not tested:** the same thing when the session is over its usage limit at that moment. That's S4/S6, which waits for the first overnight run.
 
 ## S3, S4, S6
 
