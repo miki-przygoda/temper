@@ -3,6 +3,11 @@
 
 const ID_RE = /^[a-z0-9][a-z0-9:-]*$/;
 
+// Phase ids share the Temper-Task trailer namespace with task ids (A6), so no task may take one.
+const PHASE_IDS = ['checkpoint', 'behaviour-spec', 'docs', 'evidence'];
+const PHASE_PREFIXES = ['acceptance:', 'green:', 'fix:', 'merge:'];
+const isPhaseId = (id) => PHASE_IDS.includes(id) || PHASE_PREFIXES.some((p) => id.startsWith(p));
+
 const SEVERITIES = ['severe', 'critical', 'important', 'minor'];
 
 const DEFAULT_LENSES = ['security', 'failure paths and lifecycle', 'test strength and docs'];
@@ -69,6 +74,7 @@ function checkTask(t, i, errors) {
   let ok = true;
   const bad = (msg) => { errors.push(`${name}: ${msg}`); ok = false; };
   if (typeof t.id !== 'string' || !ID_RE.test(t.id)) bad(`id must match ${ID_RE}`);
+  else if (isPhaseId(t.id)) bad(`task id ${t.id} is reserved for a phase`);
   if (typeof t.title !== 'string') bad('title must be a string');
   if (!Number.isInteger(t.wave) || t.wave < 0) bad('wave must be an integer >= 0');
   if (!isStringArray(t.owns) || t.owns.length === 0) bad('owns must be a non-empty array of strings');

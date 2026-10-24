@@ -55,6 +55,7 @@ Write `<specs_dir>/<epic>/args.json`, following `${CLAUDE_PLUGIN_ROOT}/schemas/a
 The build workflow checks `args.json` with `validateBuildArgs` and refuses to start any agent if it's invalid. Check the same rules yourself before saving, so the plan is fixed now and not at launch:
 
 - every task `id` matches `^[a-z0-9][a-z0-9:-]*$` and is unique;
+- no task `id` is a phase id, since phases share the `Temper-Task` trailers: not `checkpoint`, `behaviour-spec`, `docs` or `evidence`, and not starting `acceptance:`, `green:`, `fix:` or `merge:` (use `docs-readme`, not `docs`);
 - every `wave` is an integer of 0 or more;
 - every task has a non-empty `owns`, string arrays `uses` and `provides`, a `title` and a non-empty `text`;
 - **ownership:** no two tasks in the same wave own the same path;

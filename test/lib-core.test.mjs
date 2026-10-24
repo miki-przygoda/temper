@@ -59,6 +59,18 @@ test('an answer for an unknown task is refused', () => {
   assert.ok(hasError(errors, 'answer for unknown task zzz'), errors.join('\n'));
 });
 
+test('a task id that is a phase id is refused, so its trailer never skips that phase (A6)', () => {
+  for (const id of ['checkpoint', 'behaviour-spec', 'docs', 'evidence', 'acceptance:x', 'green:1', 'fix:x', 'merge:wave0']) {
+    const args = goodArgs();
+    args.tasks[0].id = id;
+    const errors = lib.validateBuildArgs(args);
+    assert.ok(hasError(errors, `task id ${id} is reserved for a phase`), `${id}: ${errors.join('\n')}`);
+  }
+  const ok = goodArgs();
+  ok.tasks[0].id = 'docs-readme';
+  assert.deepEqual(lib.validateBuildArgs(ok), []);
+});
+
 test('a duplicate id, a missing full gate and an ssh host without a name are each refused', () => {
   const dup = goodArgs();
   dup.tasks[1].id = 'a';
