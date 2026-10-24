@@ -113,3 +113,49 @@ For each fix:
    - **Nothing severe:** the stage is done. Non-severe findings go to the open items, not into the code.
    - **Something severe:** fix it with the same five steps, then check only those fixes' own diffs. Then stop and hand over to the user. There is never a third sweep.
 3. **It returns** the fixed branch, plus open items in `log.md`.
+
+## Section 4: the skills around the scripts, stages 1, 2 and 5 (approved 24 Oct 2026)
+
+### Stage 1, `ground`: from an idea to specs
+
+It wraps `superpowers:brainstorming` and adds:
+- **Question style from the user's preferences:** open text while ideas are being dumped, multiple-choice questionnaires once there is a base.
+- **Research agents, in parallel:** best practices, prior art, and documented facts with their sources. The notes go to `docs/temper/<epic>/research.md`, and the spec cites them.
+- **A size recommendation:** run the whole lifecycle, or stop at the specs (epics for a board). The user decides.
+- **The epic split:** `epics.md` lists each epic and what it needs from the others, written as contracts.
+- **A spec template with required sections:**
+  - goal;
+  - user flows (the MVP checkpoint runs these);
+  - contracts between parts;
+  - non-goals;
+  - security notes.
+
+  A spec is handed on only when it has no open questions. Each one is answered, or explicitly deferred with a reason.
+
+### Stage 2, `plan`: from a spec to a plan
+
+It wraps `superpowers:writing-plans` and adds:
+- a written contract at every boundary between tasks;
+- file ownership: no two tasks in the same wave own the same file;
+- waves taken from the dependency graph, with blocking tasks first;
+- the names of the behaviour groups;
+- task ids for the commit trailers;
+- the gate commands from `project.md`.
+
+It generates `args.json`. The workflow script checks `args.json` itself before it starts any agent, so nothing extra has to be installed. The user reviews the plan before stage 3 starts, unless their preferences let overnight runs go ahead without that review.
+
+### Stage 5, `publish`: from a branch to a PR
+
+- Docs are written against the final code.
+- Steps that need root, real accounts or real infrastructure go into a script and a checklist for the user.
+- Then the full gate. Only on a green gate does it push the branch and open the PR.
+
+Pushing is outward-facing, so the head asks first, unless the preferences allow pushing branches and opening PRs. It never merges.
+
+### Cleanup
+
+`/temper:cleanup` runs after the user merges. It removes worktrees, branches and build directories, but only after the coded git check passes:
+- the branch is reachable from `origin/master`, or matches the remote;
+- nothing is left uncommitted or untracked.
+
+If the check fails, nothing is deleted and the user is told.
