@@ -189,6 +189,16 @@ function validateStabiliseArgs(args) {
         });
       }
     }
+    // The head's answers to blocked fixes, keyed by finding id (spec 3.6).
+    if (args.answers !== undefined) {
+      if (!isObject(args.answers)) {
+        errors.push('answers must be an object');
+      } else {
+        for (const [k, v] of Object.entries(args.answers)) {
+          if (typeof v !== 'string') errors.push(`answer for ${k} must be a string`);
+        }
+      }
+    }
   }
   return errors;
 }
@@ -587,6 +597,9 @@ function fixPrompt(finding, args) {
       '5. If anything else breaks, revert and rethink. Move on only when this item is clean.',
     `If the contract is wrong, return status contract and change nothing. The quick gate is \`${args.gates.quick}\`.`,
     `${commitText(args.epic, `fix:${finding.id}`)}`,
+    args.answers && typeof args.answers[finding.id] === 'string'
+      ? `Answer from the head:\n${args.answers[finding.id]}`
+      : '',
     'Return status fixed (with the commit sha), reverted (the fix broke something and you undid it), contract, or blocked; the origin task id when you found it; and a note.',
   ]);
 }

@@ -566,3 +566,50 @@ test('STABILISE-21 fixes committed with their trailers are not redone on resume'
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("a blocked fix's answer reaches only its own fix prompt on resume, with no further sweep (spec 3.6, 3.5)", async (t) => {
+  const selected = [finding('security-01', 'critical'), finding('security-02', 'important')];
+
+  await t.test('the head passes the answers to part fix, keyed by finding id', () => {
+    assert.match(STAGE4, /`answers`[^\n]*finding id/);
+  });
+
+  await t.test('the answer is put into its own fix prompt and into no other', async () => {
+    const run = await runWorkflow(WF, {
+      args: fixArgs({ selected }),
+      respond: responder({ fixes: { 'security-01': { status: 'blocked', note: 'which behaviour?' } } }),
+    });
+    assert.equal(run.result.status, 'stable');
+    assert.deepEqual(run.result.blocked.map((b) => b.id), ['security-01']);
+    const resumed = await runWorkflow(WF, {
+      args: fixArgs({
+        selected,
+        done: ['fix:security-02'],
+        answers: { 'security-01': 'ANSWER-do-X' },
+        second_sweep_findings: run.result.second_sweep_findings,
+      }),
+      respond: responder(),
+    });
+    const fix = resumed.calls.find((c) => c.opts?.label === 'fix:security-01');
+    assert.ok(fix, 'the answered fix did not run again');
+    assert.ok(fix.prompt.includes('Answer from the head:') && fix.prompt.includes('ANSWER-do-X'), 'the answer never reached the fix agent');
+    assert.equal(reviewsOf(resumed.calls).length, 0, 'the resume swept again');
+    assert.deepEqual(resumed.result.fixed, ['security-01']);
+    assert.deepEqual(resumed.result.blocked, []);
+
+    const other = await runWorkflow(WF, {
+      args: fixArgs({ selected, answers: { 'security-01': 'ANSWER-do-X' }, second_sweep_findings: [] }),
+      respond: responder(),
+    });
+    const otherFix = other.calls.find((c) => c.opts?.label === 'fix:security-02');
+    assert.ok(!otherFix.prompt.includes('ANSWER-do-X') && !otherFix.prompt.includes('Answer from the head:'));
+  });
+
+  await t.test('answers that are not an object of strings are refused before any agent runs', async () => {
+    for (const answers of [[], 'x', { 'security-01': 3 }]) {
+      const { calls, result } = await runWorkflow(WF, { args: fixArgs({ selected, answers }), respond: responder() });
+      assert.equal(result.status, 'invalid', JSON.stringify(answers));
+      assert.equal(calls.length, 0);
+    }
+  });
+});
