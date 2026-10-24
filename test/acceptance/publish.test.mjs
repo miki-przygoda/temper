@@ -273,7 +273,7 @@ test('PUBLISH-06 the full gate is not green: nothing is pushed and no PR is open
     assert.match(STAGE5, /only when all of these hold:\n\s*- `status` is `ready` and `gate\.passed` is true;\n\s*- `may_push` is `yes`/);
     assert.match(read('skills/setup/SKILL.md'), /it pushes and opens PRs only on a green full gate/);
   });
-  await t.test('a gate result with a non-zero exit status is not green', { skip: 'acceptance-failing: PUBLISH-06' }, async () => {
+  await t.test('a gate result with a non-zero exit status is not green', async () => {
     const r = stabilisedRepo();
     try {
       const { result } = await runWorkflow(WF, {

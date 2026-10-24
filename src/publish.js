@@ -26,7 +26,8 @@ if (!publishDone.includes('evidence')) {
 
 phase('Gate');
 const gate = await agent(gatePrompt(args), { schema: GATE_SCHEMA, label: 'gate', phase: 'Gate' });
-if (!gate || gate.passed !== true) return { status: 'gate_failed', gate };
+// Green means passed and a real exit status of 0; anything else is not green (spec 8).
+if (!gate || gate.passed !== true || gate.exit_status !== 0) return { status: 'gate_failed', gate };
 
 const summaryLine = firstLine(docs && docs.summary);
 return {
