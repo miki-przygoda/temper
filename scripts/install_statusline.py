@@ -46,7 +46,9 @@ def _read_json(path, default):
 
 
 def _write_atomic(path, text):
-    path = Path(path)
+    # Resolve a symlinked file (settings.json in a dotfiles repo) so the
+    # replace lands on its target and the link survives.
+    path = Path(os.path.realpath(str(path)))
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix='.' + path.name + '-', suffix='.tmp', dir=str(path.parent))
     try:

@@ -229,6 +229,22 @@ class InstallTest(TempConfig):
         installer.uninstall(self.env)
         self.assertEqual(self.read_settings(), {'theme': 'dark'})
 
+    def test_symlinked_settings_stay_a_link_through_install_and_uninstall(self):
+        dotfiles = self.config / 'dotfiles'
+        dotfiles.mkdir()
+        target = dotfiles / 'settings.json'
+        target.write_text(json.dumps(
+            {'theme': 'dark', 'statusLine': {'command': 'echo mine'}}), encoding='utf-8')
+        self.settings.symlink_to(target)
+        self.install()
+        self.assertTrue(self.settings.is_symlink())
+        self.assertIn('temper_statusline.py',
+                      json.loads(target.read_text(encoding='utf-8'))['statusLine']['command'])
+        installer.uninstall(self.env)
+        self.assertTrue(self.settings.is_symlink())
+        self.assertEqual(json.loads(target.read_text(encoding='utf-8')),
+                         {'theme': 'dark', 'statusLine': {'command': 'echo mine'}})
+
     def test_install_without_settings_file(self):
         self.install()
         self.assertIn('temper_statusline.py', self.read_settings()['statusLine']['command'])
