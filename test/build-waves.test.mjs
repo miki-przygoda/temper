@@ -42,6 +42,11 @@ function responder(over = {}) {
     }
     if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
     if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
+    // The phases after the waves (Task 6) succeed with nothing failing.
+    if (label === 'checkpoint') return { gate_passed: true, gate_log: 'logs/full.log', flows: [], gaps: [] };
+    if (label === 'behaviour-spec') return { groups: [{ key: 'g1', behaviours: [{ id: 'G1-01', text: 't' }] }], commit: 'bbb' };
+    if (label.startsWith('acceptance:')) return { group: id, passing: ['G1-01'], failing: [], untestable: [], commit: 'ccc' };
+    if (label.startsWith('green:')) return { fixed: [], corrected: [], questions: [], still_failing: [] };
     return null;
   };
 }
@@ -61,13 +66,14 @@ test('two waves run implement, check and merge in order', async () => {
     'impl:a', 'check:a', 'impl:c', 'check:c', 'merge:wave0',
     'impl:b', 'check:b', 'merge:wave1',
   ]);
-  assert.deepEqual(result, { status: 'waves-done', done_now: ['a', 'c', 'b'] });
+  assert.equal(result.status, 'mvp');
+  assert.deepEqual(result.done_now, ['a', 'c', 'b']);
 });
 
 test('agents get the schemas and the Waves phase', async () => {
   const { calls } = await runWorkflow(WF, { args: buildArgs(), respond: responder() });
   for (const c of calls) {
-    assert.equal(c.opts.phase, 'Waves', c.opts.label);
+    if (/^(impl|check|retry|recheck|merge):/.test(c.opts.label)) assert.equal(c.opts.phase, 'Waves', c.opts.label);
     assert.equal(c.opts.schema?.type, 'object', c.opts.label);
   }
   const impl = calls.find((c) => c.opts.label === 'impl:a');
@@ -96,7 +102,8 @@ test('a check that fails once gets exactly one retry and one recheck', async () 
   const retry = calls.find((c) => c.opts.label === 'retry:a');
   assert.match(retry.prompt, /missing test x/);
   assert.match(retry.prompt, /The checker rejected your first attempt:/);
-  assert.equal(result.status, 'waves-done');
+  assert.equal(result.status, 'mvp');
+  assert.deepEqual(result.done_now, ['a', 'c', 'b']);
 });
 
 test('a check that fails twice blocks the task, finishes the wave and skips the merge', async () => {
@@ -186,5 +193,7 @@ test('done_now lists the tasks merged before a later wave blocks', async () => {
 
 test('a wave whose tasks are all done runs no merge', async () => {
   const { calls } = await runWorkflow(WF, { args: buildArgs({ done: ['a', 'c'] }), respond: responder() });
-  assert.deepEqual(labels(calls), ['impl:b', 'check:b', 'merge:wave1']);
+  const ls = labels(calls);
+  assert.deepEqual(ls.slice(0, ls.indexOf('merge:wave1') + 1), ['impl:b', 'check:b', 'merge:wave1']);
+  assert.ok(!ls.some((l) => /^(impl|check|retry|recheck):(a|c)$/.test(l) || l === 'merge:wave0'), 'no wave-0 label');
 });
