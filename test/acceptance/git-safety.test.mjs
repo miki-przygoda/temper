@@ -18,7 +18,7 @@ const EPIC = 'e';
 const BRANCH = 'temper/e';
 const BASE = 'main';
 
-const HOSTS = [{ kind: 'local' }, { kind: 'ssh', name: 'beast', root: '/srv/temper' }];
+const HOSTS = [{ kind: 'local' }, { kind: 'ssh', name: 'beast', root: '/srv/temper', clone: '/srv/repo' }];
 const GATES = { quick: 'QUICK-GATE-CMD', full: 'FULL-GATE-CMD' };
 
 const common = (host) => ({

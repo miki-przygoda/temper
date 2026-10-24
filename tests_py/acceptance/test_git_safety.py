@@ -7,6 +7,7 @@ bare ``origin`` with a default branch, a clone of it as the user's repo, and a s
 plays "someone else, on the remote". HOME, CLAUDE_CONFIG_DIR and the git global config are
 temporary, so the user's own config is never read or written. The only remote anything touches is
 the temporary bare repo. GIT-SAFETY-01..03, 12 and 13 are in test/acceptance/git-safety.test.mjs.
+The ssh host of amendment A7 is a local clone reached through a stub ssh on PATH.
 
 A test that fails because of the product is skipped with "acceptance-failing: <id>".
 """
@@ -394,6 +395,97 @@ class TestGitSafety(GitSandbox):
             self.assertEqual(len(outputs), 1, f'the same answer every time: {outputs}')
         after = self._snapshot(repo, [wt_ok, wt_bad], origin)
         self.assertEqual(after, before)
+
+    # ---- A7: the ssh host's commits come back before done_tasks.py and before a push ----
+
+    def _stub_ssh(self):
+        """A stand-in for ssh on PATH: it records the host and runs the command locally."""
+        bin_dir = self.tmp / 'bin'
+        bin_dir.mkdir()
+        log = self.tmp / 'ssh.log'
+        stub = bin_dir / 'ssh'
+        stub.write_text(
+            '#!/bin/sh\n'
+            'while [ $# -gt 1 ]; do\n'
+            '  case "$1" in\n'
+            '    -G) exit 0 ;;\n'
+            '    -o|-p|-l|-i) shift 2 ;;\n'
+            '    -*) shift ;;\n'
+            '    *) break ;;\n'
+            '  esac\n'
+            'done\n'
+            f'echo "$1" >> \'{log}\'\n'
+            'shift\n'
+            'exec sh -c "$*"\n',
+            encoding='utf-8')
+        stub.chmod(0o755)
+        env = dict(self.env, PATH=f'{bin_dir}:{self.env["PATH"]}')
+        return env, log
+
+    def _done(self, repo, branch):
+        proc = subprocess.run([sys.executable, str(DONE), str(repo), branch, 'main', 'e'],
+                              cwd=str(self.tmp), env=self.env, capture_output=True, text=True,
+                              check=False, timeout=60)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return json.loads(proc.stdout)
+
+    def test_A7_ssh_host_branches_are_fetched_back_before_done_tasks_and_before_a_push(self):
+        before = RUN_SKILL[RUN_SKILL.index('## Before every launch or resume'):
+                           RUN_SKILL.index('## Launching and resuming')]
+        fetches = [l.strip() for l in before.splitlines()
+                   if l.strip().startswith('git -C <repo> fetch ssh://<host>/<host_clone> ')]
+        self.assertEqual(len(fetches), 1, 'the run skill gives the head one fetch-back command')
+        cmd = fetches[0]
+        self.assertLess(before.index(cmd), before.index('scripts/done_tasks.py'),
+                        'the fetch comes before done_tasks.py')
+        self.assertNotIn('+refs', cmd, 'the fetch never forces a ref')
+        self.assertNotIn('--force', cmd)
+        stage5 = RUN_SKILL[RUN_SKILL.index('## Stage 5'):]
+        self.assertRegex(stage5, r'ssh host[^\n]*fetch[\s\S]*git push -u origin <branch>',
+                         'the fetch comes before the push')
+
+        repo, origin = self.remote()
+        self.git(repo, 'branch', '--no-track', 'epic/e', 'main')
+        # The host's clone, where the agents commit: one task merged, one still on its branch.
+        host_clone = self.tmp / 'host' / 'repo'
+        self.git(self.tmp, 'clone', '-q', str(origin), str(host_clone))
+        self.git(host_clone, 'checkout', '-q', '-b', 'epic/e')
+        self.git(host_clone, 'checkout', '-q', '-b', 'temper/e/a')
+        self.commit(host_clone, 'feat: a\n\nTemper-Task: e/a')
+        self.git(host_clone, 'checkout', '-q', 'epic/e')
+        self.git(host_clone, 'merge', '-q', '--no-ff', '--no-edit', 'temper/e/a')
+        self.git(host_clone, 'checkout', '-q', '-b', 'temper/e/b')
+        self.commit(host_clone, 'feat: b, not merged yet\n\nTemper-Task: e/b')
+        self.git(host_clone, 'checkout', '-q', 'main')
+
+        # Without the fetch the user's repo knows nothing of the host's work.
+        self.assertEqual(self._done(repo, 'epic/e'), [])
+
+        env, log = self._stub_ssh()
+        run = lambda: subprocess.run(
+            ['sh', '-c', cmd.replace('<repo>', str(repo)).replace('<host>', 'beast')
+             .replace('<host_clone>', str(host_clone)).replace('<branch>', 'epic/e')
+             .replace('<epic>', 'e')],
+            cwd=str(self.tmp), env=env, capture_output=True, text=True, check=False, timeout=60)
+        proc = run()
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(log.read_text(encoding='utf-8').split(), ['beast'])
+        self.assertEqual(self._done(repo, 'epic/e'), ['a'])
+        for ref in ('epic/e', 'temper/e/a', 'temper/e/b'):
+            self.assertEqual(self.git(repo, 'rev-parse', ref), self.git(host_clone, 'rev-parse', ref), ref)
+
+        # A local commit the host lacks is never overwritten: the fetch fails and the head stops.
+        local = self.git(repo, 'rev-parse', 'epic/e')
+        self.git(repo, 'checkout', '-q', 'epic/e')
+        mine = self.commit(repo, 'fix: local only')
+        self.git(repo, 'checkout', '-q', 'main')
+        self.git(host_clone, 'checkout', '-q', 'epic/e')
+        self.commit(host_clone, 'feat: more on the host')
+        self.git(host_clone, 'checkout', '-q', 'main')
+        self.assertNotEqual(run().returncode, 0)
+        self.assertEqual(self.git(repo, 'rev-parse', 'epic/e'), mine)
+        self.assertNotEqual(mine, local)
+        self.assertIn('On a non-zero exit, stop', before)
 
 
 if __name__ == '__main__':

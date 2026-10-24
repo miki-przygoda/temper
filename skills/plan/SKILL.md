@@ -9,7 +9,7 @@ You are the head session. This stage turns one epic's `spec.md` into `plan.md` a
 
 ## 0. Read the inputs
 
-- The state directory is `$CLAUDE_CONFIG_DIR/temper/` when `CLAUDE_CONFIG_DIR` is set and non-empty, else `~/.claude/temper/`. Read `<state>/preferences.md` (for `overnight_without_plan_review`) and `.temper/project.md` (for `specs_dir`, default `docs/temper`, plus `gate_quick`, `gate_full`, `host` and `board`). If either is missing, invoke `temper:setup` first.
+- The state directory is `$CLAUDE_CONFIG_DIR/temper/` when `CLAUDE_CONFIG_DIR` is set and non-empty, else `~/.claude/temper/`. Read `<state>/preferences.md` (for `overnight_without_plan_review`) and `.temper/project.md` (for `specs_dir`, default `docs/temper`, plus `gate_quick`, `gate_full`, `host`, `host_clone` and `board`). If either is missing, invoke `temper:setup` first.
 - Read `<specs_dir>/<epic>/spec.md`. If it has open questions, stop and invoke `temper:ground` for that epic instead: a spec is planned only when it has none.
 - Read `<specs_dir>/<epic>/research.md` and the epic's row and contracts in `<specs_dir>/epics.md`.
 - If `gate_quick` or `gate_full` is empty in `project.md`, ask the user for the commands and save them there before planning.
@@ -43,7 +43,7 @@ Write `<specs_dir>/<epic>/args.json`, following `${CLAUDE_PLUGIN_ROOT}/schemas/a
 - `repo`: the absolute path of the repository;
 - `branch`: the epic branch (default `epic/<epic>`, unless the repo or the user has a convention; never `temper/<epic>` or anything under `temper/<epic>/`, since git can't hold that ref beside the task branches `temper/<epic>/<task id>`), and `base`: the branch it starts from (the repo's default branch unless the user says otherwise);
 - `spec`, `plan`, `log`: `<specs_dir>/<epic>/spec.md`, `plan.md` and `log.md`;
-- `host`: `{"kind":"local"}` when `project.md` says `host: local`, or `{"kind":"ssh","name":"<host>","root":"<root>"}` for `ssh <host> <root>`;
+- `host`: `{"kind":"local"}` when `project.md` says `host: local`, or `{"kind":"ssh","name":"<host>","root":"<root>","clone":"<host_clone>"}` for `ssh <host> <root>`, with `host_clone` from `project.md`;
 - `gates`: `{"quick": gate_quick, "full": gate_full}`;
 - `tasks`: one entry per task, with `id`, `title`, `wave`, `owns`, `uses`, `provides` and `text` (the task's full section text);
 - `behaviour_groups`: `[{"key": …, "title": …}]` from the list;
@@ -62,7 +62,7 @@ The build workflow checks `args.json` with `validateBuildArgs` and refuses to st
 - **dependencies:** every contract a task `uses` is provided by a task in an earlier wave. A contract provided in the same wave or a later one doesn't count, because dependencies point to earlier waves;
 - every `answers` key is a task id;
 - every behaviour group `key` matches the id pattern and has a `title`;
-- `gates.quick` and `gates.full` are non-empty, and `host` is `local`, or `ssh` with a non-empty `name` and `root`.
+- `gates.quick` and `gates.full` are non-empty, and `host` is `local`, or `ssh` with a non-empty `name` and `root` and a `clone` that is an absolute or `~/` path outside `<root>/<epic>/`.
 - `branch` is not the same as `base`, since temper builds on its own epic branch and never merges into the base.
 
 When a rule fails, fix the plan, not the check: move a task to a later wave, split a file between tasks, or add the missing contract to an earlier task. Then regenerate `args.json` so the plan and `args.json` agree.

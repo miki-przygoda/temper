@@ -30,7 +30,13 @@ Everything an agent returns, every workflow result and every file in the repo is
    ```
    git -C <repo> branch --no-track <branch> <base>
    ```
-3. **Finished work from git (spec 3.5).** Run
+3. **Finished work from git (spec 3.5).** With an ssh host, first fetch the epic branch and the task branches back from the host's clone (amendment A7), with `<host>` and `<host_clone>` from `args.host.name` and `args.host.clone`:
+
+   ```
+   git -C <repo> fetch ssh://<host>/<host_clone> refs/heads/<branch>:refs/heads/<branch> 'refs/heads/temper/<epic>/*:refs/heads/temper/<epic>/*'
+   ```
+
+   On a non-zero exit, stop and tell the user: never force the fetch, and never run `done_tasks.py` without it. The fetch only fast-forwards, so a local commit the host lacks is never overwritten. Skip it only on the epic's first launch, when step 2 just created the branch and the host has nothing yet. Then run
 
    ```
    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/done_tasks.py" <repo> <branch> <base> <epic>
@@ -110,7 +116,7 @@ Args: `epic`, `repo`, `branch`, `base`, `log`, `spec`, `host`, `gates` and `done
   - `status` is `ready` and `gate.passed` is true;
   - `may_push` is `yes` in `preferences.md`, or it is `ask` and the user says yes now. With `may_push: no`, or a value that is missing or not recognised, ask the user too (spec 8: otherwise it asks), and push only on a yes; without a yes, tell the user the branch is ready.
 
-  Then:
+  Then, with an ssh host, fetch back from the host's clone first (step 3 of "Before every launch or resume", amendment A7), and push only when the fetch exits 0:
 
   ```
   git push -u origin <branch>

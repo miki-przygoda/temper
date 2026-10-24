@@ -34,14 +34,37 @@ function checkStrings(args, fields, errors) {
   }
 }
 
-function checkHost(host, errors) {
+// A path's segments with `.` and `..` resolved, for comparing two paths on the host as text.
+function pathSegments(p) {
+  const out = [];
+  for (const seg of p.split('/')) {
+    if (seg === '' || seg === '.') continue;
+    if (seg === '..') out.pop();
+    else out.push(seg);
+  }
+  return out;
+}
+
+function checkHost(host, epic, errors) {
   if (!isObject(host)) {
-    errors.push("host must be {kind:'local'} or {kind:'ssh', name, root}");
+    errors.push("host must be {kind:'local'} or {kind:'ssh', name, root, clone}");
   } else if (host.kind === 'local') {
     // nothing else needed
   } else if (host.kind === 'ssh') {
     if (!isNonEmptyString(host.name)) errors.push('host.name must be a non-empty string for an ssh host');
     if (!isNonEmptyString(host.root)) errors.push('host.root must be a non-empty string for an ssh host');
+    // A7: the head fetches back from ssh://<name>/<clone>, so the clone is absolute or under ~/,
+    // and it lies outside <root>/<epic>/, which cleanup removes.
+    if (!isNonEmptyString(host.clone) || !/^(\/|~\/)/.test(host.clone)) {
+      errors.push('host.clone must be an absolute or ~/ path for an ssh host (the host clone)');
+    } else if (isNonEmptyString(host.root) && isNonEmptyString(epic)) {
+      const clone = pathSegments(host.clone);
+      const epicDir = [...pathSegments(host.root), epic];
+      const sameKind = host.clone.startsWith('/') === host.root.startsWith('/');
+      if (sameKind && epicDir.every((seg, i) => clone[i] === seg)) {
+        errors.push(`host.clone must lie outside ${host.root}/${epic}/`);
+      }
+    }
   } else {
     errors.push("host.kind must be 'local' or 'ssh'");
   }
@@ -66,7 +89,7 @@ function checkCommon(args, errors) {
   if (isNonEmptyString(args.branch) && args.branch === args.base) {
     errors.push(`branch must not be the base branch ${args.base}`);
   }
-  checkHost(args.host, errors);
+  checkHost(args.host, args.epic, errors);
   checkGates(args.gates, errors);
   checkDone(args.done, errors);
 }
@@ -295,7 +318,7 @@ const RULES_IMPLEMENTER = [
 
 function hostText(host, repo) {
   if (host && host.kind === 'ssh') {
-    return `Work on the build host ${host.name}: worktrees under ${host.root}/<epic>/; run every command there with ssh ${host.name} '…'. Never push from the host.`;
+    return `Work on the build host ${host.name}: the repo's clone there is ${host.clone}; worktrees under ${host.root}/<epic>/, made from that clone; run every command there with ssh ${host.name} '…'. Never push from the host.`;
   }
   return `Work in git worktrees under ${repo}/.temper/worktrees/. Run commands locally.`;
 }

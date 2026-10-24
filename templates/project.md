@@ -7,6 +7,9 @@ gate_quick:
 gate_full:
 # Where tasks run: local, or ssh <host> <root> for a build host.
 host: local
+# For an ssh host: the repo's clone on the host (an absolute or ~/ path), outside <root>/<epic>/.
+# The head fetches the epic and task branches back from it. Leave it empty for a local host.
+host_clone:
 # Board mirroring of epic status: off, github or jira. A board failure never blocks a run.
 board: off
 # Extra review lenses for stage 4, comma-separated. They run as well as the defaults.

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "temper build args",
-  "description": "Reference schema for the args passed to the build workflow (stage 3). The workflow's validateBuildArgs is the enforcing check; it also refuses two tasks in one wave owning the same path, a task using a contract no earlier wave provides, and an answer for an unknown task.",
+  "description": "Reference schema for the args passed to the build workflow (stage 3). The workflow's validateBuildArgs is the enforcing check; it also refuses two tasks in one wave owning the same path, a task using a contract no earlier wave provides, an answer for an unknown task, and an ssh host clone inside <root>/<epic>/.",
   "type": "object",
   "required": ["epic", "repo", "branch", "base", "spec", "plan", "log", "host", "gates", "tasks", "behaviour_groups", "done", "answers"],
   "properties": {
@@ -21,11 +21,12 @@
         },
         {
           "type": "object",
-          "required": ["kind", "name", "root"],
+          "required": ["kind", "name", "root", "clone"],
           "properties": {
             "kind": { "const": "ssh" },
             "name": { "type": "string", "minLength": 1 },
-            "root": { "type": "string", "minLength": 1 }
+            "root": { "type": "string", "minLength": 1 },
+            "clone": { "type": "string", "pattern": "^(/|~/)", "description": "The repo's clone on the host (project.md's host_clone), outside <root>/<epic>/. The head fetches the epic and task branches back from ssh://<name>/<clone> (amendment A7)." }
           }
         }
       ]

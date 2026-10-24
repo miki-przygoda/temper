@@ -123,7 +123,7 @@ async function allPublishPrompts() {
   const prompts = [];
   const scenarios = [
     { host: { kind: 'local' }, done: [] },
-    { host: { kind: 'ssh', name: 'beast', root: '/srv/temper' }, done: [] },
+    { host: { kind: 'ssh', name: 'beast', root: '/srv/temper', clone: '/srv/repo' }, done: [] },
     { host: { kind: 'local' }, done: ['docs'] },
     { host: { kind: 'local' }, done: ['docs', 'evidence'] },
   ];

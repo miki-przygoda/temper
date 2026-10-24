@@ -85,6 +85,23 @@ test('a duplicate id, a missing full gate and an ssh host without a name are eac
   assert.ok(lib.validateBuildArgs(ssh).length > 0);
 });
 
+test('an ssh host names its clone, an absolute or ~/ path outside <root>/<epic>/ (A7)', () => {
+  const withHost = (host) => ({ ...goodArgs(), host });
+  const ssh = (clone) => withHost({ kind: 'ssh', name: 'beast', root: '/srv/o', ...(clone === undefined ? {} : { clone }) });
+  assert.ok(hasError(lib.validateBuildArgs(ssh()), 'host.clone'), 'no clone');
+  assert.ok(hasError(lib.validateBuildArgs(ssh('')), 'host.clone'), 'empty clone');
+  assert.ok(hasError(lib.validateBuildArgs(ssh('repo')), 'host.clone'), 'relative clone');
+  for (const inside of ['/srv/o/e', '/srv/o/e/', '/srv/o/e/repo', '/srv/o/./e/repo', '/srv/x/../o/e/repo']) {
+    assert.ok(hasError(lib.validateBuildArgs(ssh(inside)), 'host.clone'), `clone ${inside} is inside <root>/<epic>/`);
+  }
+  const home = withHost({ kind: 'ssh', name: 'beast', root: '~/o', clone: '~/o/e/repo' });
+  assert.ok(hasError(lib.validateBuildArgs(home), 'host.clone'), 'a ~/ clone inside a ~/ root');
+  for (const outside of ['/srv/repo', '/srv/o/repo', '/srv/o/e2/repo', '~/repo']) {
+    assert.deepEqual(lib.validateBuildArgs(ssh(outside)), [], `clone ${outside} is outside <root>/<epic>/`);
+  }
+  assert.ok(hasError(lib.validatePublishArgs({ ...goodArgs(), host: { kind: 'ssh', name: 'beast', root: '/srv/o' } }), 'host.clone'));
+});
+
 test('unknown extra fields and a well-formed behaviour list are allowed', () => {
   const args = goodArgs();
   args.contracts = { A: 'the A interface' };
@@ -108,7 +125,7 @@ test('validateStabiliseArgs accepts a sweep and requires selected findings for a
 test('validatePublishArgs requires the spec', () => {
   const base = {
     epic: 'e', repo: '/r', branch: 'temper/e', base: 'main', log: 'l', spec: 's',
-    host: { kind: 'ssh', name: 'beast', root: '~/o' }, gates: { quick: 'q', full: 'f' }, done: [],
+    host: { kind: 'ssh', name: 'beast', root: '~/o', clone: '~/repo' }, gates: { quick: 'q', full: 'f' }, done: [],
   };
   assert.deepEqual(lib.validatePublishArgs(base), []);
   const { spec, ...noSpec } = base;
@@ -180,8 +197,8 @@ test('the fixed rules are in the shared prompt text', () => {
 test('hostText describes local and ssh hosts', () => {
   assert.equal(lib.hostText({ kind: 'local' }, '/r'), 'Work in git worktrees under /r/.temper/worktrees/. Run commands locally.');
   assert.equal(
-    lib.hostText({ kind: 'ssh', name: 'beast', root: '~/o' }, '/r'),
-    "Work on the build host beast: worktrees under ~/o/<epic>/; run every command there with ssh beast '…'. Never push from the host.",
+    lib.hostText({ kind: 'ssh', name: 'beast', root: '~/o', clone: '~/repo' }, '/r'),
+    "Work on the build host beast: the repo's clone there is ~/repo; worktrees under ~/o/<epic>/, made from that clone; run every command there with ssh beast '…'. Never push from the host.",
   );
 });
 

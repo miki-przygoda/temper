@@ -85,7 +85,7 @@ function allPrompts(host) {
 }
 
 const local = allPrompts({ kind: 'local' });
-const ssh = allPrompts({ kind: 'ssh', name: 'beast', root: '~/o' });
+const ssh = allPrompts({ kind: 'ssh', name: 'beast', root: '~/o', clone: '~/repo' });
 
 test('every builder returns a string with the fixed rules and the host text', () => {
   for (const [name, text] of Object.entries(local)) {
@@ -96,7 +96,7 @@ test('every builder returns a string with the fixed rules and the host text', ()
   }
   for (const [name, text] of Object.entries(ssh)) {
     assert.ok(text.includes('Fixed rules (no exception):'), name);
-    assert.ok(text.includes(lib.hostText({ kind: 'ssh', name: 'beast', root: '~/o' }, '/r')), name);
+    assert.ok(text.includes(lib.hostText({ kind: 'ssh', name: 'beast', root: '~/o', clone: '~/repo' }, '/r')), name);
   }
 });
 
@@ -202,8 +202,9 @@ test('the publish prompts', () => {
 });
 
 test('the ssh host text names the host', () => {
-  assert.ok(lib.hostText({ kind: 'ssh', name: 'beast', root: '~/o' }, '/r').includes('ssh beast'));
+  assert.ok(lib.hostText({ kind: 'ssh', name: 'beast', root: '~/o', clone: '~/repo' }, '/r').includes('ssh beast'));
   assert.ok(ssh.implementer.includes('ssh beast'));
+  assert.ok(ssh.implementer.includes("the repo's clone there is ~/repo"), 'agents are told where the host clone is (A7)');
 });
 
 test('no builder output contains undefined or tells an agent to git push', () => {

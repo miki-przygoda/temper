@@ -625,7 +625,7 @@ test('BUILD-27 local tasks use git worktrees under a temper-owned directory; ssh
     assert.match(p, /run commands locally/i, l);
   }
 
-  const ssh = await run(buildArgs({ epic: 'hard-1', branch: 'temper/hard-1', host: { kind: 'ssh', name: 'beast', root: '/srv/temper' } }));
+  const ssh = await run(buildArgs({ epic: 'hard-1', branch: 'temper/hard-1', host: { kind: 'ssh', name: 'beast', root: '/srv/temper', clone: '/srv/repo' } }));
   for (const l of ['impl:a', 'check:a', 'merge:wave0', 'checkpoint']) {
     const p = promptOf(ssh.calls, l);
     assert.ok(p.includes('build host beast'), `${l}: on the host`);
