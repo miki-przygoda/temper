@@ -655,7 +655,7 @@ test('SKILLS-PACKAGING-26 the morning report is a summary in log.md, plus a push
   assert.match(flat(README), /writes a morning report to the epic's `log\.md`/);
 });
 
-test('SKILLS-PACKAGING-27 every stage change updates the epic\'s status in epics.md', { skip: 'acceptance-failing: SKILLS-PACKAGING-27' }, () => {
+test('SKILLS-PACKAGING-27 every stage change updates the epic\'s status in epics.md', () => {
   const statuses = read('templates/epics.md').match(/Status is one of: ([^.]+)\./)[1].split(',').map((s) => s.trim());
   assert.deepEqual(statuses, ['spec', 'planned', 'building', 'stabilising', 'ready', 'merged']);
   // Who sets each status when the epic reaches that stage.
