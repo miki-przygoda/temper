@@ -59,7 +59,7 @@ function responder({ fixes = {}, second = [], regress = { regressions: [] } } = 
       const id = label.slice('second:verify:'.length);
       return { real: true, severity: byId[id].severity, reason: 'reproduced' };
     }
-    if (label === 'regress') return regress;
+    if (label === 'regress' || label === 'regress:fix') return regress;
     throw new Error(`unexpected label ${label}`);
   };
 }
@@ -263,5 +263,50 @@ test('a lens with no slug, or a selected id in the second-sweep namespace, is re
     const { result, calls } = await runWorkflow(WF, { args: fixArgs(extra), respond: responder() });
     assert.equal(result.status, 'invalid', JSON.stringify(extra));
     assert.equal(calls.length, 0);
+  }
+});
+
+test('a blocked first-sweep fix stops part fix before the second sweep: status blocked, naming the fix (SECOND-CONTROL-FLOW-4)', async () => {
+  for (const reply of [{ status: 'blocked', note: 'which behaviour?' }, null]) {
+    const { result, calls } = await runWorkflow(WF, { args: fixArgs(), respond: responder({ fixes: { f1: reply } }) });
+    assert.equal(result.status, 'blocked', JSON.stringify(reply));
+    assert.deepEqual(result.blocked.map((b) => b.id), ['f1']);
+    assert.deepEqual(result.fixed, ['f2'], 'the other fixes still run');
+    assert.ok(!labels(calls).some((l) => l.includes('review:') || l.startsWith('regress')), labels(calls).join(', '));
+    assert.equal(result.second_sweep_findings, undefined, 'no second sweep ran, so nothing to save');
+  }
+});
+
+test('a resume after the block is resolved checks the resolved fix for regressions, then runs the second sweep (SECOND-CONTROL-FLOW-4)', async () => {
+  for (const extra of [{ answers: { f1: 'do X' } }, { done: ['fix:f2'] }]) {
+    const { result, calls } = await runWorkflow(WF, { args: fixArgs({ done: ['fix:f2'], ...extra }), respond: responder() });
+    const ls = labels(calls);
+    assert.deepEqual(ls.filter((l) => l.startsWith('fix:')), ['fix:f1'], ls.join(', '));
+    const iRegress = ls.indexOf('regress:fix');
+    assert.ok(iRegress > ls.indexOf('fix:f1'), ls.join(', '));
+    const regress = calls[iRegress];
+    assert.deepEqual(regress.opts.schema, lib.REGRESS_SCHEMA);
+    assert.ok(regress.prompt.includes('Temper-Task: e/fix:f1'));
+    assert.ok(!regress.prompt.includes('Temper-Task: e/fix:f2'), 'only the fix made on this resume is checked');
+    const reviews = ls.map((l, i) => [l, i]).filter(([l]) => l.startsWith('second:review:'));
+    assert.equal(reviews.length, lib.DEFAULT_LENSES.length);
+    assert.ok(reviews.every(([, i]) => i > iRegress), 'the second sweep runs after the regression check');
+    assert.equal(result.status, 'stable');
+    assert.deepEqual(result.blocked, []);
+  }
+});
+
+test('a first run with no block makes no regression check before the second sweep, and a resume check that finds a regression or returns nothing stops before it (SECOND-CONTROL-FLOW-4)', async () => {
+  const plain = await runWorkflow(WF, { args: fixArgs(), respond: responder() });
+  assert.ok(!labels(plain.calls).some((l) => l.startsWith('regress')));
+  const regressions = [{ fix: 'f1', evidence: 'test x fails' }];
+  for (const [reply, status] of [[{ regressions }, 'handover'], [null, 'blocked']]) {
+    const base = responder();
+    const respond = (q) => (q.label === 'regress:fix' ? reply : base(q));
+    const { result, calls } = await runWorkflow(WF, { args: fixArgs({ done: ['fix:f2'], answers: { f1: 'do X' } }), respond });
+    assert.equal(result.status, status, JSON.stringify(reply));
+    assert.ok(!labels(calls).some((l) => l.includes('review:')), labels(calls).join(', '));
+    if (reply) assert.deepEqual(result.regressions, regressions);
+    else assert.deepEqual(result.blocked, [{ id: 'regress:fix', reason: 'agent returned nothing' }]);
   }
 });

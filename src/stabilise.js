@@ -118,7 +118,32 @@ const selectedMinor = args.selected.filter((f) => f.severity === 'minor');
 const toFix = args.selected.filter((f) => f.severity !== 'minor');
 
 phase('Fix');
-await fixLoop(toFix, out);
+const fixedFirst = await fixLoop(toFix, out);
+
+// A resume after a block (an earlier run committed some of these fixes, or the head answered one):
+// the fixes made now get the regression check over their diffs before the second sweep.
+const answered = (f) => isObject(args.answers) && typeof args.answers[f.id] === 'string';
+const resumed = toFix.some((f) => args.done.includes(`fix:${f.id}`) || answered(f));
+const firstRegressions = [];
+if (resumed && fixedFirst.length > 0) {
+  const r = await agent(regressPrompt(fixedFirst, args), { label: 'regress:fix', phase: 'Fix', schema: REGRESS_SCHEMA });
+  if (!r) out.blocked.push({ id: 'regress:fix', reason: 'agent returned nothing' });
+  else if (Array.isArray(r.regressions)) firstRegressions.push(...r.regressions);
+}
+
+// A blocked first-sweep fix, or a regression from one, stops part fix here: the second sweep
+// never runs on a branch missing a selected fix (SECOND-CONTROL-FLOW-4).
+if (out.blocked.length > 0 || firstRegressions.length > 0) {
+  return {
+    status: firstRegressions.length > 0 ? 'handover' : 'blocked',
+    fixed: out.fixed,
+    reverted: out.reverted,
+    contract_items: out.contract_items,
+    blocked: out.blocked,
+    open_items: selectedMinor,
+    regressions: firstRegressions,
+  };
+}
 
 phase('Second sweep');
 if (lostSecondIds.length > 0) {

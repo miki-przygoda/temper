@@ -79,7 +79,7 @@ function responder({ reviews = {}, second = {}, verdicts = {}, fixes = {}, regre
       if (Object.prototype.hasOwnProperty.call(fixes, id)) return fixes[id];
       return { status: 'fixed', commit: `sha-${id}`, note: 'done' };
     }
-    if (label === 'regress') return regress;
+    if (label === 'regress' || label === 'regress:fix') return regress;
     throw new Error(`unexpected label ${label}`);
   };
 }
@@ -602,7 +602,7 @@ test('STABILISE-21 fixes committed with their trailers are not redone on resume'
   }
 });
 
-test("a blocked fix's answer reaches only its own fix prompt on resume, with no further sweep (spec 3.6, 3.5)", async (t) => {
+test("a blocked fix's answer reaches only its own fix prompt on resume, and the one second sweep runs after it (spec 3.6, 3.5, SECOND-CONTROL-FLOW-4)", async (t) => {
   const selected = [finding('security-01', 'critical'), finding('security-02', 'important')];
 
   await t.test('the head passes the answers to part fix, keyed by finding id', () => {
@@ -614,23 +614,27 @@ test("a blocked fix's answer reaches only its own fix prompt on resume, with no 
       args: fixArgs({ selected }),
       respond: responder({ fixes: { 'security-01': { status: 'blocked', note: 'which behaviour?' } } }),
     });
-    assert.equal(run.result.status, 'stable');
+    assert.equal(run.result.status, 'blocked');
     assert.deepEqual(run.result.blocked.map((b) => b.id), ['security-01']);
+    assert.equal(reviewsOf(run.calls).length, 0, 'the second sweep ran on a branch missing a selected fix');
     const resumed = await runWorkflow(WF, {
       args: fixArgs({
         selected,
         done: ['fix:security-02'],
         answers: { 'security-01': 'ANSWER-do-X' },
-        second_sweep_findings: run.result.second_sweep_findings,
       }),
       respond: responder(),
     });
     const fix = resumed.calls.find((c) => c.opts?.label === 'fix:security-01');
     assert.ok(fix, 'the answered fix did not run again');
     assert.ok(fix.prompt.includes('Answer from the head:') && fix.prompt.includes('ANSWER-do-X'), 'the answer never reached the fix agent');
-    assert.equal(reviewsOf(resumed.calls).length, 0, 'the resume swept again');
+    const ls = labels(resumed.calls);
+    assert.ok(ls.indexOf('regress:fix') > ls.indexOf('fix:security-01'), 'the resolved fix got no regression check');
+    assert.equal(reviewsOf(resumed.calls).length, DEFAULTS.length, 'the second sweep did not run exactly once');
+    assert.ok(reviewsOf(resumed.calls).every((c) => ls.indexOf(c.opts.label) > ls.indexOf('regress:fix')));
     assert.deepEqual(resumed.result.fixed, ['security-01']);
     assert.deepEqual(resumed.result.blocked, []);
+    assert.equal(resumed.result.status, 'stable');
 
     const other = await runWorkflow(WF, {
       args: fixArgs({ selected, answers: { 'security-01': 'ANSWER-do-X' }, second_sweep_findings: [] }),
