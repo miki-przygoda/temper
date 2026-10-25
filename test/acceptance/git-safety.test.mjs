@@ -72,9 +72,9 @@ const finding = (id, severity) => ({
 // the regression check run).
 function stabiliseRespond({ label }) {
   if (label === 'review:security') return { findings: [finding('security-01', 'critical')] };
-  if (label === 'second:review:security') return { findings: [finding('second-security-01', 'severe')] };
+  if (label === 'second:review:security') return { findings: [finding('second:security-01', 'severe')] };
   if (label.includes('review:')) return { findings: [] };
-  if (label.includes('verify:')) return { real: true, severity: label.includes('second-') ? 'severe' : 'critical', reason: 'ran it' };
+  if (label.includes('verify:')) return { real: true, severity: label.includes('second:') ? 'severe' : 'critical', reason: 'ran it' };
   if (label.startsWith('fix:')) return { status: 'fixed', commit: 'f', note: 'n' };
   if (label === 'regress') return { regressions: [] };
   throw new Error(`unexpected label ${label}`);
