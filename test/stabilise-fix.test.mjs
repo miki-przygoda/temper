@@ -204,3 +204,14 @@ test('a second-sweep severe finding whose id does not match ID_RE never reaches 
   assert.ok(result.blocked.some((b) => b.id === 'second:review:security'), JSON.stringify(result.blocked));
   assert.deepEqual(result.second_sweep_findings, []);
 });
+
+test('a malformed saved second_sweep_findings is refused before any agent, never swept a third time (SECOND-TESTS-DOCS-3)', async () => {
+  for (const second of [{}, 'x', null, [{ id: 'second-security-01' }], [{ id: 'second-security-01', severity: 'bad' }], [null]]) {
+    const { result, calls } = await runWorkflow(WF, {
+      args: fixArgs({ done: ['fix:f1', 'fix:f2'], second_sweep_findings: second }),
+      respond: responder(),
+    });
+    assert.equal(result.status, 'invalid', JSON.stringify(second));
+    assert.equal(calls.length, 0, `${JSON.stringify(second)}: ${labels(calls).join(', ')}`);
+  }
+});

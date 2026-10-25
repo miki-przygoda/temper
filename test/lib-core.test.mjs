@@ -364,3 +364,28 @@ test('a gate that runs sudo, doas, su or pkexec anywhere in it is refused by eve
     for (const errors of all({ quick: cmd, full: cmd })) assert.deepEqual(errors, [], cmd);
   }
 });
+
+test('second_sweep_findings must be an array of findings, each with an id and a severity, so a malformed saved value never means another sweep (SECOND-TESTS-DOCS-3)', () => {
+  const base = {
+    epic: 'e', repo: '/r', branch: 'temper/e', base: 'main', log: 'docs/temper/e/log.md',
+    host: { kind: 'local' }, gates: { quick: 'q', full: 'f' },
+    part: 'fix', lenses: [], severity_notes: '', done: [], selected: [{ id: 'security-01', severity: 'critical' }],
+  };
+  const v = (second) => lib.validateStabiliseArgs({ ...base, second_sweep_findings: second });
+  for (const second of [{}, { findings: [] }, 'second-security-01', 7, null, true]) {
+    assert.ok(hasError(v(second), 'second_sweep_findings must be an array of findings'), `${JSON.stringify(second)}: ${v(second).join('\n')}`);
+  }
+  const good = { id: 'second-security-01', severity: 'minor' };
+  const entries = [
+    null, 'second-security-02', ['second-security-02', 'minor'], {}, { severity: 'minor' }, { id: 'second-security-02' },
+    { id: 'second-security-02', severity: 'bad' }, { id: 'second-security-02', severity: 'Severe' }, { id: 7, severity: 'minor' },
+  ];
+  for (const entry of entries) {
+    const errors = v([good, entry]);
+    assert.ok(hasError(errors, 'second_sweep_findings[1] must be a finding with an id'), `${JSON.stringify(entry)}: ${errors.join('\n')}`);
+    assert.ok(!hasError(errors, 'second_sweep_findings[0]'), 'a good entry is not refused');
+  }
+  assert.deepEqual(v([]), []);
+  assert.deepEqual(v([good, { id: 'second-security-02', severity: 'severe' }]), []);
+  assert.deepEqual(lib.validateStabiliseArgs(base), [], 'it is optional');
+});
