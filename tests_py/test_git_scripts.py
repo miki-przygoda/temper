@@ -254,6 +254,25 @@ class CleanupCheckTest(GitRepoCase):
         self.assertFalse(match('sub/build/out.o', ['/build/']))
         self.assertFalse(match('a', []))
 
+    def test_anchored_patterns_match_segment_by_segment(self):
+        # SECOND-SAFETY-2: gitignore style, `*` never matches `/`; only `**` spans directories.
+        match = cleanup_check._disposable
+        self.assertTrue(match('x.log', ['/*.log']))
+        self.assertFalse(match('logs/x.log', ['/*.log']))
+        self.assertFalse(match('a/b/c/x.log', ['/*.log']))
+        self.assertTrue(match('out/x.log', ['out/*.log']))
+        self.assertFalse(match('out/deep/x.log', ['out/*.log']))
+        self.assertFalse(match('out/a/b/x.log', ['/out/*.log']))
+        self.assertTrue(match('out/x.log', ['out/**/*.log']))
+        self.assertTrue(match('out/a/b/x.log', ['out/**/*.log']))
+        self.assertFalse(match('other/a/x.log', ['out/**/*.log']))
+        self.assertTrue(match('out/a/b/x.log', ['out/**']))
+        self.assertFalse(match('out', ['out/**']))  # `/**` matches what is inside, not out
+        self.assertTrue(match('a/b/out/x.log', ['**/out/*.log']))
+        self.assertFalse(match('a/b/out/c/x.log', ['**/out/*.log']))
+        self.assertTrue(match('build/x/y.o', ['/build/x/']))
+        self.assertFalse(match('build/x', ['/build/x/']))  # a file named x is not the dir
+
     def test_cli_passes_repeated_disposable_patterns(self):
         wt = self.ignored_worktree()
         script = str(SCRIPTS / 'cleanup_check.py')

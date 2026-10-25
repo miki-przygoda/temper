@@ -45,11 +45,29 @@ def _default_branch(repo, remote):
     return None
 
 
+def _match_segments(pat, segs):
+    """Does the list of pattern segments match the list of path segments exactly?
+
+    Each segment is matched on its own, so `*`, `?` and `[...]` never match `/`. A `**`
+    segment matches zero or more whole segments; a trailing `**` matches one or more
+    (gitignore: `out/**` is what is inside out, not out itself).
+    """
+    if not pat:
+        return not segs
+    head, rest = pat[0], pat[1:]
+    if head == '**':
+        if not rest:
+            return len(segs) >= 1
+        return any(_match_segments(rest, segs[i:]) for i in range(len(segs) + 1))
+    return bool(segs) and fnmatch.fnmatchcase(segs[0], head) and _match_segments(rest, segs[1:])
+
+
 def _disposable(path, patterns):
     """Does an ignored path match one of the `disposable:` patterns from project.md?
 
     gitignore-style, simplified: a trailing `/` matches a directory only; a pattern with a
-    leading or inner `/` is anchored at the worktree root; any other pattern matches one path
+    leading or inner `/` is anchored at the worktree root and matched segment by segment, so
+    `*` never matches `/` and only `**` spans directories; any other pattern matches one path
     component at any depth. `*`, `?` and `[...]` are fnmatch wildcards.
     """
     parts = path.rstrip('/').split('/')
@@ -61,7 +79,8 @@ def _disposable(path, patterns):
         # A directory pattern matches the parents of a file, never the file's own name.
         last = len(parts) - 1 if dir_only and not path.endswith('/') else len(parts)
         if pat.startswith('/') or '/' in name:
-            if any(fnmatch.fnmatchcase('/'.join(parts[:i]), name) for i in range(1, last + 1)):
+            segs = name.split('/')
+            if any(_match_segments(segs, parts[:i]) for i in range(1, last + 1)):
                 return True
         elif any(fnmatch.fnmatchcase(part, name) for part in parts[:last]):
             return True

@@ -11,7 +11,8 @@ host: local
 # The head fetches the epic and task branches back from it. Leave it empty for a local host.
 host_clone:
 # Ignored files cleanup may delete with a worktree, comma-separated, e.g. target/, node_modules/, __pycache__/.
-# A trailing / matches a directory, a leading / anchors to the worktree root. Any other ignored file blocks cleanup.
+# A trailing / matches a directory, a leading / anchors to the worktree root; * never matches /, only ** spans directories.
+# Any other ignored file blocks cleanup.
 disposable:
 # Board mirroring of epic status: off, github or jira. A board failure never blocks a run.
 board: off
