@@ -205,6 +205,11 @@ test('the ssh host text names the host', () => {
   assert.ok(lib.hostText({ kind: 'ssh', name: 'beast', root: '~/o', clone: '~/repo' }, '/r').includes('ssh beast'));
   assert.ok(ssh.implementer.includes('ssh beast'));
   assert.ok(ssh.implementer.includes("the repo's clone there is ~/repo"), 'agents are told where the host clone is (A7)');
+  // SECOND-CONTROL-FLOW-2: the head brings its own commits to the host's epic branch, which git
+  // refuses while that branch is checked out in a worktree there.
+  for (const [name, text] of Object.entries(ssh)) {
+    assert.ok(text.includes('leave the epic branch checked out in no worktree on the host'), name);
+  }
 });
 
 test('no builder output contains undefined or tells an agent to git push', () => {

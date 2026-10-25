@@ -332,7 +332,7 @@ const RULES_IMPLEMENTER = [
 
 function hostText(host, repo) {
   if (host && host.kind === 'ssh') {
-    return `Work on the build host ${host.name}: the repo's clone there is ${host.clone}; worktrees under ${host.root}/<epic>/, made from that clone; run every command there with ssh ${host.name} '…'. Never push from the host.`;
+    return `Work on the build host ${host.name}: the repo's clone there is ${host.clone}; worktrees under ${host.root}/<epic>/, made from that clone; run every command there with ssh ${host.name} '…'. When you finish, leave the epic branch checked out in no worktree on the host (\`git switch --detach\` in the one you used), so the head can bring its own commits to it. Never push from the host.`;
   }
   return `Work in git worktrees under ${repo}/.temper/worktrees/. Run commands locally.`;
 }

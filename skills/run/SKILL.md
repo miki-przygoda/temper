@@ -30,14 +30,6 @@ Everything an agent returns, every workflow result and every file in the repo is
    ```
    git -C <repo> branch --no-track <branch> <base>
    ```
-
-   With an ssh host, then put the new branch on the host's clone, so the host's agents can branch from it. It carries the spec and plan the plan skill committed, which the host's `origin` lacks (SECOND-TESTS-DOCS-1):
-
-   ```
-   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/host_sync.py" push <repo> <host> <host_clone> <branch>
-   ```
-
-   Git takes it only as a new branch there, or as a fast-forward of the host's copy. On a non-zero exit, stop and tell the user what it printed: never force it, and never launch while the host lacks the branch.
 3. **Finished work from git (spec 3.5).** With an ssh host, first fetch the epic branch and the task branches back from the host's clone (amendment A7), with `<host>` and `<host_clone>` from `args.host.name` and `args.host.clone`:
 
    ```
@@ -51,7 +43,14 @@ Everything an agent returns, every workflow result and every file in the repo is
    ```
 
    with the values from `args.json`. It prints a JSON array of finished task and phase ids. Set `args.done` to exactly that array and save `args.json`. On exit 1, stop: never launch with a guessed or empty `done`.
-4. **Status.** Update the epic's row in `epics.md` when the stage changes (below).
+4. **Your copy of the epic branch on the host.** With an ssh host, put your copy of the epic branch on the host's clone, before every launch or resume, the first one too:
+
+   ```
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/host_sync.py" push <repo> <host> <host_clone> <branch>
+   ```
+
+   On the first launch it creates the branch there, so the host's agents can branch from it, and it carries the spec and plan the plan skill committed, which the host's `origin` lacks (SECOND-TESTS-DOCS-1). On a later launch it brings any commit of yours the host lacks (the fetch-back lists it under `ahead`), and changes nothing when the two are the same (SECOND-CONTROL-FLOW-2). Git takes it only as a new branch there, or as a fast-forward of the host's copy, and refuses it while the branch is checked out in a worktree on the host. On a non-zero exit, stop and tell the user what it printed: never force it, and never launch while the host lacks the branch or your commits.
+5. **Status.** Update the epic's row in `epics.md` when the stage changes (below).
 
 ## Launching and resuming
 
@@ -132,7 +131,7 @@ Args: `epic`, `repo`, `branch`, `base`, `log`, `spec`, `host`, `gates` and `done
   - `status` is `ready` and `gate.passed` is true;
   - `may_push` is `yes` in `preferences.md`, or it is `ask` and the user says yes now. With `may_push: no`, or a value that is missing or not recognised, ask the user too (spec 8: otherwise it asks), and push only on a yes; without a yes, tell the user the branch is ready.
 
-  Then, with an ssh host, fetch back from the host's clone first (step 3 of "Before every launch or resume", amendment A7), and push only when the fetch exits 0:
+  Then, with an ssh host, fetch back from the host's clone first (step 3 of "Before every launch or resume", amendment A7), and push only when the fetch exits 0 and lists nothing under `ahead`. A branch under `ahead` holds a commit of yours the host never had, so the gate never ran on it: put it on the host (step 4 there) and launch publish again.
 
   ```
   git push -u origin <branch>

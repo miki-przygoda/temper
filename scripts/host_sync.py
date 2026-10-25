@@ -156,8 +156,16 @@ def push(repo: str, host: str, clone: str, branch: str) -> dict:
         raise SyncError(f'there is no local branch {branch} to push')
     proc = _git(repo, 'push', '--quiet', '--no-follow-tags', url, f'{ref}:{ref}')
     if proc.returncode != 0:
-        raise SyncError(f'push of {branch} to {url} refused (nothing on the host changed): '
-                        f'{proc.stderr.strip()}. Never force it: tell the user.')
+        why = proc.stderr.strip()
+        hint = ''
+        if 'checked out' in why:
+            hint = (f' {branch} is checked out in a worktree on the host: it can take the push only'
+                    ' once that worktree is detached (git switch --detach).')
+        elif 'non-fast-forward' in why or 'fetch first' in why:
+            hint = (' The host has commits the local branch lacks: fetch back first; if the two'
+                    ' have diverged, the user decides.')
+        raise SyncError(f'push of {branch} to {url} refused, nothing on the host changed.{hint}'
+                        f' Never force it: tell the user. git said: {why}')
     return {'ok': True, 'branch': branch, 'commit': sha}
 
 

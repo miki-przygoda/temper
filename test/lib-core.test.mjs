@@ -222,7 +222,7 @@ test('hostText describes local and ssh hosts', () => {
   assert.equal(lib.hostText({ kind: 'local' }, '/r'), 'Work in git worktrees under /r/.temper/worktrees/. Run commands locally.');
   assert.equal(
     lib.hostText({ kind: 'ssh', name: 'beast', root: '~/o', clone: '~/repo' }, '/r'),
-    "Work on the build host beast: the repo's clone there is ~/repo; worktrees under ~/o/<epic>/, made from that clone; run every command there with ssh beast '…'. Never push from the host.",
+    "Work on the build host beast: the repo's clone there is ~/repo; worktrees under ~/o/<epic>/, made from that clone; run every command there with ssh beast '…'. When you finish, leave the epic branch checked out in no worktree on the host (`git switch --detach` in the one you used), so the head can bring its own commits to it. Never push from the host.",
   );
 });
 

@@ -658,6 +658,51 @@ class TestGitSafety(GitSandbox):
         self.assertNotEqual(proc.returncode, 0)
         self.assertEqual(self.git(host_clone, 'rev-parse', 'epic/e'), theirs)
 
+    # ---- SECOND-CONTROL-FLOW-2: the head's copy of the epic branch reaches the host before every launch ----
+
+    def test_SECOND_CONTROL_FLOW_2_every_launch_brings_the_heads_commits_to_the_host(self):
+        push, before = self._push_cmd('## Before every launch or resume', '## Launching and resuming')
+        fetch = self._fetch_back_cmd()
+        self.assertLess(before.index(fetch), before.index('scripts/done_tasks.py'))
+        self.assertLess(before.index('scripts/done_tasks.py'), before.index(push),
+                        'the push is a step of every launch, after the fetch-back and done_tasks.py')
+        self.assertRegex(before, r'before every launch or resume, the first one too')
+        stage5 = RUN_SKILL[RUN_SKILL.index('## Stage 5'):]
+        self.assertRegex(stage5, r'`ahead`[^\n]*[\s\S]*git push -u origin <branch>',
+                         'nothing the host never had goes to origin')
+
+        repo, origin = self.remote()
+        host_clone = self.tmp / 'host' / 'repo'
+        self.git(self.tmp, 'clone', '-q', str(origin), str(host_clone))
+        self.git(repo, 'branch', '--no-track', 'epic/e', 'main')
+        env, _log = self._stub_ssh()
+        self.assertEqual(self._run_skill_cmd(push, env, repo, host_clone).returncode, 0)
+        # A commit of the head's that never reached the host (its push was refused, say).
+        self.git(repo, 'checkout', '-q', 'epic/e')
+        mine = self.commit(repo, 'fix: the checkpoint\n\nTemper-Task: e/checkpoint')
+        # An agent left the epic branch checked out on the host: the push is refused, nothing moves.
+        hwt = self.tmp / 'host' / 'e' / 'x'
+        self.git(host_clone, 'worktree', 'add', '-q', str(hwt), 'epic/e')
+        old = self.git(host_clone, 'rev-parse', 'epic/e')
+        for cmd in (fetch, push):
+            proc = self._run_skill_cmd(cmd, env, repo, host_clone)
+            if cmd is fetch:
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertEqual(json.loads(proc.stdout)['ahead'], ['epic/e'])
+            else:
+                self.assertNotEqual(proc.returncode, 0)
+                self.assertIn('checked out', proc.stderr)
+        self.assertEqual(self.git(host_clone, 'rev-parse', 'epic/e'), old)
+        self.assertEqual(self.git(hwt, 'status', '--porcelain'), '')
+        # Once it is checked out nowhere on the host, the next launch brings the commit there.
+        self.git(hwt, 'switch', '-q', '--detach')
+        for cmd in (fetch, push):
+            proc = self._run_skill_cmd(cmd, env, repo, host_clone)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(self.git(host_clone, 'rev-parse', 'epic/e'), mine)
+        proc = self._run_skill_cmd(fetch, env, repo, host_clone)
+        self.assertEqual(json.loads(proc.stdout)['ahead'], [], 'after the push the two are the same')
+
     # ---- SECOND-SAFETY-7: the host's login directory is not on the cleanup check's sys.path ----
 
     def test_SECOND_SAFETY_7_the_host_cleanup_check_runs_isolated_from_the_login_directory(self):
