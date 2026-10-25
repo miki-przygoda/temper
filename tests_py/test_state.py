@@ -1,12 +1,15 @@
 import importlib.util
 import json
 import os
+import shutil
+import stat
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'scripts'))
@@ -265,6 +268,38 @@ class InstallTest(TempConfig):
         finally:
             store.chmod(0o755)
             target.chmod(0o644)
+
+    def test_backup_keeps_the_settings_mode_and_is_never_open_to_others(self):
+        # SECOND-SAFETY-3: settings.json can hold env secrets or an apiKeyHelper. The backup
+        # keeps its mode, and is created 0600 from the start, so it is never 0644 for a moment.
+        real_open = os.open
+        created = []
+
+        def spy_open(path, flags, mode=0o777, *args, **kwargs):
+            if str(path).endswith('settings.backup.json'):
+                created.append((flags, mode))
+            return real_open(path, flags, mode, *args, **kwargs)
+
+        old_umask = os.umask(0)
+        try:
+            for mode in (0o600, 0o640):
+                with self.subTest(mode=oct(mode)):
+                    shutil.rmtree(self.state, ignore_errors=True)
+                    self.write_settings({'env': {'API_KEY': 'secret'}})
+                    self.settings.chmod(mode)
+                    original = self.settings.read_bytes()
+                    created.clear()
+                    with mock.patch.object(installer.os, 'open', side_effect=spy_open):
+                        self.install()
+                    backup = self.state / 'settings.backup.json'
+                    self.assertEqual(backup.read_bytes(), original)
+                    self.assertEqual(stat.S_IMODE(backup.stat().st_mode), mode)
+                    self.assertEqual(len(created), 1, created)
+                    flags, made = created[0]
+                    self.assertEqual(made & 0o777, 0o600)
+                    self.assertTrue(flags & os.O_EXCL)
+        finally:
+            os.umask(old_umask)
 
     def test_install_without_settings_file(self):
         self.install()

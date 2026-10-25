@@ -15,6 +15,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import sys
 import tempfile
 import time
@@ -78,6 +79,28 @@ def _replace_file(path, text):
         raise
 
 
+def _backup(source, backup):
+    """Copy settings.json to the backup, keeping its mode (it can hold env secrets).
+
+    The backup is created 0600 and only then given the original's mode, so it is never
+    readable by others for a moment, whatever the umask.
+    """
+    data = Path(source).read_bytes()
+    mode = stat.S_IMODE(os.stat(str(source)).st_mode)
+    fd = os.open(str(backup), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0),
+                 0o600)
+    try:
+        with os.fdopen(fd, 'wb') as handle:
+            handle.write(data)
+            os.fchmod(handle.fileno(), mode)
+    except BaseException:
+        try:
+            os.unlink(str(backup))
+        except OSError:
+            pass
+        raise
+
+
 def _write_json(path, data):
     _write_atomic(path, json.dumps(data, indent=2) + '\n')
 
@@ -113,7 +136,7 @@ def install(plugin_root, env=os.environ):
     backup = state / 'settings.backup.json'
     if not backup.exists():
         if settings_file.exists():
-            shutil.copyfile(str(settings_file), str(backup))
+            _backup(settings_file, backup)
         else:
             _write_json(backup, {})
 
