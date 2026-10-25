@@ -335,3 +335,32 @@ test('the branch is compared with the base and the default branch however either
     for (const errors of all({ branch, base, default_branch: 'main' })) assert.deepEqual(errors, [], `branch ${branch}, base ${base}`);
   }
 });
+
+test('a gate that runs sudo, doas, su or pkexec anywhere in it is refused by every validator (SECOND-SAFETY-6)', () => {
+  const common = {
+    epic: 'e', repo: '/r', branch: 'temper/e', base: 'main', log: 'l', host: { kind: 'local' }, done: [],
+  };
+  const all = (gates) => [
+    lib.validateBuildArgs({ ...goodArgs(), gates }),
+    lib.validateStabiliseArgs({ ...common, gates, part: 'sweep', lenses: [], severity_notes: '' }),
+    lib.validatePublishArgs({ ...common, gates, spec: 's' }),
+  ];
+  const privileged = [
+    'sudo make install', 'sudo -n true', 'npm test && sudo make install', 'npm test;sudo x', 'a || sudo b',
+    'a | sudo tee /etc/x', 'a & sudo b', 'echo $(sudo id)', 'echo `sudo id`', 'env FOO=1 sudo x', '/usr/bin/sudo x',
+    'doas make', 'su -c "make"', 'pkexec make', 'x &&sudo y', 'bash -c "sudo x"', "sh -c 'npm test; sudo x'",
+    "s''udo x", 's\\udo x', 'nice -n 5 sudo x', 'xargs sudo rm', '(sudo x)', '{ sudo x; }', 'npm test\nsudo x',
+    'SUDO_ASKPASS=/x sudo -A y', 'SUDO make', 'exec sudo x', 'timeout 5 sudo x', 'time sudo x', 'cmd=sudo; $cmd x',
+  ];
+  for (const cmd of privileged) {
+    for (const [errors, which] of all({ quick: 'npm test', full: cmd }).map((e) => [e, 'full'])) {
+      assert.ok(hasError(errors, `gates.${which} must not run sudo, doas, su or pkexec`), `${JSON.stringify(cmd)}: ${errors.join('\n')}`);
+    }
+    for (const errors of all({ quick: cmd, full: 'npm test' })) {
+      assert.ok(hasError(errors, 'gates.quick must not run sudo, doas, su or pkexec'), `${JSON.stringify(cmd)}: ${errors.join('\n')}`);
+    }
+  }
+  for (const cmd of ['npm test', 'cargo test pseudo', 'npm run sudo-check', 'grep -r sudoers .', 'cargo test --features suite', 'make summary']) {
+    for (const errors of all({ quick: cmd, full: cmd })) assert.deepEqual(errors, [], cmd);
+  }
+});

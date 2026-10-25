@@ -87,13 +87,32 @@ function checkHost(host, epic, errors) {
   }
 }
 
+const PRIVILEGED_COMMANDS = ['sudo', 'doas', 'su', 'pkexec'];
+
+// Whether a gate command names a privileged command as a word anywhere (spec 8, SECOND-SAFETY-6).
+// Quotes and backslashes are dropped first, since the shell joins s''udo and s\udo into sudo; then
+// the text is split at blanks and shell punctuation (; & | ( ) < > ` $ { } = , !), so a word after
+// &&, a pipe, $( or backticks, inside sh -c '…', or after env, xargs or a variable assignment is
+// caught. It refuses any such word, not only one in command position: an argument named su is rare
+// in a gate, and a miss would run as root. Case is folded, since macOS finds SUDO as sudo.
+function runsPrivileged(cmd) {
+  return cmd
+    .replace(/["'\\]/g, '')
+    .split(/[\s;&|()<>`${}=,!]+/)
+    .some((w) => PRIVILEGED_COMMANDS.includes(w.slice(w.lastIndexOf('/') + 1).toLowerCase()));
+}
+
 function checkGates(gates, errors) {
   if (!isObject(gates)) {
     errors.push('gates must be {quick, full}');
     return;
   }
-  if (!isNonEmptyString(gates.quick)) errors.push('gates.quick must be a non-empty string');
-  if (!isNonEmptyString(gates.full)) errors.push('gates.full must be a non-empty string');
+  for (const k of ['quick', 'full']) {
+    if (!isNonEmptyString(gates[k])) errors.push(`gates.${k} must be a non-empty string`);
+    else if (runsPrivileged(gates[k])) {
+      errors.push(`gates.${k} must not run sudo, doas, su or pkexec (spec 8: no privileged commands)`);
+    }
+  }
 }
 
 function checkDone(done, errors) {
