@@ -86,3 +86,66 @@ Recorded as spec amendments A7–A11. These are the owner's answers to the quest
 
 - **The ssh build-host mode isn't ready.** Nothing brings the epic branch, spec and plan into the host clone (SECOND-CONTROL-FLOW-2, SECOND-TESTS-DOCS-1). The fetch-back clashes with a checked-out epic branch (SECOND-CONTROL-FLOW-1), and with the head's own commits (the regression above). Local mode is the solid path for v1.
 - **Several important findings concern inputs that cross into prompts or shell commands:** ids (SAFETY-4), gates that use sudo (SAFETY-6), and branch spelling (SAFETY-5). They belong with the ssh-host work, in one hardening pass.
+
+## Fix run on fix/second-sweep (25 Oct)
+
+Branch fix/second-sweep, made from feat/v1 at 170eb69. Four fix groups ran one after the other (ssh-host, validation, stabilise, publish-scripts), then a regression check over every fix, then a revert pass. Each fix has its own commit with a test that was seen failing on the old code first. The full gate passed after every commit. Nothing was pushed and no sudo was used.
+
+### Per finding
+
+- **SECOND-SAFETY-8:** fixed, 98eef22. A relative root or clone is refused, and so is a ~/ path mixed with an absolute one (the host's home isn't known locally). One old expectation changed: clone `~/repo` with root `/srv/o` is now refused.
+- **SECOND-SAFETY-7:** fixed, 157546d (`python3 -I` on the host).
+- **SECOND-CONTROL-FLOW-1:** fixed, 6724141 (new `scripts/host_sync.py fetch`: the fetch goes into refs/temper/host/, and local branches move only by `merge --ff-only` or a checked `update-ref`). **It has a proven regression that is still open; see below.**
+- **SECOND-TESTS-DOCS-1:** fixed, 5da51af (`host_sync.py push` on the first launch; the A7 test no longer makes epic/e on the host by hand).
+- **A7-REGRESSION** (the open regression from the 24 Oct run): fixed, f9fae65. The fetch-back leaves a local branch that is ahead of the host's copy alone and lists it under `ahead`.
+- **SECOND-CONTROL-FLOW-2:** fixed, 8f49441. The head pushes before every launch, ssh agents leave the epic branch detached on the host, and stage 5 publishes only what the host had. This is spec amendment A12.
+- Not a finding: 4308db3 adds `scripts/ssh_host_smoke.sh` (`<host>` or `--local`; the `--local` form runs in npm test).
+- **SECOND-SAFETY-4:** fixed, c1c1857. ID_RE is enforced on finding, selected, second-sweep and done ids. A reviewer finding with any other id is never verified and blocks its lens. The id reaches the prompts only inside the data block and the trailer. This also covers SECOND-CONTROL-FLOW-3's cause, though that finding had no fix of its own.
+- **SECOND-CONTROL-FLOW-6:** fixed in f8899ce, **then reverted in 99382ae** (regression).
+- **SECOND-SAFETY-5:** fixed, 03d0e05. Branch spellings are normalised. A new optional `default_branch` arg is written by the plan skill. Older args.json files without it are compared with the base only.
+- **SECOND-SAFETY-6:** fixed, da2b941. sudo, doas, su and pkexec are refused as a word anywhere in a gate. Escape tricks like `$'\163udo'` aren't caught; the fixed-rules prompt text still covers them.
+- **SECOND-TESTS-DOCS-3:** fixed, 4aa1acf (each check pinned by a test that a mutant dropping it fails).
+- **SECOND-TESTS-DOCS-11:** fixed, f06ddb2 (the dedupe key and the ownership key are pinned by mutant tests).
+- **SECOND-TESTS-DOCS-2 and SECOND-CONTROL-FLOW-7:** fixed together in ec33aad (a `second:` id namespace), **then reverted in d340d7e** (regression).
+- **SECOND-CONTROL-FLOW-4:** fixed, 7b4a267. A blocked first-sweep fix stops part fix with status `blocked`, and a resume runs `regress:fix` before the second sweep. Known gap: a run whose only selected fix died with no answer looks like a first run on resume, so it gets no extra regression check (the second sweep still reviews it).
+- **SECOND-CONTROL-FLOW-5:** fixed in c8f9e53, **then reverted in e1a5054** (regression).
+- **SECOND-SAFETY-2:** fixed, 53884d2 (gitignore-style matching, segment by segment).
+- **SECOND-SAFETY-3:** fixed, 38128a4 (the backup is made 0600 with O_EXCL, then given the settings file's mode).
+- **SECOND-CONTROL-FLOW-9:** fixed, 93b2e1a. The fix is in `done_tasks.py`, not publish.js: docs and evidence count only while every commit after theirs is also a docs or evidence commit.
+- **SECOND-TESTS-DOCS-5:** fixed in 2edbbb7 (`scripts/session_mode.py`), **then reverted in 2b86b11** (regression).
+- **SECOND-TESTS-DOCS-4:** fixed, 234db26. BUILD-01's cases are now generated from `schemas/args.schema.json`, and stabilise and publish get the same common-field cases. validateBuildArgs now checks that each behaviour entry is `{id, text}`.
+
+### The regression check
+
+Five regressions were proven. Each was reproduced a second time with an independent probe on `git archive` exports of the parent and the fix.
+
+- **REGRESS-STAB-2** (ec33aad): a part 'fix' resume whose branch has a second-sweep trailer in the old `fix:second-<slug>-NN` form, with no `second_sweep_findings`, ran a third sweep and skipped that fix's regression check. That breaks spec 7's "never sweep again". **Reverted** (d340d7e). One conflict in test/stabilise-fix.test.mjs was resolved by keeping the later CONTROL-FLOW-4 tests. A compatible redo would also count a legacy `fix:second-*` trailer whose id is not in `args.selected`.
+- **REGRESS-STAB-1** (c8f9e53): unverified findings were deduped only among themselves. So one bug that two lenses report, verified by one verifier while the other returned nothing, showed up twice and turned a stable second sweep into handover. **Reverted** (e1a5054). A redo should dedupe the unverified list against the verified one.
+- **SECOND-TESTS-DOCS-5** (2edbbb7): the mode record is written only on a user prompt. An auto-mode overnight run that the plan skill starts in the same turn stalls at the pre-flight once ground and plan take over 600 s, waiting for a confirmation nobody gives. **Reverted** (2b86b11). A redo needs a refresh that doesn't depend on a new prompt, or no age limit inside the same session.
+- **SECOND-CONTROL-FLOW-6** (f8899ce): once a failed checkpoint commits nothing, the resumed run has the same args. If the failing checkpoint was the run's first agent call (a second failure, or a resume with every task already done), the resume cache returns the old `gate_passed: false` with the stale gate log every time. This was shown on a model of the documented resume cache, not on the real runtime. **Reverted** (99382ae). A redo needs the head's fix to change the args, or a relaunch without `resumeFromRunId` after a checkpoint block.
+- **SECOND-CONTROL-FLOW-1-stale-private-ref** (6724141): `_fetch_private` uses refspecs without `+` into refs/temper/host/, and nothing ever prunes or resets them. Once the host's copy of a branch is rewritten or recreated, every later fetch-back is refused as non-fast-forward, even when local and host agree or the local branch is missing. Two cases show it: a divergence that the user resolves by force-pushing the head's branch to the host, and a task branch deleted on both sides and remade on the host. **Blocked, not reverted, still present at HEAD.** A clean revert would also need 5da51af, f9fae65, 8f49441 and 4308db3 reverted, and the old plain fetch would bring A7-REGRESSION back. The owner chooses between:
+  - a cascade revert of those four commits, or
+  - the one-line forward fix: add `+` to the two private refspecs, or delete refs/temper/host/<epic> before each fetch. refs/heads/ would still move only by `--ff-only` or a checked `update-ref`.
+
+  Until then, recover by hand with `git update-ref -d` on the stale refs/temper/host/ ref.
+
+### Gate and smoke at 99382ae
+
+- `npm test`: 282 of 282 Node tests and 106 of 106 Python tests passed, rc 0. The counts dropped from 287 and 114 at 234db26 because the reverts took their tests with them.
+- `node scripts/bundle.mjs`, then `--check`: rc 0, and the working tree was clean afterwards.
+- `claude plugin validate --strict .` with a fresh CLAUDE_CONFIG_DIR: passed, rc 0. The LICENSE_MISSING and ICON_MISSING directory notes were already there and don't change the result.
+- `sh scripts/install_smoke.sh`: rc 0 (the marketplace was added, and superpowers and temper@temper were installed and enabled).
+- `sh scripts/ssh_host_smoke.sh beast`: PASS, 11 of 11 checks, mode ssh, rc 0, with no temper-smoke directories left on beast. The smoke doesn't cover the stale-private-ref cases above.
+
+### Reopened by the reverts, left for the owner
+
+- SECOND-CONTROL-FLOW-5, SECOND-CONTROL-FLOW-6, SECOND-TESTS-DOCS-2, SECOND-CONTROL-FLOW-7 and SECOND-TESTS-DOCS-5 are open again, in their 24 Oct form.
+- SECOND-CONTROL-FLOW-1 is fixed but carries the open stale-private-ref regression.
+
+### Second-sweep findings this run did not touch (minors, left for the owner)
+
+- SECOND-SAFETY-9 (statusline timeout leaves children running).
+- SECOND-CONTROL-FLOW-3 (no fix of its own; c1c1857's ID_RE check removes its cause).
+- SECOND-CONTROL-FLOW-8 (runWaves ignores `merge.merged`).
+- SECOND-TESTS-DOCS-6, 7, 8, 9 and 10 (run-skill blocked reasons, the empty 4a selection, args.contracts, the strict result checks, untested prompt lines).
+- SECOND-TESTS-DOCS-12 (untested cleanup-check paths).
