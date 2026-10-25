@@ -86,7 +86,7 @@ Write each answer to `args.answers[<task id>]` in `args.json`. Each answer reach
 
 `merge:wave<n>`, `checkpoint` and `behaviour-spec` are not tasks, so they never go through `args.answers`. Handle them yourself:
 - `merge:wave<n>`: a merge conflict, or a quick gate that failed after a merge. Resolve the conflict or the failure by the spec, run the quick gate, and commit on the epic branch.
-- `checkpoint`: the full gate failed. Fix the cause by the spec, run the full gate, and commit, without a `Temper-Task` trailer. The checkpoint agent committed nothing for a failed gate, so the checkpoint runs again on resume (SECOND-CONTROL-FLOW-6).
+- `checkpoint`: the full gate failed. Fix the cause by the spec, run the full gate, and commit.
 
 With an ssh host, fetch back first (step 3 of "Before every launch or resume"), before you commit on the epic branch or anywhere else, so your commit lands on top of the host's work. Right after each commit you make on the epic branch, fetch back again and put the commit on the host's clone, so the host's agents build on it and the next fetch-back finds the two branches the same (A7-REGRESSION):
 
