@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runWorkflow } from '../harness.mjs';
+import { namesField, schemaCases } from '../schema-cases.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const WF = 'workflows/stabilise.js';
@@ -142,6 +143,35 @@ function tracking(base, prefix) {
   };
   return { respond, state };
 }
+
+test('STABILISE args: every common field the args schema names, and part, lenses and severity_notes, are refused missing or of the wrong type, before any agent (SECOND-TESTS-DOCS-4)', async () => {
+  const full = args({ default_branch: 'main', done: ['x1'], lenses: ['security'] });
+  const ssh = { ...full, host: { kind: 'ssh', name: 'beast', root: '/srv/temper', clone: '/srv/repo' } };
+  const only = ['epic', 'repo', 'branch', 'base', 'default_branch', 'log', 'host', 'gates', 'done'];
+  const without = (f) => { const a = { ...full }; delete a[f]; return a; };
+  const cases = [
+    ...schemaCases(full, { only }),
+    ...schemaCases(ssh, { only }).filter((c) => c.name.startsWith('host')),
+    { name: 'part missing', args: without('part'), field: 'part' },
+    { name: 'part not sweep or fix', args: { ...full, part: 'both' }, field: 'part' },
+    { name: 'lenses missing', args: without('lenses'), field: 'lenses' },
+    { name: 'lenses a string', args: { ...full, lenses: 'security' }, field: 'lenses' },
+    { name: 'a lens a number', args: { ...full, lenses: [7] }, field: 'lenses' },
+    { name: 'severity_notes missing', args: without('severity_notes'), field: 'severity_notes' },
+    { name: 'severity_notes a number', args: { ...full, severity_notes: 7 }, field: 'severity_notes' },
+  ];
+  for (const f of only.filter((x) => x !== 'default_branch')) assert.ok(cases.some((c) => c.name === `${f} missing`), `no case for ${f} missing`);
+  for (const valid of [full, ssh]) {
+    const { result } = await runWorkflow(WF, { args: valid, respond: () => null });
+    assert.notEqual(result.status, 'invalid', `the base is valid: ${result.errors}`);
+  }
+  for (const c of cases) {
+    const { result, calls } = await runWorkflow(WF, { args: c.args, respond: () => null });
+    assert.equal(calls.length, 0, `${c.name}: an agent was started`);
+    assert.equal(result.status, 'invalid', `${c.name}: status`);
+    assert.ok(namesField(result.errors, c.field), `${c.name}: no error names ${c.field}: ${result.errors}`);
+  }
+});
 
 test('STABILISE-01 the first sweep runs one reviewer per lens, in parallel, each in a throwaway worktree', async () => {
   const base = responder({ reviews: { security: [finding('security-01', 'critical')] } });

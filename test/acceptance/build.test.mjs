@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runWorkflow } from '../harness.mjs';
+import { ARGS_SCHEMA, namesField, schemaCases } from '../schema-cases.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const WF = 'workflows/build.js';
@@ -112,12 +113,33 @@ test('BUILD-01 invalid args.json is refused naming the problem, before any agent
     { name: 'done of the wrong type', args: { ...base, done: 'a' }, field: 'done' },
     { name: 'a task wave of the wrong type', args: { ...base, tasks: [task('a', '0')] }, field: 'wave' },
   ];
-  for (const c of cases) {
+  // Every required field and wrong type the args schema names (SECOND-TESTS-DOCS-4), from a full
+  // base that holds every optional field and one entry in each list, once with a local host and
+  // once with an ssh host.
+  const full = buildArgs({
+    default_branch: 'main',
+    done: ['x1'],
+    answers: { a: 'an answer' },
+    behaviour: [{ key: 'g1', behaviours: [{ id: 'G1-01', text: 'given x then y' }] }],
+  });
+  const ssh = { ...full, host: { kind: 'ssh', name: 'beast', root: '/srv/temper', clone: '/srv/repo' } };
+  for (const valid of [full, ssh]) {
+    const { result } = await run(valid);
+    assert.notEqual(result.status, 'invalid', `the base is valid: ${result.errors}`);
+  }
+  const fromSchema = [...schemaCases(full), ...schemaCases(ssh).filter((c) => c.name.startsWith('host'))];
+  const names = fromSchema.map((c) => c.name);
+  for (const required of ARGS_SCHEMA.required) assert.ok(names.includes(`${required} missing`), `no case for ${required} missing`);
+  for (const f of ['tasks.0.wave a string', 'tasks.0.owns empty', 'host.clone missing', 'host.kind not its const',
+    'gates.full missing', 'behaviour.0.behaviours.0.text missing', 'answers.a a number', 'done.0 a number']) {
+    assert.ok(names.includes(f), `no case ${f}: ${names.join(', ')}`);
+  }
+  for (const c of [...cases, ...fromSchema]) {
     const { result, calls } = await run(c.args);
     assert.equal(calls.length, 0, `${c.name}: an agent was started`);
     assert.equal(result.status, 'invalid', `${c.name}: status`);
     assert.ok(Array.isArray(result.errors) && result.errors.length > 0, `${c.name}: no errors`);
-    assert.ok(result.errors.some((e) => e.includes(c.field)), `${c.name}: no error names ${c.field}: ${result.errors}`);
+    assert.ok(namesField(result.errors, c.field), `${c.name}: no error names ${c.field}: ${result.errors}`);
   }
 });
 

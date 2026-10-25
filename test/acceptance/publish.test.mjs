@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runWorkflow } from '../harness.mjs';
+import { namesField, schemaCases } from '../schema-cases.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const WF = 'workflows/publish.js';
@@ -142,6 +143,24 @@ async function allPublishPrompts() {
   }
   return prompts;
 }
+
+test('PUBLISH args: every common field the args schema names, and spec, are refused missing or of the wrong type, before any agent (SECOND-TESTS-DOCS-4)', async () => {
+  const full = args('/r', { default_branch: 'main', done: ['x1'] });
+  const ssh = { ...full, host: { kind: 'ssh', name: 'beast', root: '/srv/temper', clone: '/srv/repo' } };
+  const only = [...['epic', 'repo', 'branch', 'base', 'default_branch', 'log', 'host', 'gates', 'done'], 'spec'];
+  const cases = [...schemaCases(full, { only }), ...schemaCases(ssh, { only }).filter((c) => c.name.startsWith('host'))];
+  for (const f of only.filter((x) => x !== 'default_branch')) assert.ok(cases.some((c) => c.name === `${f} missing`), `no case for ${f} missing`);
+  for (const valid of [full, ssh]) {
+    const { result } = await runWorkflow(WF, { args: valid, respond: () => null });
+    assert.notEqual(result.status, 'invalid', `the base is valid: ${result.errors}`);
+  }
+  for (const c of cases) {
+    const { result, calls } = await runWorkflow(WF, { args: c.args, respond: () => null });
+    assert.equal(calls.length, 0, `${c.name}: an agent was started`);
+    assert.equal(result.status, 'invalid', `${c.name}: status`);
+    assert.ok(namesField(result.errors, c.field), `${c.name}: no error names ${c.field}: ${result.errors}`);
+  }
+});
 
 test('PUBLISH-01 on a stabilised branch publish writes docs against the final code, an evidence script and checklist, and a PR title and body file', async () => {
   const r = stabilisedRepo();

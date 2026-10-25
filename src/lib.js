@@ -258,6 +258,12 @@ function validateBuildArgs(args) {
       args.behaviour.forEach((b, i) => {
         if (!isObject(b) || typeof b.key !== 'string' || !Array.isArray(b.behaviours)) {
           errors.push(`behaviour[${i}] must be {key, behaviours}`);
+        } else {
+          b.behaviours.forEach((x, j) => {
+            if (!isObject(x) || typeof x.id !== 'string' || typeof x.text !== 'string') {
+              errors.push(`behaviour[${i}].behaviours[${j}] must be {id, text} with string id and text`);
+            }
+          });
         }
       });
     }
