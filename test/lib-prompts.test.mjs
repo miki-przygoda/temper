@@ -254,3 +254,13 @@ test('a finding id reaches the verify and fix prompts only inside the data block
   }
   assert.ok(local.regress.includes('data'), 'the regress prompt marks its ids as data');
 });
+
+test('the checkpoint prompt commits its trailer only when the full gate passed, so a failed gate leaves the checkpoint to run again on resume (SECOND-CONTROL-FLOW-6)', () => {
+  const p = local.checkpoint;
+  const steps = p.split('\n').filter((l) => /^\d\. /.test(l));
+  const withTrailer = steps.filter((l) => l.includes('Temper-Task: e/checkpoint'));
+  assert.equal(withTrailer.length, 1, 'one step names the trailer');
+  assert.match(withTrailer[0], /^\d\. Only if the full gate passed: /, withTrailer[0]);
+  assert.match(p, /If the full gate failed, change nothing and commit nothing: no checkpoint section and no `Temper-Task: e\/checkpoint` trailer, so the checkpoint runs again on resume\./);
+  assert.match(p, /gate_passed false/);
+});

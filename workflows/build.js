@@ -563,7 +563,9 @@ function checkpointPrompt(args) {
     `1. Run the full gate: \`${args.gates.full}\`. Record whether it passed and where its log is.`,
     `2. Run each user flow from the user flows section of the spec ${args.spec} on the real program, by hand, as a user would. Record each flow as ok or gap, with evidence (the commands and what they printed).`,
     '3. Record gaps; fix nothing. Change no product code and no tests.',
-    `4. Append a checkpoint section to ${args.log} with the gate result, the flows and the gaps. ${commitText(args.epic, 'checkpoint')}`,
+    `4. Only if the full gate passed: append a checkpoint section to ${args.log} with the gate result, the flows and the gaps. ${commitText(args.epic, 'checkpoint')}`,
+    `If the full gate failed, change nothing and commit nothing: no checkpoint section and no \`${trailer(args.epic, 'checkpoint')}\` trailer, so the checkpoint runs again on resume. The head records the failure.`,
+    'Return gate_passed (true only when the full gate passed, gate_passed false when it failed), the gate log, the flows and the gaps.',
   ]);
 }
 
