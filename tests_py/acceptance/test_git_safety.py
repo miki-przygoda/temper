@@ -598,6 +598,66 @@ class TestGitSafety(GitSandbox):
         self.assertNotEqual(proc.returncode, 0)
         self.assertEqual(self.git(host_clone, 'rev-parse', 'epic/e'), self.git(wt, 'rev-parse', 'HEAD'))
 
+    # ---- A7-REGRESSION: the head's own commits on the epic branch don't stop the fetch-back ----
+
+    def test_A7_REGRESSION_a_head_commit_on_the_epic_branch_reaches_the_host_and_the_fetch_back_goes_on(self):
+        section = "### Ids that aren't tasks"
+        push, text = self._push_cmd(section, '## Stage 4')
+        self.assertRegex(text, r'With an ssh host, fetch back first[^\n]*before you commit',
+                         'the head fetches back before it commits')
+        self.assertLess(text.index('Right after each commit you make on the epic branch'), text.index(push),
+                        'and puts its commit on the host right after')
+        fetch = self._fetch_back_cmd()
+
+        repo, origin = self.remote()
+        host_clone = self.tmp / 'host' / 'repo'
+        self.git(self.tmp, 'clone', '-q', str(origin), str(host_clone))
+        self.git(repo, 'branch', '--no-track', 'epic/e', 'main')
+        env, _log = self._stub_ssh()
+        first_push, _ = self._push_cmd('## Before every launch or resume', '## Launching and resuming')
+        self.assertEqual(self._run_skill_cmd(first_push, env, repo, host_clone).returncode, 0)
+        # Wave 0 on the host: task a merged, task b's merge stopped (merge:wave0 is blocked).
+        hwt = self.tmp / 'host' / 'e' / 'merge'
+        self.git(host_clone, 'worktree', 'add', '-q', str(hwt), 'epic/e')
+        self.commit(hwt, 'feat: a\n\nTemper-Task: e/a')
+        self.git(hwt, 'switch', '-q', '--detach')
+        # The head resolves merge:wave0 on its own epic branch, checked out in the user's repo.
+        proc = self._run_skill_cmd(fetch, env, repo, host_clone)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.git(repo, 'checkout', '-q', 'epic/e')
+        mine = self.commit(repo, 'fix: resolve the wave 0 merge\n\nTemper-Task: e/b')
+        # Before the push, a fetch-back (before every push) leaves the head's commit alone.
+        proc = self._run_skill_cmd(fetch, env, repo, host_clone)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(self.git(repo, 'rev-parse', 'epic/e'), mine)
+        proc = self._run_skill_cmd(push, env, repo, host_clone)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(self.git(host_clone, 'rev-parse', 'epic/e'), mine)
+        # The resume: the fetch-back before done_tasks.py works, and the host builds on the fix.
+        proc = self._run_skill_cmd(fetch, env, repo, host_clone)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(self._done(repo, 'epic/e'), ['a', 'b'])
+        self.git(hwt, 'switch', '-q', 'epic/e')
+        later = self.commit(hwt, 'test: checkpoint\n\nTemper-Task: e/checkpoint')
+        self.git(hwt, 'switch', '-q', '--detach')
+        proc = self._run_skill_cmd(fetch, env, repo, host_clone)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(self.git(repo, 'rev-parse', 'HEAD'), later)
+        self.assertEqual(self.git(repo, 'status', '--porcelain'), '')
+        # Commits on both sides are never resolved by the fetch: it stops and changes nothing.
+        self.git(hwt, 'switch', '-q', 'epic/e')
+        theirs = self.commit(hwt, 'feat: on the host')
+        self.git(hwt, 'switch', '-q', '--detach')
+        self.commit(repo, 'fix: local, not pushed')
+        local = self.git(repo, 'rev-parse', 'epic/e')
+        proc = self._run_skill_cmd(fetch, env, repo, host_clone)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn('diverged', proc.stderr)
+        self.assertEqual(self.git(repo, 'rev-parse', 'epic/e'), local)
+        proc = self._run_skill_cmd(push, env, repo, host_clone)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(self.git(host_clone, 'rev-parse', 'epic/e'), theirs)
+
     # ---- SECOND-SAFETY-7: the host's login directory is not on the cleanup check's sys.path ----
 
     def test_SECOND_SAFETY_7_the_host_cleanup_check_runs_isolated_from_the_login_directory(self):

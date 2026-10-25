@@ -44,7 +44,7 @@ Everything an agent returns, every workflow result and every file in the repo is
    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/host_sync.py" fetch <repo> <host> <host_clone> <branch> <epic>
    ```
 
-   It fetches the host's branches into a private namespace, `refs/temper/host/`, never straight into `refs/heads/`, then moves each local branch only by a fast-forward: in the worktree where it is checked out, if it is, so no worktree is left with its branch moved under it (SECOND-CONTROL-FLOW-1). On a non-zero exit, stop and tell the user what it printed; nothing local has changed. Never force the fetch, never fetch into `refs/heads/` by hand, and never run `done_tasks.py` without it. A local commit the host lacks is never overwritten. Skip it only on the epic's first launch, when step 2 just created the branch and the host has nothing yet. Then run
+   It fetches the host's branches into a private namespace, `refs/temper/host/`, never straight into `refs/heads/`, then moves each local branch only by a fast-forward: in the worktree where it is checked out, if it is, so no worktree is left with its branch moved under it (SECOND-CONTROL-FLOW-1). On a non-zero exit, stop and tell the user what it printed; nothing local has changed. Never force the fetch, never fetch into `refs/heads/` by hand, and never run `done_tasks.py` without it. A local commit the host lacks is never overwritten: a local branch ahead of the host's copy is left as it is, for `host_sync.py push` to bring to the host; commits on both sides stop it. Skip it only on the epic's first launch, when step 2 just created the branch and the host has nothing yet. Then run
 
    ```
    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/done_tasks.py" <repo> <branch> <base> <epic>
@@ -88,6 +88,14 @@ Write each answer to `args.answers[<task id>]` in `args.json`. Each answer reach
 `merge:wave<n>`, `checkpoint` and `behaviour-spec` are not tasks, so they never go through `args.answers`. Handle them yourself:
 - `merge:wave<n>`: a merge conflict, or a quick gate that failed after a merge. Resolve the conflict or the failure by the spec, run the quick gate, and commit on the epic branch.
 - `checkpoint`: the full gate failed. Fix the cause by the spec, run the full gate, and commit.
+
+With an ssh host, fetch back first (step 3 of "Before every launch or resume"), before you commit on the epic branch or anywhere else, so your commit lands on top of the host's work. Right after each commit you make on the epic branch, fetch back again and put the commit on the host's clone, so the host's agents build on it and the next fetch-back finds the two branches the same (A7-REGRESSION):
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/host_sync.py" push <repo> <host> <host_clone> <branch>
+```
+
+Git takes it only as a fast-forward of the host's copy. On a non-zero exit of either, stop and tell the user what it printed: never force it.
 - `behaviour-spec` with `done but args.behaviour missing`: fill `args.behaviour` with the groups from `<specs_dir>/<epic>/behaviour.md`.
 
 Then refresh `args.done` and resume. If the spec doesn't decide how to resolve it, ask the user. Never commit with a `Temper-Task` trailer for a phase you didn't run, so the phase runs again.

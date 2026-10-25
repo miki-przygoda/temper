@@ -9,8 +9,10 @@ fetch: bring the epic branch and the task branches temper/<epic>/* back from the
 straight in refs/heads/ (SECOND-CONTROL-FLOW-1). Each local branch then moves only by a fast
 forward: with `git merge --ff-only` in the worktree where it is checked out, if it is, so no
 worktree is left with its branch moved under it; otherwise with `git update-ref`, which checks
-the old value. A local branch that is missing is created. When any branch can't be fast
-forwarded, nothing local is changed and it exits 1.
+the old value. A local branch that is missing is created. A local branch already ahead of the
+host's copy (the head's own commits, which `push` then brings to the host) is left as it is
+(A7-REGRESSION). When any branch has commits on both sides, nothing local is changed and it
+exits 1.
 
 push: send the local epic branch to the host clone, so the host's agents build on it: on the
 first launch it carries the spec and plan the plan skill committed (SECOND-TESTS-DOCS-1). It is
@@ -19,7 +21,8 @@ a plain push of refs/heads/<branch>, so git takes it only as a fast-forward of t
 
 CLI: python3 scripts/host_sync.py fetch <repo> <host> <clone> <branch> <epic>
      python3 scripts/host_sync.py push <repo> <host> <clone> <branch>
-fetch prints {"ok": true, "updated": [...], "created": [...], "same": [...]}, push prints
+fetch prints {"ok": true, "updated": [...], "created": [...], "same": [...], "ahead": [...]},
+push prints
 {"ok": true, "branch": ..., "commit": ...}; each exits 0, or prints `host_sync: <why>` on
 stderr and exits 1.
 """
@@ -107,6 +110,7 @@ def fetch(repo: str, host: str, clone: str, branch: str, epic: str) -> dict:
     worktrees = checked_out(repo)
     plan = []  # (ref, old, new, worktree)
     same = []
+    ahead = []
     problems = []
     for ref, new in sorted(host_refs.items()):
         old = _rev(repo, ref)
@@ -118,7 +122,9 @@ def fetch(repo: str, host: str, clone: str, branch: str, epic: str) -> dict:
         elif _is_ancestor(repo, old, new):
             plan.append((ref, old, new, worktrees.get(ref)))
         elif _is_ancestor(repo, new, old):
-            problems.append(f'{name} has local commits the host clone lacks')
+            # The head's own commits, not on the host yet: left as they are, for `push` to
+            # bring to the host as a fast-forward (A7-REGRESSION).
+            ahead.append(name)
         else:
             problems.append(f'{name} has diverged from the host clone (commits on both sides)')
     if problems:
@@ -139,7 +145,7 @@ def fetch(repo: str, host: str, clone: str, branch: str, epic: str) -> dict:
         if proc.returncode != 0 or _rev(repo, ref) != new:
             where = f' in the worktree {wt}' if wt else ''
             raise SyncError(f'could not fast-forward {name}{where}: {proc.stderr.strip()}')
-    return {'ok': True, 'updated': updated, 'created': created, 'same': same}
+    return {'ok': True, 'updated': updated, 'created': created, 'same': same, 'ahead': ahead}
 
 
 def push(repo: str, host: str, clone: str, branch: str) -> dict:
