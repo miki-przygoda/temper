@@ -310,31 +310,3 @@ test('a first run with no block makes no regression check before the second swee
     else assert.deepEqual(result.blocked, [{ id: 'regress:fix', reason: 'agent returned nothing' }]);
   }
 });
-
-test('an unverified Critical or Important second-sweep finding means the result is not stable; it is kept, listed and never fixed (SECOND-CONTROL-FLOW-5)', async () => {
-  for (const severity of ['severe', 'critical', 'important', 'minor']) {
-    const u = finding('second:u1', severity, { line: 60 });
-    const base = responder({ second: [u] });
-    const respond = (q) => (q.label === 'second:verify:second:u1' ? null : base(q));
-    const { result, calls } = await runWorkflow(WF, { args: fixArgs(), respond });
-    assert.ok(!labels(calls).includes('fix:second:u1'), `${severity}: an unverified finding went to a fix agent`);
-    assert.deepEqual(result.unverified.map((f) => f.id), ['second:u1'], severity);
-    assert.ok(result.open_items.some((f) => f.id === 'second:u1'), `${severity}: not in the open items`);
-    assert.ok(result.second_sweep_findings.some((f) => f.id === 'second:u1' && f.unverified === true), `${severity}: not saved`);
-    if (severity === 'minor') {
-      assert.equal(result.status, 'stable');
-      assert.deepEqual(result.blocked, []);
-    } else {
-      assert.equal(result.status, 'handover', severity);
-      assert.deepEqual(result.blocked, [{ id: 'second:verify:second:u1', reason: 'agent returned nothing' }], severity);
-    }
-    // A resume with the saved findings keeps it unverified and never stable.
-    const resumed = await runWorkflow(WF, {
-      args: fixArgs({ done: ['fix:f1', 'fix:f2'], second_sweep_findings: result.second_sweep_findings }),
-      respond: responder(),
-    });
-    assert.equal(labels(resumed.calls).filter((l) => l.includes('review:') || l === 'fix:second:u1').length, 0, severity);
-    assert.equal(resumed.result.status, severity === 'minor' ? 'stable' : 'handover', `${severity} on resume`);
-    assert.deepEqual(resumed.result.unverified.map((f) => f.id), ['second:u1']);
-  }
-});

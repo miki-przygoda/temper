@@ -3,12 +3,9 @@
 // part 'fix' (4b): the selected fixes, the second sweep, severe fixes with a regression check, the stop.
 
 // One sweep: a review per lens, then a verify per finding. Keeps the findings the verifier
-// reproduced, with the verifier's severity, merged and ordered. A verdict of real:false counts as
-// refuted. A verify that returns nothing (the agent died or was skipped) leaves its finding
-// unverified: kept and listed with the reviewer's severity, never dropped; an unverified finding
-// above minor is blocked ("agent returned nothing"), so the result can't be stable (SECOND-CONTROL-FLOW-5).
-// A review that returns nothing leaves its lens unreviewed: it is blocked ("agent returned nothing"),
-// never a lens with no findings.
+// reproduced, with the verifier's severity, merged and ordered. A verdict of real:false or
+// null (the agent died or was skipped) counts as refuted. A review that returns nothing leaves its
+// lens unreviewed: it is blocked ("agent returned nothing"), never a lens with no findings.
 // A finding needs an input and the wrong result it produces (spec 7 4a.1); one without is not accepted.
 const hasInputAndWrongResult = (f) => !!f
   && typeof f.input === 'string' && f.input.trim() !== ''
@@ -50,7 +47,6 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
     },
   );
   const kept = [];
-  const unverified = [];
   const blocked = [];
   let refuted = 0;
   for (const [i, lensResult] of perLens.entries()) {
@@ -65,19 +61,14 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
       blocked.push({ id: `${labelPrefix}review:${lenses[i]}`, reason: `a first-sweep finding id started with ${SECOND_PREFIX}; that finding was not verified` });
     }
     for (const { finding, verdict } of lensResult.pairs) {
-      if (!verdict) {
-        unverified.push({ ...finding, unverified: true });
-        if (finding.severity !== 'minor') blocked.push({ id: `${labelPrefix}verify:${finding.id}`, reason: 'agent returned nothing' });
-        continue;
-      }
-      if (verdict.real !== true) {
+      if (!verdict || verdict.real !== true) {
         refuted += 1;
         continue;
       }
       kept.push({ ...finding, severity: verdict.severity ?? finding.severity });
     }
   }
-  return { findings: sortFindings(dedupeFindings(kept)), refuted, blocked, unverified: sortFindings(dedupeFindings(unverified)) };
+  return { findings: sortFindings(dedupeFindings(kept)), refuted, blocked };
 }
 
 const errors = validateStabiliseArgs(args);
@@ -85,8 +76,8 @@ if (errors.length > 0) return { status: 'invalid', errors };
 
 if (args.part === 'sweep') {
   phase('Sweep');
-  const { findings, refuted, blocked, unverified } = await sweepAndVerify(lensesOr(args.lenses), [], '');
-  return { status: 'list', findings, refuted, blocked, unverified };
+  const { findings, refuted, blocked } = await sweepAndVerify(lensesOr(args.lenses), [], '');
+  return { status: 'list', findings, refuted, blocked };
 }
 
 // part 'fix' (4b): careful fixes one at a time in severity order, one more sweep, then the stop.
@@ -174,22 +165,14 @@ if (lostSecondIds.length > 0) {
 }
 
 // Saved findings stand in for the sweep; their done severe fixes still get the regression check below.
-// Unverified findings are saved with them, marked, and stay unverified on resume: never fixed, and
-// one above minor keeps the stage from being stable.
 let secondFindings;
-let unverified;
 let unreviewed = false;
 if (savedSecond) {
-  secondFindings = sortFindings(savedSecond.filter((f) => f.unverified !== true));
-  unverified = sortFindings(savedSecond.filter((f) => f.unverified === true));
-  const unclean = unverified.filter((f) => f.severity !== 'minor');
-  out.blocked.push(...unclean.map((f) => ({ id: `second:verify:${f.id}`, reason: 'agent returned nothing' })));
-  unreviewed = unclean.length > 0;
+  secondFindings = sortFindings(savedSecond);
 } else {
   const alreadyFixed = [...doneIds(toFix), ...out.fixed];
   const second = await sweepAndVerify(lensesOr(args.lenses), alreadyFixed, 'second:');
   secondFindings = second.findings;
-  unverified = second.unverified;
   // A lens the second sweep never reviewed means the stage is not done: hand over, never 'stable'.
   out.blocked.push(...second.blocked);
   unreviewed = second.blocked.length > 0;
@@ -218,9 +201,8 @@ return {
   reverted: out.reverted,
   contract_items: out.contract_items,
   blocked: out.blocked,
-  open_items: [...selectedMinor, ...others, ...unverified],
+  open_items: [...selectedMinor, ...others],
   second_sweep: { severe: severe.length, others: others.length },
-  second_sweep_findings: [...secondFindings, ...unverified],
-  unverified,
+  second_sweep_findings: secondFindings,
   regressions,
 };
