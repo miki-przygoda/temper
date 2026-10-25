@@ -732,5 +732,40 @@ class TestGitSafety(GitSandbox):
         self.assertIn('ok', out, proc.stderr)
 
 
+    # ---- scripts/ssh_host_smoke.sh, in its test-only local mode (a fake ssh on PATH) ----
+
+    def test_ssh_host_smoke_local_mode_passes_and_leaves_nothing_behind(self):
+        smoke = ROOT / 'scripts' / 'ssh_host_smoke.sh'
+        tmpdir = self.tmp / 'smoke-tmp'
+        tmpdir.mkdir()
+        env = dict(self.env, TMPDIR=str(tmpdir))
+        proc = subprocess.run(['sh', str(smoke), '--local'], cwd=str(self.tmp), env=env,
+                              capture_output=True, text=True, check=False, timeout=180)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertRegex(proc.stdout, r'ssh_host_smoke: PASS \(11 checks, host smoke-host, mode local\)')
+        for case in ('SECOND-TESTS-DOCS-1', 'SECOND-CONTROL-FLOW-1', 'A7-REGRESSION', 'SECOND-CONTROL-FLOW-2'):
+            self.assertRegex(proc.stdout, rf'(?m)^ok \d+ - .*\({case}\)$', case)
+        self.assertEqual(list(tmpdir.iterdir()), [], 'the smoke test removed what it made')
+
+        # A failure part-way still removes everything, and exits 1.
+        bin_dir = self.tmp / 'nopython'
+        bin_dir.mkdir()
+        (bin_dir / 'python3').write_text('#!/bin/sh\nexit 3\n', encoding='utf-8')
+        (bin_dir / 'python3').chmod(0o755)
+        env = dict(env, PATH=f'{bin_dir}:{env["PATH"]}')
+        proc = subprocess.run(['sh', str(smoke), '--local'], cwd=str(self.tmp), env=env,
+                              capture_output=True, text=True, check=False, timeout=180)
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn('FAIL - host_sync.py push (first launch)', proc.stderr)
+        self.assertEqual(list(tmpdir.iterdir()), [], 'a failed run removed what it made too')
+
+        # Bad usage changes nothing.
+        for argv in ([], ['-x'], ['a', 'b']):
+            proc = subprocess.run(['sh', str(smoke), *argv], cwd=str(self.tmp), env=env,
+                                  capture_output=True, text=True, check=False, timeout=30)
+            self.assertEqual(proc.returncode, 2, argv)
+        self.assertEqual(list(tmpdir.iterdir()), [])
+
+
 if __name__ == '__main__':
     unittest.main()
