@@ -389,3 +389,27 @@ test('second_sweep_findings must be an array of findings, each with an id and a 
   assert.deepEqual(v([good, { id: 'second-security-02', severity: 'severe' }]), []);
   assert.deepEqual(lib.validateStabiliseArgs(base), [], 'it is optional');
 });
+
+test('dedupeFindings keys on file, line and summary together: a finding that differs in any one of them is kept (SECOND-TESTS-DOCS-11)', () => {
+  const fs = [
+    { id: 'f1', file: 'a.rs', line: 3, summary: 'Leaks the token' },
+    { id: 'f2', file: 'b.rs', line: 3, summary: 'Leaks the token' },
+    { id: 'f3', file: 'a.rs', line: 4, summary: 'Leaks the token' },
+    { id: 'f4', file: 'a.rs', line: 3, summary: 'Drops the token' },
+    { id: 'f5', file: 'a.rs', line: 3, summary: 'leaks the token' },
+    { id: 'f6', file: 'b.rs', line: 3, summary: 'LEAKS THE TOKEN ' },
+  ];
+  assert.deepEqual(lib.dedupeFindings(fs).map((f) => f.id), ['f1', 'f2', 'f3', 'f4']);
+});
+
+test('the ownership rule keys on wave and path: the same path in another wave, or another path in the same wave, is allowed (SECOND-TESTS-DOCS-11)', () => {
+  const laterWave = goodArgs();
+  laterWave.tasks.push({ id: 'c', title: 'C', wave: 1, owns: ['src/a.rs'], uses: [], provides: [], text: 'do c' });
+  assert.deepEqual(lib.validateBuildArgs(laterWave), []);
+  const sameWave = goodArgs();
+  sameWave.tasks.push({ id: 'c', title: 'C', wave: 0, owns: ['src/c.rs'], uses: [], provides: [], text: 'do c' });
+  assert.deepEqual(lib.validateBuildArgs(sameWave), []);
+  const clash = goodArgs();
+  clash.tasks.push({ id: 'c', title: 'C', wave: 1, owns: ['src/c.rs', 'src/b.rs'], uses: [], provides: [], text: 'do c' });
+  assert.deepEqual(lib.validateBuildArgs(clash), ['wave 1: tasks b and c both own src/b.rs']);
+});
