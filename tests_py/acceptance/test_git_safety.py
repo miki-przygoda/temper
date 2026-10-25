@@ -15,6 +15,7 @@ A test that fails because of the product is skipped with "acceptance-failing: <i
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -438,7 +439,13 @@ class TestGitSafety(GitSandbox):
         self.assertNotIn('+refs', cmd, 'the fetch never forces a ref')
         self.assertNotIn('--force', cmd)
         sync = (ROOT / 'scripts' / 'host_sync.py').read_text(encoding='utf-8')
-        self.assertNotIn("'+", sync, 'host_sync.py never forces a refspec')
+        # A forced refspec may only fill temper's private copy of the host's refs, never a
+        # branch: refs/heads/ moves only by a fast-forward (SECOND-CONTROL-FLOW-1).
+        forced = re.findall(r"""f?['"]\+(refs/[^'"]*)['"]""", sync)
+        self.assertTrue(forced, 'the private refs are fetched with + so they follow a rewrite')
+        for spec in forced:
+            self.assertRegex(spec, r':\{PRIVATE\}', f'only the private refs are forced: {spec}')
+            self.assertNotIn(':refs/heads/', spec)
         self.assertNotIn('--force', sync)
         stage5 = RUN_SKILL[RUN_SKILL.index('## Stage 5'):]
         self.assertRegex(stage5, r'ssh host[^\n]*fetch[\s\S]*git push -u origin <branch>',
@@ -557,6 +564,38 @@ class TestGitSafety(GitSandbox):
         self.assertEqual(self.git(repo, 'rev-parse', 'HEAD'), tip)
         self.assertEqual(self.git(repo, 'rev-parse', 'epic/e'), tip)
         self.assertEqual((repo / 'clash.txt').read_text(encoding='utf-8'), 'mine\n')
+
+    def test_SECOND_CONTROL_FLOW_1_a_rewritten_host_branch_does_not_wedge_the_private_refs(self):
+        cmd = self._fetch_back_cmd()
+        repo, origin = self.remote()
+        self.git(repo, 'branch', '--no-track', 'epic/e', 'main')
+        host_clone = self.tmp / 'host' / 'repo'
+        self.git(self.tmp, 'clone', '-q', str(origin), str(host_clone))
+        self.git(host_clone, 'branch', '--no-track', 'epic/e', 'origin/main')
+        env, _log = self._stub_ssh()
+        # A task branch on the host, fetched back once.
+        self.git(host_clone, 'checkout', '-q', '-b', 'temper/e/a', 'epic/e')
+        first = self.commit(host_clone, 'feat: a\n\nTemper-Task: e/a')
+        self.git(host_clone, 'checkout', '-q', '--detach')
+        proc = self._run_skill_cmd(cmd, env, repo, host_clone)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(self.git(repo, 'rev-parse', 'refs/temper/host/temper/e/a'), first)
+        # The host rewrites it (an agent rebased its branch).
+        self.git(host_clone, 'checkout', '-q', 'temper/e/a')
+        self.git(host_clone, 'commit', '-q', '--amend', '-m', 'feat: a, rebased\n\nTemper-Task: e/a')
+        rewritten = self.git(host_clone, 'rev-parse', 'HEAD')
+        self.git(host_clone, 'checkout', '-q', '--detach')
+        # A local copy holding the old commit is a real divergence: refused, nothing local moves.
+        proc = self._run_skill_cmd(cmd, env, repo, host_clone)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(self.git(repo, 'rev-parse', 'temper/e/a'), first)
+        # Once the head drops its stale copy, the fetch-back goes on: the private ref follows the
+        # host's rewrite instead of refusing it forever.
+        self.git(repo, 'branch', '-D', 'temper/e/a')
+        proc = self._run_skill_cmd(cmd, env, repo, host_clone)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(self.git(repo, 'rev-parse', 'refs/temper/host/temper/e/a'), rewritten)
+        self.assertEqual(self.git(repo, 'rev-parse', 'temper/e/a'), rewritten)
 
     # ---- SECOND-TESTS-DOCS-1: the epic branch, with the spec and plan, reaches the host clone ----
 

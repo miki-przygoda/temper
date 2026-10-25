@@ -2,7 +2,8 @@
 """Keep the epic branch the same on the user's machine and on the ssh build host's clone.
 
 The head runs this, never an agent. It talks to the host clone only through git over ssh,
-at ssh://<host>/<clone>, and never forces anything.
+at ssh://<host>/<clone>, and never forces a branch: the only forced refs are its own private
+copies of the host's, refs/temper/host/, which follow a host branch that was rewritten.
 
 fetch: bring the epic branch and the task branches temper/<epic>/* back from the host clone
 (amendment A7). They land first in a private namespace, refs/temper/host/<branch>, never
@@ -81,10 +82,14 @@ def checked_out(repo):
 
 
 def _fetch_private(repo, url, branch, epic):
-    """Fetch the host's branches into refs/temper/host/; return {local ref: host sha}."""
+    """Fetch the host's branches into refs/temper/host/; return {local ref: host sha}.
+
+    The private refs are a copy of the host's, so they follow a host branch that was
+    rewritten or recreated (the '+'); only refs/heads/ is guarded, by fetch() below.
+    """
     specs = [
-        f'refs/heads/{branch}:{PRIVATE}{branch}',
-        f'refs/heads/temper/{epic}/*:{PRIVATE}temper/{epic}/*',
+        f'+refs/heads/{branch}:{PRIVATE}{branch}',
+        f'+refs/heads/temper/{epic}/*:{PRIVATE}temper/{epic}/*',
     ]
     proc = _git(repo, 'fetch', '--no-tags', '--no-write-fetch-head', url, *specs)
     if proc.returncode != 0:
