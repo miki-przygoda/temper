@@ -432,14 +432,14 @@ class TestGitSafety(GitSandbox):
     def test_A7_ssh_host_branches_are_fetched_back_before_done_tasks_and_before_a_push(self):
         before = RUN_SKILL[RUN_SKILL.index('## Before every launch or resume'):
                            RUN_SKILL.index('## Launching and resuming')]
-        fetches = [l.strip() for l in before.splitlines()
-                   if l.strip().startswith('git -C <repo> fetch ssh://<host>/<host_clone> ')]
-        self.assertEqual(len(fetches), 1, 'the run skill gives the head one fetch-back command')
-        cmd = fetches[0]
+        cmd = self._fetch_back_cmd()
         self.assertLess(before.index(cmd), before.index('scripts/done_tasks.py'),
                         'the fetch comes before done_tasks.py')
         self.assertNotIn('+refs', cmd, 'the fetch never forces a ref')
         self.assertNotIn('--force', cmd)
+        sync = (ROOT / 'scripts' / 'host_sync.py').read_text(encoding='utf-8')
+        self.assertNotIn("'+", sync, 'host_sync.py never forces a refspec')
+        self.assertNotIn('--force', sync)
         stage5 = RUN_SKILL[RUN_SKILL.index('## Stage 5'):]
         self.assertRegex(stage5, r'ssh host[^\n]*fetch[\s\S]*git push -u origin <branch>',
                          'the fetch comes before the push')
@@ -462,11 +462,7 @@ class TestGitSafety(GitSandbox):
         self.assertEqual(self._done(repo, 'epic/e'), [])
 
         env, log = self._stub_ssh()
-        run = lambda: subprocess.run(
-            ['sh', '-c', cmd.replace('<repo>', str(repo)).replace('<host>', 'beast')
-             .replace('<host_clone>', str(host_clone)).replace('<branch>', 'epic/e')
-             .replace('<epic>', 'e')],
-            cwd=str(self.tmp), env=env, capture_output=True, text=True, check=False, timeout=60)
+        run = lambda: self._run_skill_cmd(cmd, env, repo, host_clone)
         proc = run()
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(log.read_text(encoding='utf-8').split(), ['beast'])
@@ -487,6 +483,75 @@ class TestGitSafety(GitSandbox):
         self.assertNotEqual(mine, local)
         self.assertIn('On a non-zero exit, stop', before)
 
+
+    # ---- SECOND-CONTROL-FLOW-1: the fetch-back never moves a checked-out branch under its worktree ----
+
+    def _fetch_back_cmd(self):
+        before = RUN_SKILL[RUN_SKILL.index('## Before every launch or resume'):
+                           RUN_SKILL.index('## Launching and resuming')]
+        cmds = [l.strip() for l in before.splitlines()
+                if '<host_clone>' in l and ' fetch ' in l and l.strip().startswith(('git ', 'python3 '))]
+        self.assertEqual(len(cmds), 1, f'the run skill gives one fetch-back command: {cmds}')
+        return cmds[0]
+
+    def _run_skill_cmd(self, cmd, env, repo, host_clone):
+        line = (cmd.replace('<repo>', str(repo)).replace('<host>', 'beast')
+                .replace('<host_clone>', str(host_clone)).replace('<branch>', 'epic/e')
+                .replace('<epic>', 'e'))
+        return subprocess.run(['sh', '-c', line], cwd=str(self.tmp),
+                              env=dict(env, CLAUDE_PLUGIN_ROOT=str(ROOT)), capture_output=True,
+                              text=True, check=False, timeout=60)
+
+    def test_SECOND_CONTROL_FLOW_1_fetch_back_with_the_epic_branch_checked_out(self):
+        cmd = self._fetch_back_cmd()
+        repo, origin = self.remote()
+        self.git(repo, 'branch', '--no-track', 'epic/e', 'main')
+        host_clone = self.tmp / 'host' / 'repo'
+        self.git(self.tmp, 'clone', '-q', str(origin), str(host_clone))
+        self.git(host_clone, 'branch', '--no-track', 'epic/e', 'origin/main')
+        # The epic branch is checked out in a worktree of the user's repo.
+        wt = self.tmp / 'wt'
+        self.git(repo, 'worktree', 'add', '-q', str(wt), 'epic/e')
+        env, _log = self._stub_ssh()
+
+        # Nothing new on the host: the fetch changes nothing, and still succeeds.
+        proc = self._run_skill_cmd(cmd, env, repo, host_clone)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
+        # The host's agents merged a task: the worktree moves with its branch, and stays clean.
+        self.git(host_clone, 'checkout', '-q', 'epic/e')
+        tip = self.commit(host_clone, 'feat: a\n\nTemper-Task: e/a')
+        self.git(host_clone, 'checkout', '-q', '--detach')
+        proc = self._run_skill_cmd(cmd, env, repo, host_clone)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(self.git(repo, 'rev-parse', 'epic/e'), tip)
+        self.assertEqual(self.git(wt, 'rev-parse', 'HEAD'), tip)
+        self.assertEqual(self.git(wt, 'status', '--porcelain'), '', 'the worktree matches its branch')
+        self.assertEqual(self._done(repo, 'epic/e'), ['a'])
+        # The host's refs land in a private namespace first, never straight in refs/heads/.
+        self.assertEqual(self.git(repo, 'rev-parse', 'refs/temper/host/epic/e'), tip)
+
+        # The same with the branch checked out in the user's own repo, not a linked worktree.
+        self.git(repo, 'worktree', 'remove', str(wt))
+        self.git(repo, 'checkout', '-q', 'epic/e')
+        self.git(host_clone, 'checkout', '-q', 'epic/e')
+        tip = self.commit(host_clone, 'feat: b\n\nTemper-Task: e/b')
+        self.git(host_clone, 'checkout', '-q', '--detach')
+        proc = self._run_skill_cmd(cmd, env, repo, host_clone)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(self.git(repo, 'rev-parse', 'HEAD'), tip)
+        self.assertEqual(self.git(repo, 'status', '--porcelain'), '')
+
+        # A fast-forward the worktree can't take (a local edit in the way) moves nothing.
+        self.git(host_clone, 'checkout', '-q', 'epic/e')
+        self.commit(host_clone, 'feat: c', name='clash.txt')
+        self.git(host_clone, 'checkout', '-q', '--detach')
+        (repo / 'clash.txt').write_text('mine\n', encoding='utf-8')
+        proc = self._run_skill_cmd(cmd, env, repo, host_clone)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(self.git(repo, 'rev-parse', 'HEAD'), tip)
+        self.assertEqual(self.git(repo, 'rev-parse', 'epic/e'), tip)
+        self.assertEqual((repo / 'clash.txt').read_text(encoding='utf-8'), 'mine\n')
 
     # ---- SECOND-SAFETY-7: the host's login directory is not on the cleanup check's sys.path ----
 

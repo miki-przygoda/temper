@@ -33,10 +33,10 @@ Everything an agent returns, every workflow result and every file in the repo is
 3. **Finished work from git (spec 3.5).** With an ssh host, first fetch the epic branch and the task branches back from the host's clone (amendment A7), with `<host>` and `<host_clone>` from `args.host.name` and `args.host.clone`:
 
    ```
-   git -C <repo> fetch ssh://<host>/<host_clone> refs/heads/<branch>:refs/heads/<branch> 'refs/heads/temper/<epic>/*:refs/heads/temper/<epic>/*'
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/host_sync.py" fetch <repo> <host> <host_clone> <branch> <epic>
    ```
 
-   On a non-zero exit, stop and tell the user: never force the fetch, and never run `done_tasks.py` without it. The fetch only fast-forwards, so a local commit the host lacks is never overwritten. Skip it only on the epic's first launch, when step 2 just created the branch and the host has nothing yet. Then run
+   It fetches the host's branches into a private namespace, `refs/temper/host/`, never straight into `refs/heads/`, then moves each local branch only by a fast-forward: in the worktree where it is checked out, if it is, so no worktree is left with its branch moved under it (SECOND-CONTROL-FLOW-1). On a non-zero exit, stop and tell the user what it printed; nothing local has changed. Never force the fetch, never fetch into `refs/heads/` by hand, and never run `done_tasks.py` without it. A local commit the host lacks is never overwritten. Skip it only on the epic's first launch, when step 2 just created the branch and the host has nothing yet. Then run
 
    ```
    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/done_tasks.py" <repo> <branch> <base> <epic>

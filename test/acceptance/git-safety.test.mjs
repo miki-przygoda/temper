@@ -214,10 +214,13 @@ test('GIT-SAFETY-02: no stage merges the epic branch or a PR into the base or de
   for (const [name, text] of Object.entries(SKILLS)) {
     assert.doesNotMatch(text, /gh pr merge|--auto\b/, `skill ${name} never merges a PR`);
   }
-  // The shipped scripts never run a merge (merge-base is a read).
+  // The shipped scripts never run a merge (merge-base is a read). The one exception is a
+  // fast-forward, which makes no merge commit: host_sync.py moves the local epic branch to the
+  // host clone's copy with `merge --ff-only` in its worktree (SECOND-CONTROL-FLOW-1).
+  const ffOnly = /['"]merge['"],\s*['"]--ff-only['"]|\bmerge --ff-only\b/g;
   for (const [path, text] of shippedScripts()) {
     for (const line of codeLines(text)) {
-      assert.doesNotMatch(line, /['"]merge['"]|git\s+(?:-C\s+\S+\s+)?merge\b(?!-)|gh\s+pr\s+merge/, `${path} runs no merge: ${line}`);
+      assert.doesNotMatch(line.replace(ffOnly, ''), /['"]merge['"]|git\s+(?:-C\s+\S+\s+)?merge\b(?!-)|gh\s+pr\s+merge/, `${path} runs no merge: ${line}`);
     }
   }
 });
