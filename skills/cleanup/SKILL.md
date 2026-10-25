@@ -24,10 +24,10 @@ Run it once for each branch, with its worktree when it has one, and with one `--
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup_check.py" <repo> <branch> --worktree <path> --disposable 'target/' --disposable 'node_modules/'
 ```
 
-Leave out `--worktree` for a branch without a worktree, and `--disposable` when the `disposable:` line is empty. Single-quote each pattern so no shell expands it; over ssh the host's shell reads the line again, so wrap each one once more, as `"'target/'"`. For a worktree on an ssh host, run the same script there, fed on stdin, against the host's clone, with the same `--disposable` options:
+Leave out `--worktree` for a branch without a worktree, and `--disposable` when the `disposable:` line is empty. Single-quote each pattern so no shell expands it; over ssh the host's shell reads the line again, so wrap each one once more, as `"'target/'"`. For a worktree on an ssh host, run the same script there, fed on stdin, against the host's clone, with the same `--disposable` options. Run it with `python3 -I` (isolated mode), so a `json.py` or `subprocess.py` in the host's login directory, or a `PYTHONPATH` there, can't replace a standard module inside the check that decides what is deleted:
 
 ```
-ssh <host> python3 - <host repo> <branch> --worktree <path> --disposable "'target/'" < "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup_check.py"
+ssh <host> python3 -I - <host repo> <branch> --worktree <path> --disposable "'target/'" < "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup_check.py"
 ```
 
 It fetches the remote first, then prints `{"ok": bool, "reasons": [...]}`:

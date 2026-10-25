@@ -488,5 +488,34 @@ class TestGitSafety(GitSandbox):
         self.assertIn('On a non-zero exit, stop', before)
 
 
+    # ---- SECOND-SAFETY-7: the host's login directory is not on the cleanup check's sys.path ----
+
+    def test_SECOND_SAFETY_7_the_host_cleanup_check_runs_isolated_from_the_login_directory(self):
+        lines = [l.strip() for l in CLEANUP_SKILL.splitlines() if l.strip().startswith('ssh <host> python3')]
+        self.assertEqual(len(lines), 1, 'the cleanup skill gives one ssh form of the check')
+        cmd = lines[0]
+        repo, _origin = self.remote()
+        wt = self.tmp / 'wt'
+        self.git(repo, 'worktree', 'add', '-q', '-b', 'temper/e/a', str(wt), 'main')
+        # The host's login directory holds a json.py; the stub ssh runs the command from there.
+        login = self.tmp / 'login'
+        login.mkdir()
+        marker = self.tmp / 'planted-ran'
+        (login / 'json.py').write_text(f'open({str(marker)!r}, "w").close()\n', encoding='utf-8')
+        bin_dir = self.tmp / 'bin'
+        bin_dir.mkdir()
+        stub = bin_dir / 'ssh'
+        stub.write_text('#!/bin/sh\nshift\ncd ' + f"'{login}'" + ' && exec sh -c "$*"\n', encoding='utf-8')
+        stub.chmod(0o755)
+        env = dict(self.env, PATH=f'{bin_dir}:{self.env["PATH"]}', CLAUDE_PLUGIN_ROOT=str(ROOT))
+        line = (cmd.replace('<host repo>', str(repo)).replace('<branch>', 'temper/e/a')
+                .replace('<path>', str(wt)).replace('<host>', 'beast'))
+        proc = subprocess.run(['sh', '-c', line], cwd=str(self.tmp), env=env, capture_output=True,
+                              text=True, check=False, timeout=60)
+        self.assertFalse(marker.exists(), 'a json.py in the login directory replaced the stdlib module')
+        out = json.loads(proc.stdout)
+        self.assertIn('ok', out, proc.stderr)
+
+
 if __name__ == '__main__':
     unittest.main()
