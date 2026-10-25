@@ -73,7 +73,7 @@ function allPrompts(host) {
     acceptance: lib.acceptancePrompt(group, behaviours, b),
     green: lib.greenPrompt(failing, 1, b),
     greenIds: lib.greenPrompt(['G1-01'], 2, b),
-    review: lib.reviewPrompt('security', s, ['F1']),
+    review: lib.reviewPrompt('security', s, ['f1']),
     reviewFresh: lib.reviewPrompt('security', s, []),
     verify: lib.verifyPrompt(finding, s),
     fix: lib.fixPrompt(finding, s),
@@ -177,7 +177,7 @@ test('the green prompt reverts rather than patches', () => {
 });
 
 test('the review prompt lists what is already fixed only when there is something', () => {
-  assert.ok(local.review.includes('F1'));
+  assert.ok(local.review.includes("don't report: f1"));
   assert.ok(local.review.includes('already fixed'));
   assert.ok(!local.reviewFresh.includes('already fixed'));
   assert.ok(local.review.includes('Rust: a panic on user input is critical.'));
@@ -243,4 +243,14 @@ test('a non-default specs_dir: the epic files go next to the spec, plan and log 
   assert.ok(prompts.docs.includes('design/temper/e/pr-body.md'));
   assert.ok(prompts.evidence.includes('design/temper/e/owner-steps.sh'));
   assert.ok(prompts.evidence.includes('design/temper/e/owner-checklist.md'));
+});
+
+test('a finding id reaches the verify and fix prompts only inside the data block, and in the fix trailer (SECOND-SAFETY-4)', () => {
+  const block = lib.findingText(finding);
+  for (const [name, p] of [['verify', local.verify], ['fix', local.fix]]) {
+    assert.ok(p.includes(block), `${name}: the finding block`);
+    const outside = p.replace(block, '').replace('`Temper-Task: e/fix:security-01`', '');
+    assert.ok(!outside.includes('security-01'), `${name}: the id appears outside the data block`);
+  }
+  assert.ok(local.regress.includes('data'), 'the regress prompt marks its ids as data');
 });

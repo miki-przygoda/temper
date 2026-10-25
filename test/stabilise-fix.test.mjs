@@ -20,10 +20,10 @@ function finding(id, severity, extra = {}) {
   };
 }
 
-const F1 = finding('F1', 'critical', { line: 11 });
-const F2 = finding('F2', 'important', { line: 12 });
-const S1 = finding('S1', 'severe', { line: 21 });
-const M1 = finding('M1', 'minor', { line: 22 });
+const F1 = finding('f1', 'critical', { line: 11 });
+const F2 = finding('f2', 'important', { line: 12 });
+const S1 = finding('s1', 'severe', { line: 21 });
+const M1 = finding('m1', 'minor', { line: 22 });
 
 function fixArgs(extra = {}) {
   return {
@@ -69,36 +69,36 @@ const labels = (calls) => calls.map((c) => c.opts?.label);
 test('selected findings are fixed one at a time in severity order', async () => {
   const { calls } = await runWorkflow(WF, { args: fixArgs(), respond: responder() });
   const fixes = calls.filter((c) => c.opts.label.startsWith('fix:'));
-  assert.deepEqual(fixes.map((c) => c.opts.label), ['fix:F1', 'fix:F2']);
+  assert.deepEqual(fixes.map((c) => c.opts.label), ['fix:f1', 'fix:f2']);
   for (const c of fixes) {
     assert.deepEqual(c.opts.schema, lib.FIX_SCHEMA);
     assert.equal(c.opts.phase, 'Fix');
   }
-  assert.ok(fixes[0].prompt.includes('Temper-Task: e/fix:F1'));
+  assert.ok(fixes[0].prompt.includes('Temper-Task: e/fix:f1'));
 });
 
 test('a fix that finds the contract wrong is a contract item', async () => {
   const { result } = await runWorkflow(WF, {
     args: fixArgs(),
-    respond: responder({ fixes: { F1: { status: 'contract', note: 'the contract is wrong' } } }),
+    respond: responder({ fixes: { f1: { status: 'contract', note: 'the contract is wrong' } } }),
   });
-  assert.deepEqual(result.contract_items, ['F1']);
-  assert.deepEqual(result.fixed, ['F2']);
+  assert.deepEqual(result.contract_items, ['f1']);
+  assert.deepEqual(result.fixed, ['f2']);
 });
 
 test('a reverted fix is listed as reverted', async () => {
   const { result } = await runWorkflow(WF, {
     args: fixArgs(),
-    respond: responder({ fixes: { F2: { status: 'reverted', note: 'broke a test' } } }),
+    respond: responder({ fixes: { f2: { status: 'reverted', note: 'broke a test' } } }),
   });
-  assert.deepEqual(result.reverted, ['F2']);
-  assert.deepEqual(result.fixed, ['F1']);
+  assert.deepEqual(result.reverted, ['f2']);
+  assert.deepEqual(result.fixed, ['f1']);
 });
 
 test('a fix already done is skipped', async () => {
-  const { calls } = await runWorkflow(WF, { args: fixArgs({ done: ['fix:F1'] }), respond: responder() });
-  assert.ok(!labels(calls).includes('fix:F1'));
-  assert.ok(labels(calls).includes('fix:F2'));
+  const { calls } = await runWorkflow(WF, { args: fixArgs({ done: ['fix:f1'] }), respond: responder() });
+  assert.ok(!labels(calls).includes('fix:f1'));
+  assert.ok(labels(calls).includes('fix:f2'));
 });
 
 test('nothing severe in the second sweep: stable, no regress, exactly one sweep', async () => {
@@ -119,8 +119,8 @@ test('the second sweep is told what was already fixed', async () => {
   const { calls } = await runWorkflow(WF, { args: fixArgs(), respond: responder() });
   const review = calls.find((c) => c.opts.label === 'second:review:security');
   assert.ok(review.prompt.includes('already fixed'));
-  assert.ok(review.prompt.includes('F1'));
-  assert.ok(review.prompt.includes('F2'));
+  assert.ok(review.prompt.includes('f1'));
+  assert.ok(review.prompt.includes('f2'));
 });
 
 test('the second sweep uses the given lenses', async () => {
@@ -134,25 +134,25 @@ test('something severe in the second sweep: fix it, check those fixes, then hand
     respond: responder({ second: [S1, M1] }),
   });
   const ls = labels(calls);
-  const iFix = ls.indexOf('fix:S1');
+  const iFix = ls.indexOf('fix:s1');
   const iRegress = ls.indexOf('regress');
   assert.ok(iFix > -1, 'no fix:S1 call');
   assert.equal(ls.filter((l) => l === 'regress').length, 1);
-  assert.ok(iRegress > iFix, 'regress must come after fix:S1');
-  assert.ok(!ls.includes('fix:M1'));
+  assert.ok(iRegress > iFix, 'regress must come after fix:s1');
+  assert.ok(!ls.includes('fix:m1'));
   assert.ok(!ls.slice(iRegress + 1).some((l) => l.includes('review:')), 'no review after regress');
   const regress = calls[iRegress];
   assert.deepEqual(regress.opts.schema, lib.REGRESS_SCHEMA);
-  assert.ok(regress.prompt.includes('Temper-Task: e/fix:S1'));
-  assert.ok(!regress.prompt.includes('Temper-Task: e/fix:F1'));
+  assert.ok(regress.prompt.includes('Temper-Task: e/fix:s1'));
+  assert.ok(!regress.prompt.includes('Temper-Task: e/fix:f1'));
   assert.equal(result.status, 'handover');
-  assert.deepEqual(result.open_items.map((f) => f.id), ['M1']);
+  assert.deepEqual(result.open_items.map((f) => f.id), ['m1']);
   assert.deepEqual(result.second_sweep, { severe: 1, others: 1 });
-  assert.deepEqual(result.fixed, ['F1', 'F2', 'S1']);
+  assert.deepEqual(result.fixed, ['f1', 'f2', 's1']);
 });
 
 test('regressions the check finds are returned', async () => {
-  const regressions = [{ fix: 'S1', evidence: 'test x fails' }];
+  const regressions = [{ fix: 's1', evidence: 'test x fails' }];
   const { result } = await runWorkflow(WF, {
     args: fixArgs(),
     respond: responder({ second: [S1], regress: { regressions } }),
@@ -162,18 +162,18 @@ test('regressions the check finds are returned', async () => {
 });
 
 test('a fix that returns nothing is blocked', async () => {
-  const { result } = await runWorkflow(WF, { args: fixArgs(), respond: responder({ fixes: { F1: null } }) });
-  assert.ok(result.blocked.some((b) => b.id === 'F1'));
-  assert.equal(result.blocked.find((b) => b.id === 'F1').reason, 'agent returned nothing');
-  assert.ok(!result.fixed.includes('F1'));
+  const { result } = await runWorkflow(WF, { args: fixArgs(), respond: responder({ fixes: { f1: null } }) });
+  assert.ok(result.blocked.some((b) => b.id === 'f1'));
+  assert.equal(result.blocked.find((b) => b.id === 'f1').reason, 'agent returned nothing');
+  assert.ok(!result.fixed.includes('f1'));
 });
 
 test('a blocked fix keeps its reason', async () => {
   const { result } = await runWorkflow(WF, {
     args: fixArgs(),
-    respond: responder({ fixes: { F2: { status: 'blocked', note: 'needs root' } } }),
+    respond: responder({ fixes: { f2: { status: 'blocked', note: 'needs root' } } }),
   });
-  assert.deepEqual(result.blocked, [{ id: 'F2', reason: 'needs root' }]);
+  assert.deepEqual(result.blocked, [{ id: 'f2', reason: 'needs root' }]);
 });
 
 test("part 'fix' with no selected findings is invalid with no agent calls", async () => {
@@ -194,4 +194,13 @@ test('a second-sweep review that returns nothing is blocked, and the stage is no
   );
   const ls = labels(calls);
   assert.ok(!ls.slice(ls.lastIndexOf(`second:review:${lib.DEFAULT_LENSES.at(-1)}`) + 1).some((l) => /review:/.test(l)));
+});
+
+test('a second-sweep severe finding whose id does not match ID_RE never reaches a fix agent, and the run hands over (SECOND-SAFETY-4)', async () => {
+  const bad = finding('S_1', 'severe', { line: 40 });
+  const { result, calls } = await runWorkflow(WF, { args: fixArgs(), respond: responder({ second: [bad] }) });
+  assert.ok(!labels(calls).some((l) => l.includes('S_1')), labels(calls).join(', '));
+  assert.equal(result.status, 'handover');
+  assert.ok(result.blocked.some((b) => b.id === 'second:review:security'), JSON.stringify(result.blocked));
+  assert.deepEqual(result.second_sweep_findings, []);
 });

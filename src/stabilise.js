@@ -24,24 +24,31 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
     }),
     async (review) => {
       if (!review) return null;
-      const found = (Array.isArray(review.findings) ? review.findings : []).filter(hasInputAndWrongResult);
+      const all = (Array.isArray(review.findings) ? review.findings : []).filter(hasInputAndWrongResult);
+      // An id that doesn't match ID_RE never reaches a prompt, a label or a fix:<id> trailer, and
+      // done_tasks.py would never read its trailer back (SECOND-SAFETY-4): that finding goes
+      // unverified and its lens is blocked, so the list is not clean for it.
+      const found = all.filter((f) => isId(f.id));
       const verdicts = await parallel(found.map((f) => () => agent(verifyPrompt(f, args), {
         label: `${labelPrefix}verify:${f.id}`,
         phase: verifyPhase,
         schema: VERDICT_SCHEMA,
       })));
-      return found.map((finding, i) => ({ finding, verdict: verdicts[i] }));
+      return { pairs: found.map((finding, i) => ({ finding, verdict: verdicts[i] })), badIds: found.length < all.length };
     },
   );
   const kept = [];
   const blocked = [];
   let refuted = 0;
-  for (const [i, pairs] of perLens.entries()) {
-    if (!pairs) {
+  for (const [i, lensResult] of perLens.entries()) {
+    if (!lensResult) {
       blocked.push({ id: `${labelPrefix}review:${lenses[i]}`, reason: 'agent returned nothing' });
       continue;
     }
-    for (const { finding, verdict } of pairs) {
+    if (lensResult.badIds) {
+      blocked.push({ id: `${labelPrefix}review:${lenses[i]}`, reason: 'a finding id did not match ID_RE; that finding was not verified' });
+    }
+    for (const { finding, verdict } of lensResult.pairs) {
       if (!verdict || verdict.real !== true) {
         refuted += 1;
         continue;
