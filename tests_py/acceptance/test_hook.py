@@ -311,6 +311,61 @@ class HookAcceptance(HookSandbox):
             code, stdout, stderr = self.run_hook(stdin)
             self.assert_not_blocking(code, stdout)
 
+    def test_HOOK_10_every_prompt_records_the_session_mode_for_the_overnight_pre_flight(self):
+        # SECOND-TESTS-DOCS-5: the overnight pre-flight reads the mode the hook recorded for
+        # this session, so an overnight run started in plain words is still checked.
+        import stat
+        import sys
+        reader = [sys.executable,
+                  str(self.plugin / 'scripts' / 'session_mode.py')]
+
+        def preflight(session):
+            result = subprocess.run(reader + [session], capture_output=True, timeout=20,
+                                    cwd=str(self.work), env=self.env(), text=True)
+            return result.returncode, json.loads(result.stdout)
+
+        # Nothing recorded yet: not in auto mode.
+        code, out = preflight('sess-1')
+        self.assertEqual((code, out['auto']), (1, False), out)
+
+        # A plain-words prompt, keyword off, in default mode: recorded, still not auto.
+        code, stdout, stderr = self.run_hook(hook_input('start the overnight run', mode='default'))
+        self.assertEqual((code, stdout, stderr), (0, '', ''))
+        record = self.config / 'temper' / 'session-mode.json'
+        self.assertEqual(stat.S_IMODE(record.stat().st_mode), 0o600)
+        code, out = preflight('sess-1')
+        self.assertEqual((code, out['auto'], out['mode']), (1, False, 'default'), out)
+
+        # The same session in auto mode: the pre-flight passes.
+        self.run_hook(hook_input('start the overnight run', mode='auto'))
+        code, out = preflight('sess-1')
+        self.assertEqual((code, out['auto'], out['mode']), (0, True, 'auto'), out)
+
+        # Another session's record never counts for this one.
+        code, out = preflight('sess-2')
+        self.assertEqual((code, out['auto']), (1, False), out)
+        self.run_hook(hook_input('hello', mode='default', session_id='sess-2'))
+        code, out = preflight('sess-1')
+        self.assertEqual((code, out['auto']), (0, True), out)
+        code, out = preflight('sess-2')
+        self.assertEqual((code, out['auto']), (1, False), out)
+
+        # A stale record (older than the pre-flight's limit) is not auto mode.
+        data = json.loads(record.read_text(encoding='utf-8'))
+        for entry in data['sessions']:
+            entry['recorded_at'] -= 3600
+        record.write_text(json.dumps(data), encoding='utf-8')
+        code, out = preflight('sess-1')
+        self.assertEqual((code, out['auto']), (1, False), out)
+        self.assertIn('stale', out['reason'])
+
+        # The run skill's pre-flight runs the reader for this session and stops on anything else.
+        skill = (ROOT / 'skills' / 'run' / 'SKILL.md').read_text(encoding='utf-8')
+        pre = skill.split('### Pre-flight', 1)[1].split('### Wakeups', 1)[0]
+        self.assertIn('scripts/session_mode.py" "${CLAUDE_SESSION_ID}"', pre)
+        for words in ('missing', 'stale', 'unless the user confirms'):
+            self.assertIn(words, pre)
+        self.assertNotIn("Skills can't read the mode", pre)
 
 if __name__ == '__main__':
     unittest.main()

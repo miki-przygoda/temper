@@ -1,8 +1,10 @@
 """UserPromptSubmit hook: the temper keyword and a permission-mode warning.
 
 It matches only the ``prompt`` field of the hook input, never the raw JSON
-(amendment A3). It always exits 0 and prints nothing unless it has context to
-add. Stdlib only.
+(amendment A3). On every prompt, whatever it says, it also records the
+session's permission mode for the overnight pre-flight (``session_mode.py``,
+SECOND-TESTS-DOCS-5). It always exits 0 and prints nothing unless it has
+context to add. Stdlib only.
 """
 
 import json
@@ -37,11 +39,27 @@ def decide(hook_input, prefs):
     return '\n'.join(lines) if lines else None
 
 
-def _load_preferences():
+def _scripts_on_path():
     root = os.environ.get('CLAUDE_PLUGIN_ROOT') or str(Path(__file__).resolve().parent.parent)
-    sys.path.insert(0, str(Path(root) / 'scripts'))
+    scripts = str(Path(root) / 'scripts')
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+
+
+def _load_preferences():
+    _scripts_on_path()
     import temper_paths
     return temper_paths.load_preferences(os.environ)
+
+
+def _record_mode(hook_input):
+    """Record the session's mode; a failure here never stops the prompt or the warning."""
+    try:
+        _scripts_on_path()
+        import session_mode
+        session_mode.record(hook_input, os.environ)
+    except Exception:
+        pass
 
 
 def main():
@@ -49,6 +67,7 @@ def main():
         hook_input = json.loads(sys.stdin.read())
         if not isinstance(hook_input, dict):
             return
+        _record_mode(hook_input)
         text = decide(hook_input, _load_preferences())
         if text:
             print(json.dumps({'hookSpecificOutput': {'hookEventName': 'UserPromptSubmit',

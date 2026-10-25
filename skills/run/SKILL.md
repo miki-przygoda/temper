@@ -153,7 +153,13 @@ Update the epic's `Status` in `epics.md` at every stage change: `building`, `sta
 ### Pre-flight (spec 9)
 
 Before an overnight launch, check and report each:
-- **Auto mode is on.** Skills can't read the mode; temper's prompt hook says when the session isn't in auto mode. If it did, ask the user to switch.
+- **Auto mode is on.** temper's prompt hook records this session's permission mode on every prompt, whatever the prompt says. Read it for this session:
+
+  ```
+  python3 "${CLAUDE_PLUGIN_ROOT}/scripts/session_mode.py" "${CLAUDE_SESSION_ID}"
+  ```
+
+  It prints `{"auto", "mode", "age_s", "reason"}` and exits 0 only when this session's latest record is `auto` and under 600 seconds old. A record that is missing or stale, any other mode, or a non-zero exit means the session is not in auto mode (SECOND-TESTS-DOCS-5): warn the user, with the `reason`, and ask them to switch to auto mode and send a prompt, then check again. Don't start the overnight run unless the user confirms they want it started anyway.
 - **`autoContinueAtUsageLimit` is on** in the user's Claude settings.
 - **The statusline is installed**, it wraps any statusline the user had, and `limits.json` is fresh: `install_statusline.py status` reports `installed: true` and `limits_age_s` under about 600.
 - **Wakeups are approved:** `wakeups_approved: yes`.
