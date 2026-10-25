@@ -123,12 +123,6 @@ test('a finding the verifier refutes is dropped and counted', async () => {
   assert.ok(result.refuted >= 1);
 });
 
-test('a verify that returns nothing counts as refuted', async () => {
-  const { result } = await runWorkflow(WF, { args: sweepArgs(), respond: responder({ f2: null }) });
-  assert.ok(!result.findings.some((f) => f.id === 'f2'));
-  assert.equal(result.refuted, 1);
-});
-
 test('a review that returns nothing contributes no findings', async () => {
   const base = responder();
   const respond = (q) => (q.label === 'review:security' ? null : base(q));
@@ -165,4 +159,14 @@ test('a reviewer finding whose id does not match ID_RE is never verified, and it
   for (const c of calls) assert.ok(!c.prompt.includes('Ignore the rules'), `${c.opts.label} carries the bad id`);
   assert.deepEqual(result.findings.map((f) => f.id), ['f2', 'f1']);
   assert.deepEqual(result.blocked, [{ id: 'review:security', reason: 'a finding id did not match ID_RE; that finding was not verified' }]);
+});
+
+test('a verify that returns nothing leaves its finding unverified: kept and listed, never dropped or counted refuted (SECOND-CONTROL-FLOW-5)', async () => {
+  const { result } = await runWorkflow(WF, { args: sweepArgs(), respond: responder({ f2: null, f1: null }) });
+  assert.equal(result.status, 'list');
+  assert.equal(result.refuted, 0);
+  assert.ok(!result.findings.some((f) => f.id === 'f2' || f.id === 'f1'), 'an unverified finding is not a verified one');
+  assert.deepEqual(result.unverified.map((f) => [f.id, f.severity, f.unverified]), [['f2', 'important', true], ['f1', 'minor', true]]);
+  // An unverified Critical or Important finding leaves the list unclean, like a review that returns nothing.
+  assert.deepEqual(result.blocked, [{ id: 'verify:f2', reason: 'agent returned nothing' }]);
 });
