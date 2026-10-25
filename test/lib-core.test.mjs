@@ -96,10 +96,34 @@ test('an ssh host names its clone, an absolute or ~/ path outside <root>/<epic>/
   }
   const home = withHost({ kind: 'ssh', name: 'beast', root: '~/o', clone: '~/o/e/repo' });
   assert.ok(hasError(lib.validateBuildArgs(home), 'host.clone'), 'a ~/ clone inside a ~/ root');
-  for (const outside of ['/srv/repo', '/srv/o/repo', '/srv/o/e2/repo', '~/repo']) {
+  for (const outside of ['/srv/repo', '/srv/o/repo', '/srv/o/e2/repo']) {
     assert.deepEqual(lib.validateBuildArgs(ssh(outside)), [], `clone ${outside} is outside <root>/<epic>/`);
   }
   assert.ok(hasError(lib.validatePublishArgs({ ...goodArgs(), host: { kind: 'ssh', name: 'beast', root: '/srv/o' } }), 'host.clone'));
+});
+
+test('the clone is checked against <root>/<epic>/ however the two are spelled (SECOND-SAFETY-8)', () => {
+  const v = (root, clone) => lib.validateBuildArgs({ ...goodArgs(), host: { kind: 'ssh', name: 'beast', root, clone } });
+  // A relative root can't be compared with anything on the host: refused.
+  for (const root of ['o', './o', 'o/', '../o']) {
+    assert.ok(hasError(v(root, '/srv/repo'), 'host.root'), `relative root ${root}`);
+  }
+  // One under ~/ and the other absolute: the host's home is unknown here, so the clone could be
+  // inside <root>/<epic>/ (root ~/o and clone /home/u/o/e/repo, with home /home/u). Refused.
+  for (const [root, clone] of [['~/o', '/home/u/o/e/repo'], ['~/o', '/srv/repo'], ['/srv/o', '~/repo'], ['/home/u/o', '~/o/e/repo']]) {
+    assert.ok(hasError(v(root, clone), 'host.clone'), `root ${root}, clone ${clone}`);
+  }
+  // The same kind, spelled differently: ~ itself, ./, .., doubled and trailing slashes.
+  const inside = [
+    ['~', '~/e/repo'], ['~/', '~/e'], ['~/o/', '~/o//e/repo'], ['~/./o', '~/o/e'], ['~/o/..', '~/e/r'],
+    ['/srv/o/', '/srv//o/e'], ['/srv/./o', '/srv/o/e/x'], ['/srv/x/../o', '/srv/o/e'], ['//srv/o', '/srv/o/e/repo'],
+  ];
+  for (const [root, clone] of inside) {
+    assert.ok(hasError(v(root, clone), 'host.clone must lie outside'), `root ${root}, clone ${clone} is inside`);
+  }
+  for (const [root, clone] of [['~', '~/repo'], ['~/o', '~/o/e2'], ['/srv/o/', '/srv/o/../repo'], ['~/o/..', '~/o/e']]) {
+    assert.deepEqual(v(root, clone), [], `root ${root}, clone ${clone} is outside`);
+  }
 });
 
 test('unknown extra fields and a well-formed behaviour list are allowed', () => {

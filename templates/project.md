@@ -7,7 +7,7 @@ gate_quick:
 gate_full:
 # Where tasks run: local, or ssh <host> <root> for a build host.
 host: local
-# For an ssh host: the repo's clone on the host (an absolute or ~/ path), outside <root>/<epic>/.
+# For an ssh host: the repo's clone on the host (absolute or ~/, the same way as <root>), outside <root>/<epic>/.
 # The head fetches the epic and task branches back from it. Leave it empty for a local host.
 host_clone:
 # Ignored files cleanup may delete with a worktree, comma-separated, e.g. target/, node_modules/, __pycache__/.

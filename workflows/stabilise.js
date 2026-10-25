@@ -34,15 +34,28 @@ function checkStrings(args, fields, errors) {
   }
 }
 
-// A path's segments with `.` and `..` resolved, for comparing two paths on the host as text.
-function pathSegments(p) {
-  const out = [];
-  for (const seg of p.split('/')) {
-    if (seg === '' || seg === '.') continue;
-    if (seg === '..') out.pop();
-    else out.push(seg);
+// A host path normalised for comparing as text (SECOND-SAFETY-8): `~` or `~/…` (the ssh user's
+// home) or an absolute path, with `.`, `..` and repeated or trailing slashes collapsed. Returns
+// {home, segs}, or null for a path that is neither (relative, or ~user/).
+function hostPath(p) {
+  let home;
+  let rest;
+  if (p === '~' || p.startsWith('~/')) {
+    home = true;
+    rest = p.slice(1);
+  } else if (p.startsWith('/')) {
+    home = false;
+    rest = p;
+  } else {
+    return null;
   }
-  return out;
+  const segs = [];
+  for (const seg of rest.split('/')) {
+    if (seg === '' || seg === '.') continue;
+    if (seg === '..') segs.pop();
+    else segs.push(seg);
+  }
+  return { home, segs };
 }
 
 function checkHost(host, epic, errors) {
@@ -52,16 +65,19 @@ function checkHost(host, epic, errors) {
     // nothing else needed
   } else if (host.kind === 'ssh') {
     if (!isNonEmptyString(host.name)) errors.push('host.name must be a non-empty string for an ssh host');
-    if (!isNonEmptyString(host.root)) errors.push('host.root must be a non-empty string for an ssh host');
+    const root = isNonEmptyString(host.root) ? hostPath(host.root) : null;
+    if (root === null) errors.push('host.root must be an absolute or ~/ path for an ssh host');
     // A7: the head fetches back from ssh://<name>/<clone>, so the clone is absolute or under ~/,
     // and it lies outside <root>/<epic>/, which cleanup removes.
-    if (!isNonEmptyString(host.clone) || !/^(\/|~\/)/.test(host.clone)) {
+    const clone = isNonEmptyString(host.clone) && host.clone !== '~' ? hostPath(host.clone) : null;
+    if (clone === null) {
       errors.push('host.clone must be an absolute or ~/ path for an ssh host (the host clone)');
-    } else if (isNonEmptyString(host.root) && isNonEmptyString(epic)) {
-      const clone = pathSegments(host.clone);
-      const epicDir = [...pathSegments(host.root), epic];
-      const sameKind = host.clone.startsWith('/') === host.root.startsWith('/');
-      if (sameKind && epicDir.every((seg, i) => clone[i] === seg)) {
+    } else if (root !== null && isNonEmptyString(epic)) {
+      // The host's home isn't known here, so a ~/ path and an absolute one can't be compared:
+      // the clone could be inside <root>/<epic>/ either way.
+      if (clone.home !== root.home) {
+        errors.push('host.clone and host.root must both be absolute or both under ~/, so the clone can be checked to lie outside <root>/<epic>/');
+      } else if ([...root.segs, epic].every((seg, i) => clone.segs[i] === seg)) {
         errors.push(`host.clone must lie outside ${host.root}/${epic}/`);
       }
     }
