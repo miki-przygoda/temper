@@ -29,7 +29,7 @@ The additions:
   - `Uses:` the contracts it builds against;
   - `Provides:` the contracts it defines;
   - `Wave:` an integer from 0;
-- **waves from the dependency graph:** tasks that block others come first, and wave 0 builds the shared contracts. Add the `## Waves` table;
+- **waves from the dependency graph, sized to the build host:** tasks that block others come first, and wave 0 builds the shared contracts. No wave holds more tasks than the build host can gate at once (its CPUs, memory and free disk against one gate's cost; the `run` skill checks it again before every launch, amendment A13); when the graph allows a wider wave, split it, most critical first. Add the `## Waves` table;
 - **the behaviour groups:** a `## Behaviour groups` list, each a key (matching the same id pattern) and a title, covering the spec's user flows; the build's behaviour spec and acceptance tests are written per group;
 - **the gate commands** from `project.md`, quoted in the plan.
 
