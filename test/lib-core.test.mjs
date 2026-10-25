@@ -301,3 +301,37 @@ test('a finding id or a done id that does not match ID_RE is refused before any 
     ...base, selected: [ok], second_sweep_findings: [{ id: 'second-security-01', severity: 'minor' }], done: ['fix:security-01', 'a'],
   }), []);
 });
+
+test('the branch is compared with the base and the default branch however either is spelled (SECOND-SAFETY-5)', () => {
+  const common = {
+    epic: 'e', repo: '/r', log: 'l', host: { kind: 'local' }, gates: { quick: 'q', full: 'f' }, done: [],
+  };
+  const all = (extra) => [
+    lib.validateBuildArgs({ ...goodArgs(), ...extra }),
+    lib.validateStabiliseArgs({ ...common, part: 'sweep', lenses: [], severity_notes: '', ...extra }),
+    lib.validatePublishArgs({ ...common, spec: 's', ...extra }),
+  ];
+  const same = [
+    ['refs/heads/main', 'main'], ['heads/main', 'main'], ['origin/main', 'main'], ['upstream/main', 'main'],
+    ['refs/remotes/origin/main', 'main'], ['remotes/origin/main', 'main'], ['refs/remotes/fork/main', 'main'],
+    ['Main', 'main'], ['MAIN', 'refs/heads/main'], ['main', 'origin/main'], ['refs/heads/epic/e', 'origin/epic/e'],
+    ['Origin/main', 'main'], ['REFS/HEADS/main', 'main'],
+  ];
+  for (const [branch, base] of same) {
+    for (const errors of all({ branch, base })) {
+      assert.ok(hasError(errors, 'branch must not be the base branch'), `branch ${branch}, base ${base}: ${errors.join('\n')}`);
+    }
+  }
+  for (const [branch, def] of [['origin/trunk', 'trunk'], ['refs/heads/Trunk', 'trunk'], ['trunk', 'refs/remotes/origin/trunk']]) {
+    for (const errors of all({ branch, base: 'develop', default_branch: def })) {
+      assert.ok(hasError(errors, "branch must not be the repo's default branch"), `branch ${branch}, default ${def}: ${errors.join('\n')}`);
+    }
+  }
+  for (const errors of all({ branch: 'epic/e', base: 'main', default_branch: '' })) {
+    assert.ok(hasError(errors, 'default_branch must be a non-empty string'), errors.join('\n'));
+  }
+  // Another branch that only looks alike is still allowed.
+  for (const [branch, base] of [['epic/main', 'main'], ['mainline', 'main'], ['epic/e', 'main'], ['origin-main', 'main']]) {
+    for (const errors of all({ branch, base, default_branch: 'main' })) assert.deepEqual(errors, [], `branch ${branch}, base ${base}`);
+  }
+});

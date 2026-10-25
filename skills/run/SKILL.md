@@ -103,7 +103,7 @@ Other blocked ids (an acceptance group, a green round, `docs`, `evidence`) with 
 
 ## Stage 4, `temper:stabilise`
 
-Set the status to `stabilising`. The args come from `args.json` and `project.md`: `epic`, `repo`, `branch`, `base`, `log`, `host`, `gates`, `done` (refreshed as above), `lenses` (the default lenses `security`, `failure paths and lifecycle` and `test strength and docs`, followed by the extra lenses on the `lenses` line of `project.md`, comma-separated, leaving out repeats; the workflow runs exactly the lenses it's given, so the extras run as well as the defaults), `severity_notes` (the text of `project.md`'s `## Severity notes` section, or `""`) and, for `part: "fix"`, `answers` (the answers to blocked fixes, each keyed by its finding id).
+Set the status to `stabilising`. The args come from `args.json` and `project.md`: `epic`, `repo`, `branch`, `base`, `default_branch` (when `args.json` has it), `log`, `host`, `gates`, `done` (refreshed as above), `lenses` (the default lenses `security`, `failure paths and lifecycle` and `test strength and docs`, followed by the extra lenses on the `lenses` line of `project.md`, comma-separated, leaving out repeats; the workflow runs exactly the lenses it's given, so the extras run as well as the defaults), `severity_notes` (the text of `project.md`'s `## Severity notes` section, or `""`) and, for `part: "fix"`, `answers` (the answers to blocked fixes, each keyed by its finding id).
 
 1. **4a.** Launch with `part: "sweep"`. It returns `{status: "list", findings, refuted, blocked}`, with the findings ordered by severity. Each `blocked` entry (id `review:<lens>`) is a lens whose review is incomplete: with reason `agent returned nothing` it was never reviewed, and with `a finding id did not match ID_RE; that finding was not verified` the reviewer gave a finding an id that can't be a trailer id (SECOND-SAFETY-4). Either way the list is not clean for it. Record each in `log.md` and tell the user (overnight, in the morning report).
 2. **Choosing the fixes.**
@@ -123,7 +123,7 @@ The `fix` return value:
 
 ## Stage 5, `temper:publish`
 
-Args: `epic`, `repo`, `branch`, `base`, `log`, `spec`, `host`, `gates` and `done`.
+Args: `epic`, `repo`, `branch`, `base`, `default_branch` (when `args.json` has it), `log`, `spec`, `host`, `gates` and `done`.
 
 - `gate_failed`: don't push. Record the gate's exit status and log path in `log.md` and tell the user.
 - `blocked`: resume once, as above.

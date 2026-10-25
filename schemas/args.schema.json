@@ -9,6 +9,7 @@
     "repo": { "type": "string" },
     "branch": { "type": "string" },
     "base": { "type": "string" },
+    "default_branch": { "type": "string", "minLength": 1, "description": "The repo's default branch (origin/HEAD without its remote). The workflows refuse a branch that names it or the base, however either is spelled: refs/heads/, heads/, refs/remotes/<remote>/, remotes/<remote>/, origin/ and upstream/ are stripped and case is folded." },
     "spec": { "type": "string" },
     "plan": { "type": "string" },
     "log": { "type": "string" },

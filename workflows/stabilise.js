@@ -108,11 +108,39 @@ function checkDone(done, errors) {
   });
 }
 
+// Remotes whose `<remote>/` prefix names a remote-tracking branch; refs/remotes/<any>/ always does.
+const KNOWN_REMOTES = ['origin', 'upstream'];
+
+// The branch a name means, for comparing two spellings (SECOND-SAFETY-5): refs/heads/, heads/,
+// refs/remotes/<remote>/, remotes/<remote>/ and <known remote>/ stripped, and case folded, since
+// git on a case-insensitive filesystem (macOS) takes Main and main for one branch.
+function branchKey(name) {
+  let n = name.trim();
+  const lower = () => n.toLowerCase();
+  const remote = /^(?:refs\/)?remotes\/[^/]+\/(.+)$/i.exec(n);
+  if (lower().startsWith('refs/heads/')) n = n.slice('refs/heads/'.length);
+  else if (lower().startsWith('heads/')) n = n.slice('heads/'.length);
+  else if (remote) n = remote[1];
+  else {
+    const r = KNOWN_REMOTES.find((k) => lower().startsWith(`${k}/`));
+    if (r !== undefined) n = n.slice(r.length + 1);
+  }
+  return n.toLowerCase();
+}
+
 function checkCommon(args, errors) {
   checkStrings(args, ['epic', 'repo', 'branch', 'base', 'log'], errors);
   if (isNonEmptyString(args.epic) && !ID_RE.test(args.epic)) errors.push(`epic must match ${ID_RE}`);
-  if (isNonEmptyString(args.branch) && args.branch === args.base) {
+  if (isNonEmptyString(args.branch) && isNonEmptyString(args.base) && branchKey(args.branch) === branchKey(args.base)) {
     errors.push(`branch must not be the base branch ${args.base}`);
+  }
+  // The repo's default branch, when the head passes it (it is the base unless the user chose another).
+  if (args.default_branch !== undefined) {
+    if (!isNonEmptyString(args.default_branch)) {
+      errors.push('default_branch must be a non-empty string');
+    } else if (isNonEmptyString(args.branch) && branchKey(args.branch) === branchKey(args.default_branch)) {
+      errors.push(`branch must not be the repo's default branch ${args.default_branch}`);
+    }
   }
   checkHost(args.host, args.epic, errors);
   checkGates(args.gates, errors);

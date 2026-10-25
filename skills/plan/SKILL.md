@@ -41,7 +41,7 @@ Write `<specs_dir>/<epic>/args.json`, following `${CLAUDE_PLUGIN_ROOT}/schemas/a
 
 - `epic`: the epic id from `epics.md`;
 - `repo`: the absolute path of the repository;
-- `branch`: the epic branch (default `epic/<epic>`, unless the repo or the user has a convention; never `temper/<epic>` or anything under `temper/<epic>/`, since git can't hold that ref beside the task branches `temper/<epic>/<task id>`), and `base`: the branch it starts from (the repo's default branch unless the user says otherwise);
+- `branch`: the epic branch (default `epic/<epic>`, unless the repo or the user has a convention; never `temper/<epic>` or anything under `temper/<epic>/`, since git can't hold that ref beside the task branches `temper/<epic>/<task id>`), and `base`: the branch it starts from (the repo's default branch unless the user says otherwise), and `default_branch`: the repo's default branch, from `git -C <repo> symbolic-ref --short refs/remotes/origin/HEAD` without its `origin/` (leave it out when there is none);
 - `spec`, `plan`, `log`: `<specs_dir>/<epic>/spec.md`, `plan.md` and `log.md`;
 - `host`: `{"kind":"local"}` when `project.md` says `host: local`, or `{"kind":"ssh","name":"<host>","root":"<root>","clone":"<host_clone>"}` for `ssh <host> <root>`, with `host_clone` from `project.md`;
 - `gates`: `{"quick": gate_quick, "full": gate_full}`;
@@ -63,7 +63,7 @@ The build workflow checks `args.json` with `validateBuildArgs` and refuses to st
 - every `answers` key is a task id;
 - every behaviour group `key` matches the id pattern and has a `title`;
 - `gates.quick` and `gates.full` are non-empty, and `host` is `local`, or `ssh` with a non-empty `name`, and a `root` and a `clone` that are both absolute or both `~/` paths, with the clone outside `<root>/<epic>/` once `.`, `..` and repeated slashes are collapsed.
-- `branch` is not the same as `base`, since temper builds on its own epic branch and never merges into the base.
+- `branch` is not the same as `base` or `default_branch`, however they are spelled (`refs/heads/main`, `origin/main` and `Main` all name `main`), since temper builds on its own epic branch and never merges into the base.
 
 When a rule fails, fix the plan, not the check: move a task to a later wave, split a file between tasks, or add the missing contract to an earlier task. Then regenerate `args.json` so the plan and `args.json` agree.
 
