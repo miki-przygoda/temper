@@ -422,46 +422,46 @@ test('STABILISE-16 the second sweep uses fresh agents told what was already fixe
 });
 
 test('STABILISE-17 nothing severe in the second sweep: the stage is done and the rest go to the open items', async () => {
-  const c = finding('second:security-01', 'critical');
-  const m = finding('second:security-02', 'minor');
+  const c = finding('second-security-01', 'critical');
+  const m = finding('second-security-02', 'minor');
   const { calls, result } = await runWorkflow(WF, {
     args: fixArgs({ selected: [finding('security-01', 'important')] }),
     respond: responder({ second: { security: [c, m] } }),
   });
   assert.equal(result.status, 'stable');
-  assert.deepEqual(result.open_items.map((f) => f.id).sort(), ['second:security-01', 'second:security-02']);
+  assert.deepEqual(result.open_items.map((f) => f.id).sort(), ['second-security-01', 'second-security-02']);
   const ls = labels(calls);
-  assert.ok(!ls.includes('fix:second:security-01') && !ls.includes('fix:second:security-02'));
+  assert.ok(!ls.includes('fix:second-security-01') && !ls.includes('fix:second-security-02'));
   assert.ok(!ls.includes('regress'));
   assert.match(STAGE4, /`open_items`: append them to the open items in `log\.md`/);
   assert.match(STAGE4, /`status: "stable"`: go to stage 5/);
 });
 
 test('STABILISE-18 something severe in the second sweep: fixed with the five steps, only those diffs checked, then hand over', async () => {
-  const s = finding('second:security-01', 'severe');
-  const m = finding('second:security-02', 'minor');
+  const s = finding('second-security-01', 'severe');
+  const m = finding('second-security-02', 'minor');
   const { calls, result } = await runWorkflow(WF, {
     args: fixArgs({ selected: [finding('security-01', 'critical')] }),
     respond: responder({ second: { security: [s, m] } }),
   });
   const ls = labels(calls);
-  const fix = calls.find((c) => c.opts.label === 'fix:second:security-01');
+  const fix = calls.find((c) => c.opts.label === 'fix:second-security-01');
   assert.ok(fix, 'the severe finding is fixed');
   assert.ok(FIX_STEPS_ORDER(fix.prompt).every((i) => i > -1), 'with the same five steps');
   const regress = calls.filter((c) => c.opts.label === 'regress');
   assert.equal(regress.length, 1);
-  assert.ok(ls.indexOf('regress') > ls.indexOf('fix:second:security-01'));
-  assert.ok(regress[0].prompt.includes('Temper-Task: e/fix:second:security-01'));
+  assert.ok(ls.indexOf('regress') > ls.indexOf('fix:second-security-01'));
+  assert.ok(regress[0].prompt.includes('Temper-Task: e/fix:second-security-01'));
   assert.ok(!regress[0].prompt.includes('Temper-Task: e/fix:security-01'), 'only the second-sweep fixes are checked');
   assert.match(regress[0].prompt, /Check only the diffs/);
-  assert.ok(!ls.includes('fix:second:security-02'));
+  assert.ok(!ls.includes('fix:second-security-02'));
   assert.equal(result.status, 'handover');
   assert.match(STAGE4, /`status: "handover"`[^\n]*Stop, record it in `log\.md`, and hand over to the user/);
 });
 
 test('STABILISE-19 there is never a third sweep', async (t) => {
   const lensCount = DEFAULTS.length;
-  for (const [name, second] of [['stable', {}], ['handover', { security: [finding('second:security-01', 'severe')] }]]) {
+  for (const [name, second] of [['stable', {}], ['handover', { security: [finding('second-security-01', 'severe')] }]]) {
     await t.test(`after a ${name} second sweep, the run ends with no further review`, async () => {
       const { calls, result } = await runWorkflow(WF, {
         args: fixArgs({ selected: [finding('security-01', 'critical')] }),
@@ -481,13 +481,13 @@ test('STABILISE-19 there is never a third sweep', async (t) => {
 
   await t.test('resuming the stage after the second sweep ran does not sweep again', async () => {
     // Run 1 (4a) and run 2 (4b with a severe second-sweep finding) as the head launches them.
-    const sev = finding('second:security-01', 'severe');
+    const sev = finding('second-security-01', 'severe');
     const first = await runWorkflow(WF, { args: args(), respond: responder({ reviews: { security: [finding('security-01', 'critical')] } }) });
     const selected = first.result.findings;
     const second = await runWorkflow(WF, { args: fixArgs({ selected }), respond: responder({ second: { security: [sev] } }) });
     assert.equal(second.result.status, 'handover');
     // The head resumes (e.g. after a usage-limit stop) with args.done refreshed from the trailers.
-    const done = ['fix:security-01', 'fix:second:security-01'];
+    const done = ['fix:security-01', 'fix:second-security-01'];
     const resumed = await runWorkflow(WF, { args: fixArgs({ selected, done }), respond: responder({ second: { security: [sev] } }) });
     const sweeps = [first, second, resumed].reduce((n, r) => n + (reviewsOf(r.calls).length > 0 ? 1 : 0), 0);
     assert.ok(sweeps <= 2, `${sweeps} sweeps ran across the stage`);
@@ -529,44 +529,44 @@ test('STABILISE-19 there is never a third sweep', async (t) => {
 
   await t.test('a severe second-sweep finding left blocked is not lost on resume', async () => {
     const selected = [finding('security-01', 'critical')];
-    const s1 = finding('second:security-01', 'severe');
-    const s2 = finding('second:security-02', 'severe');
+    const s1 = finding('second-security-01', 'severe');
+    const s2 = finding('second-security-02', 'severe');
     const run = await runWorkflow(WF, {
       args: fixArgs({ selected }),
-      respond: responder({ second: { security: [s1, s2] }, fixes: { 'second:security-02': null } }),
+      respond: responder({ second: { security: [s1, s2] }, fixes: { 'second-security-02': null } }),
     });
-    assert.ok(run.result.blocked.some((b) => b.id === 'second:security-02'));
+    assert.ok(run.result.blocked.some((b) => b.id === 'second-security-02'));
     assert.match(STAGE4, /`second_sweep_findings`/);
-    const resumed = await resumeAfter(run, { selected, done: ['fix:security-01', 'fix:second:security-01'] });
+    const resumed = await resumeAfter(run, { selected, done: ['fix:security-01', 'fix:second-security-01'] });
     assert.equal(reviewsOf(resumed.calls).length, 0, 'the resume swept again');
-    assert.ok(labels(resumed.calls).includes('fix:second:security-02'), 'the blocked severe finding is fixed on resume');
+    assert.ok(labels(resumed.calls).includes('fix:second-security-02'), 'the blocked severe finding is fixed on resume');
     assert.equal(resumed.result.status, 'handover');
     assert.equal(resumed.result.second_sweep.severe, 2);
   });
 
   await t.test('a resume after a second sweep with no committed fix does not sweep again', async () => {
     const selected = [finding('security-01', 'critical')];
-    const s1 = finding('second:security-01', 'severe');
-    const m1 = finding('second:security-02', 'minor');
+    const s1 = finding('second-security-01', 'severe');
+    const m1 = finding('second-security-02', 'minor');
     const run = await runWorkflow(WF, {
       args: fixArgs({ selected }),
-      respond: responder({ second: { security: [s1, m1] }, fixes: { 'second:security-01': { status: 'blocked', note: 'q' } } }),
+      respond: responder({ second: { security: [s1, m1] }, fixes: { 'second-security-01': { status: 'blocked', note: 'q' } } }),
     });
     assert.equal(run.result.status, 'handover');
     const resumed = await resumeAfter(run, { selected, done: ['fix:security-01'] });
     assert.equal(reviewsOf(resumed.calls).length, 0, 'a third sweep ran');
-    assert.ok(labels(resumed.calls).includes('fix:second:security-01'));
-    assert.deepEqual(resumed.result.open_items.map((f) => f.id), ['second:security-02']);
+    assert.ok(labels(resumed.calls).includes('fix:second-security-01'));
+    assert.deepEqual(resumed.result.open_items.map((f) => f.id), ['second-security-02']);
   });
 
   await t.test('a second-sweep trailer without the saved findings never sweeps again or guesses', async () => {
     const { calls, result } = await runWorkflow(WF, {
-      args: fixArgs({ selected: [finding('security-01', 'critical')], done: ['fix:security-01', 'fix:second:security-01'] }),
+      args: fixArgs({ selected: [finding('security-01', 'critical')], done: ['fix:security-01', 'fix:second-security-01'] }),
       respond: responder(),
     });
     assert.equal(reviewsOf(calls).length, 0, 'the resume swept again');
     assert.deepEqual(labels(calls), ['regress'], 'the committed severe second-sweep fix got no regression check');
-    assert.ok(calls[0].prompt.includes('Temper-Task: e/fix:second:security-01'));
+    assert.ok(calls[0].prompt.includes('Temper-Task: e/fix:second-security-01'));
     assert.ok(!calls[0].prompt.includes('Temper-Task: e/fix:security-01'), 'only the second-sweep fixes are checked');
     assert.equal(result.status, 'handover');
     assert.deepEqual(result.blocked, [{ id: 'second-sweep', reason: 'done but args.second_sweep_findings missing' }]);

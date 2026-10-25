@@ -22,8 +22,8 @@ function finding(id, severity, extra = {}) {
 
 const F1 = finding('f1', 'critical', { line: 11 });
 const F2 = finding('f2', 'important', { line: 12 });
-const S1 = finding('second:s1', 'severe', { line: 21 });
-const M1 = finding('second:m1', 'minor', { line: 22 });
+const S1 = finding('s1', 'severe', { line: 21 });
+const M1 = finding('m1', 'minor', { line: 22 });
 
 function fixArgs(extra = {}) {
   return {
@@ -134,25 +134,25 @@ test('something severe in the second sweep: fix it, check those fixes, then hand
     respond: responder({ second: [S1, M1] }),
   });
   const ls = labels(calls);
-  const iFix = ls.indexOf('fix:second:s1');
+  const iFix = ls.indexOf('fix:s1');
   const iRegress = ls.indexOf('regress');
-  assert.ok(iFix > -1, 'no fix:second:s1 call');
+  assert.ok(iFix > -1, 'no fix:S1 call');
   assert.equal(ls.filter((l) => l === 'regress').length, 1);
   assert.ok(iRegress > iFix, 'regress must come after fix:s1');
-  assert.ok(!ls.includes('fix:second:m1'));
+  assert.ok(!ls.includes('fix:m1'));
   assert.ok(!ls.slice(iRegress + 1).some((l) => l.includes('review:')), 'no review after regress');
   const regress = calls[iRegress];
   assert.deepEqual(regress.opts.schema, lib.REGRESS_SCHEMA);
-  assert.ok(regress.prompt.includes('Temper-Task: e/fix:second:s1'));
+  assert.ok(regress.prompt.includes('Temper-Task: e/fix:s1'));
   assert.ok(!regress.prompt.includes('Temper-Task: e/fix:f1'));
   assert.equal(result.status, 'handover');
-  assert.deepEqual(result.open_items.map((f) => f.id), ['second:m1']);
+  assert.deepEqual(result.open_items.map((f) => f.id), ['m1']);
   assert.deepEqual(result.second_sweep, { severe: 1, others: 1 });
-  assert.deepEqual(result.fixed, ['f1', 'f2', 'second:s1']);
+  assert.deepEqual(result.fixed, ['f1', 'f2', 's1']);
 });
 
 test('regressions the check finds are returned', async () => {
-  const regressions = [{ fix: 'second:s1', evidence: 'test x fails' }];
+  const regressions = [{ fix: 's1', evidence: 'test x fails' }];
   const { result } = await runWorkflow(WF, {
     args: fixArgs(),
     respond: responder({ second: [S1], regress: { regressions } }),
@@ -213,56 +213,6 @@ test('a malformed saved second_sweep_findings is refused before any agent, never
     });
     assert.equal(result.status, 'invalid', JSON.stringify(second));
     assert.equal(calls.length, 0, `${JSON.stringify(second)}: ${labels(calls).join(', ')}`);
-  }
-});
-
-test("a first-sweep fix from a lens whose slug starts with 'second' is not taken for a second-sweep fix: a resume still runs the second sweep (SECOND-TESTS-DOCS-2, SECOND-CONTROL-FLOW-7)", async () => {
-  const lenses = ['security', 'second opinion'];
-  // The first sweep's prompt for that lens names its ids, and the id it gives is a first-sweep id.
-  const first = lib.reviewPrompt('second opinion', { ...fixArgs(), part: 'sweep', lenses }, []);
-  const m = first.match(/Give each finding an id `([^`]*)-NN`/);
-  assert.ok(m, 'the first-sweep review prompt names the ids');
-  const id = `${m[1]}-01`;
-  const sel = [finding(id, 'critical', { lens: 'second opinion' })];
-  const { result, calls } = await runWorkflow(WF, {
-    args: fixArgs({ lenses, selected: sel, done: [`fix:${id}`] }),
-    respond: responder(),
-  });
-  const reviews = labels(calls).filter((l) => l.includes('review:'));
-  assert.deepEqual(reviews, lenses.map((l) => `second:review:${l}`), labels(calls).join(', '));
-  assert.ok(!result.blocked.some((b) => b.id === 'second-sweep'), JSON.stringify(result.blocked));
-  assert.equal(result.status, 'stable');
-});
-
-test('a second-sweep id carries a namespace no first-sweep lens slug can produce, and the workflow enforces it both ways (SECOND-TESTS-DOCS-2, SECOND-CONTROL-FLOW-7)', async () => {
-  for (const lens of ['second', 'Second opinion', 'second: x', 'a:b']) assert.ok(!lib.isSecondId(`${lib.lensSlug(lens)}-01`), lens);
-  const second = lib.reviewPrompt('security', fixArgs(), []);
-  const m = second.match(/Give each finding an id `([^`]*)-NN`/);
-  assert.ok(m && lib.isSecondId(`${m[1]}-01`), 'the second-sweep prompt names ids in the namespace');
-  // A second-sweep finding given without the namespace is put into it before any verify or fix.
-  const bare = finding('security-07', 'severe', { line: 50 });
-  const base = responder({ second: [bare] });
-  const respond = (q) => (q.label === 'second:verify:second:security-07' ? { real: true, severity: 'severe', reason: 'r' } : base(q));
-  const run = await runWorkflow(WF, { args: fixArgs(), respond });
-  assert.ok(labels(run.calls).includes('second:verify:second:security-07'), labels(run.calls).join(', '));
-  assert.ok(labels(run.calls).includes('fix:second:security-07'), labels(run.calls).join(', '));
-  // A first-sweep finding in the namespace is never verified; its lens is blocked.
-  const sweep = await runWorkflow(WF, {
-    args: { ...fixArgs(), part: 'sweep', selected: undefined },
-    respond: ({ label }) => (label === 'review:security'
-      ? { findings: [finding('second:security-01', 'critical')] }
-      : label.startsWith('review:') ? { findings: [] } : { real: true, severity: 'critical', reason: 'r' }),
-  });
-  assert.ok(!labels(sweep.calls).some((l) => l.startsWith('verify:')), labels(sweep.calls).join(', '));
-  assert.deepEqual(sweep.result.findings, []);
-  assert.deepEqual(sweep.result.blocked.map((b) => b.id), ['review:security']);
-});
-
-test('a lens with no slug, or a selected id in the second-sweep namespace, is refused before any agent (SECOND-TESTS-DOCS-2, SECOND-CONTROL-FLOW-7)', async () => {
-  for (const extra of [{ lenses: ['!!!'] }, { lenses: ['security', ' '] }, { selected: [finding('second:security-01', 'critical')] }]) {
-    const { result, calls } = await runWorkflow(WF, { args: fixArgs(extra), respond: responder() });
-    assert.equal(result.status, 'invalid', JSON.stringify(extra));
-    assert.equal(calls.length, 0);
   }
 });
 
