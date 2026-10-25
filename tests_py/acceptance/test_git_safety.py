@@ -447,9 +447,14 @@ class TestGitSafety(GitSandbox):
         repo, origin = self.remote()
         self.git(repo, 'branch', '--no-track', 'epic/e', 'main')
         # The host's clone, where the agents commit: one task merged, one still on its branch.
+        # The epic branch gets there the way the run skill puts it there, never by hand.
         host_clone = self.tmp / 'host' / 'repo'
         self.git(self.tmp, 'clone', '-q', str(origin), str(host_clone))
-        self.git(host_clone, 'checkout', '-q', '-b', 'epic/e')
+        env, log = self._stub_ssh()
+        push, _ = self._push_cmd('## Before every launch or resume', '## Launching and resuming')
+        proc = self._run_skill_cmd(push, env, repo, host_clone)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.git(host_clone, 'checkout', '-q', 'epic/e')
         self.git(host_clone, 'checkout', '-q', '-b', 'temper/e/a')
         self.commit(host_clone, 'feat: a\n\nTemper-Task: e/a')
         self.git(host_clone, 'checkout', '-q', 'epic/e')
@@ -461,7 +466,7 @@ class TestGitSafety(GitSandbox):
         # Without the fetch the user's repo knows nothing of the host's work.
         self.assertEqual(self._done(repo, 'epic/e'), [])
 
-        env, log = self._stub_ssh()
+        log.write_text('', encoding='utf-8')
         run = lambda: self._run_skill_cmd(cmd, env, repo, host_clone)
         proc = run()
         self.assertEqual(proc.returncode, 0, proc.stderr)
@@ -552,6 +557,46 @@ class TestGitSafety(GitSandbox):
         self.assertEqual(self.git(repo, 'rev-parse', 'HEAD'), tip)
         self.assertEqual(self.git(repo, 'rev-parse', 'epic/e'), tip)
         self.assertEqual((repo / 'clash.txt').read_text(encoding='utf-8'), 'mine\n')
+
+    # ---- SECOND-TESTS-DOCS-1: the epic branch, with the spec and plan, reaches the host clone ----
+
+    def _push_cmd(self, section_start, section_end):
+        text = RUN_SKILL[RUN_SKILL.index(section_start):RUN_SKILL.index(section_end)]
+        cmds = [l.strip() for l in text.splitlines()
+                if '<host_clone>' in l and ' push ' in l and l.strip().startswith(('git ', 'python3 '))]
+        self.assertEqual(len(cmds), 1, f'one push-to-the-host command in {section_start}: {cmds}')
+        return cmds[0], text
+
+    def test_SECOND_TESTS_DOCS_1_the_first_launch_puts_the_epic_branch_on_the_host(self):
+        push, before = self._push_cmd('## Before every launch or resume', '## Launching and resuming')
+        self.assertLess(before.index('git -C <repo> branch --no-track <branch> <base>'), before.index(push),
+                        'the branch is pushed to the host once step 2 has created it')
+        repo, origin = self.remote()
+        # The host clone was made from origin, which lacks what the plan skill committed locally.
+        host_clone = self.tmp / 'host' / 'repo'
+        self.git(self.tmp, 'clone', '-q', str(origin), str(host_clone))
+        spec = self.commit(repo, 'docs(temper): e spec and plan', name='docs/temper/e/spec.md')
+        self.git(repo, 'branch', '--no-track', 'epic/e', 'main')
+        self.assertEqual(self.git(host_clone, 'branch', '--list', 'epic/e'), '')
+        env, _log = self._stub_ssh()
+        proc = self._run_skill_cmd(push, env, repo, host_clone)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(self.git(host_clone, 'rev-parse', 'epic/e'), spec)
+        self.git(host_clone, 'cat-file', '-e', 'epic/e:docs/temper/e/spec.md')
+        # An implementer on the host can branch from it, and the fetch-back then works.
+        wt = self.tmp / 'host' / 'e' / 'a'
+        self.git(host_clone, 'worktree', 'add', '-q', '-b', 'temper/e/a', str(wt), 'epic/e')
+        self.commit(wt, 'feat: a\n\nTemper-Task: e/a')
+        proc = self._run_skill_cmd(self._fetch_back_cmd(), env, repo, host_clone)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(self.git(repo, 'rev-parse', 'temper/e/a'), self.git(wt, 'rev-parse', 'HEAD'))
+        # A host branch of the same name that isn't an ancestor is never overwritten.
+        self.git(host_clone, 'branch', '-f', 'epic/e', 'temper/e/a')
+        self.git(repo, 'checkout', '-q', 'epic/e')
+        self.commit(repo, 'docs: a local change')
+        proc = self._run_skill_cmd(push, env, repo, host_clone)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(self.git(host_clone, 'rev-parse', 'epic/e'), self.git(wt, 'rev-parse', 'HEAD'))
 
     # ---- SECOND-SAFETY-7: the host's login directory is not on the cleanup check's sys.path ----
 

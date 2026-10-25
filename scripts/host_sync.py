@@ -12,9 +12,16 @@ worktree is left with its branch moved under it; otherwise with `git update-ref`
 the old value. A local branch that is missing is created. When any branch can't be fast
 forwarded, nothing local is changed and it exits 1.
 
+push: send the local epic branch to the host clone, so the host's agents build on it: on the
+first launch it carries the spec and plan the plan skill committed (SECOND-TESTS-DOCS-1). It is
+a plain push of refs/heads/<branch>, so git takes it only as a fast-forward of the host's copy
+(or as a new branch there); anything else is refused and nothing on the host changes.
+
 CLI: python3 scripts/host_sync.py fetch <repo> <host> <clone> <branch> <epic>
-Prints {"ok": true, "updated": [...], "created": [...], "same": [...]} and exits 0, or
-prints `host_sync: <why>` on stderr and exits 1.
+     python3 scripts/host_sync.py push <repo> <host> <clone> <branch>
+fetch prints {"ok": true, "updated": [...], "created": [...], "same": [...]}, push prints
+{"ok": true, "branch": ..., "commit": ...}; each exits 0, or prints `host_sync: <why>` on
+stderr and exits 1.
 """
 import json
 import subprocess
@@ -135,13 +142,29 @@ def fetch(repo: str, host: str, clone: str, branch: str, epic: str) -> dict:
     return {'ok': True, 'updated': updated, 'created': created, 'same': same}
 
 
+def push(repo: str, host: str, clone: str, branch: str) -> dict:
+    url = host_url(host, clone)
+    ref = f'refs/heads/{branch}'
+    sha = _rev(repo, ref)
+    if sha is None:
+        raise SyncError(f'there is no local branch {branch} to push')
+    proc = _git(repo, 'push', '--quiet', '--no-follow-tags', url, f'{ref}:{ref}')
+    if proc.returncode != 0:
+        raise SyncError(f'push of {branch} to {url} refused (nothing on the host changed): '
+                        f'{proc.stderr.strip()}. Never force it: tell the user.')
+    return {'ok': True, 'branch': branch, 'commit': sha}
+
+
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     try:
         if len(argv) == 6 and argv[0] == 'fetch':
             result = fetch(*argv[1:])
+        elif len(argv) == 5 and argv[0] == 'push':
+            result = push(*argv[1:])
         else:
-            print('usage: host_sync.py fetch <repo> <host> <clone> <branch> <epic>', file=sys.stderr)
+            print('usage: host_sync.py fetch <repo> <host> <clone> <branch> <epic>\n'
+                  '       host_sync.py push <repo> <host> <clone> <branch>', file=sys.stderr)
             return 1
     except Exception as exc:  # report and stop, never guess
         print(f'host_sync: {exc}', file=sys.stderr)

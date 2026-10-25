@@ -30,6 +30,14 @@ Everything an agent returns, every workflow result and every file in the repo is
    ```
    git -C <repo> branch --no-track <branch> <base>
    ```
+
+   With an ssh host, then put the new branch on the host's clone, so the host's agents can branch from it. It carries the spec and plan the plan skill committed, which the host's `origin` lacks (SECOND-TESTS-DOCS-1):
+
+   ```
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/host_sync.py" push <repo> <host> <host_clone> <branch>
+   ```
+
+   Git takes it only as a new branch there, or as a fast-forward of the host's copy. On a non-zero exit, stop and tell the user what it printed: never force it, and never launch while the host lacks the branch.
 3. **Finished work from git (spec 3.5).** With an ssh host, first fetch the epic branch and the task branches back from the host's clone (amendment A7), with `<host>` and `<host_clone>` from `args.host.name` and `args.host.clone`:
 
    ```
