@@ -86,6 +86,32 @@ class DoneTasksTest(GitRepoCase):
             ['acceptance:g1', 'checkpoint'],
         )
 
+    def test_docs_and_evidence_count_only_with_no_other_commit_after_them(self):
+        # SECOND-CONTROL-FLOW-9: a gate fix after docs and evidence means the PR body and docs
+        # describe code that never passed, so a publish relaunch must write them again.
+        self.make_feat(
+            ('Temper-Task: e/1',),
+            ('Temper-Task: e/docs',),
+            ('Temper-Task: e/evidence',),
+        )
+        self.assertEqual(done_tasks.done(str(self.repo), 'feat', 'main', 'e'),
+                         ['1', 'docs', 'evidence'])
+        self.commit('fix the full gate')  # the head's gate fix, no trailer
+        self.assertEqual(done_tasks.done(str(self.repo), 'feat', 'main', 'e'), ['1'])
+        self.commit('docs again', 'Temper-Task: e/docs')
+        self.assertEqual(done_tasks.done(str(self.repo), 'feat', 'main', 'e'), ['1', 'docs'])
+        self.commit('evidence again', 'Temper-Task: e/evidence')
+        self.assertEqual(done_tasks.done(str(self.repo), 'feat', 'main', 'e'),
+                         ['1', 'docs', 'evidence'])
+
+    def test_a_merge_after_docs_also_makes_them_stale(self):
+        self.make_feat(('Temper-Task: e/docs',))
+        self.git(self.repo, 'checkout', '--quiet', '-b', 'side', 'feat~1')
+        self.commit('side work')
+        self.git(self.repo, 'checkout', '--quiet', 'feat')
+        self.git(self.repo, 'merge', '--quiet', '--no-ff', '-m', 'merge side', 'side')
+        self.assertEqual(done_tasks.done(str(self.repo), 'feat', 'main', 'e'), [])
+
     def test_cli_prints_a_json_array_and_exits_0(self):
         self.make_feat(('Temper-Task: e/1',))
         proc = subprocess.run(

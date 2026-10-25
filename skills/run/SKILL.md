@@ -127,7 +127,7 @@ The `fix` return value:
 
 Args: `epic`, `repo`, `branch`, `base`, `default_branch` (when `args.json` has it), `log`, `spec`, `host`, `gates` and `done`.
 
-- `gate_failed`: don't push. Record the gate's exit status and log path in `log.md` and tell the user.
+- `gate_failed`: don't push. Record the gate's exit status and log path in `log.md` and tell the user. Once the cause is fixed and committed on the epic branch, refresh `args.done` and launch publish again. `done_tasks.py` counts `docs` and `evidence` only while no other commit comes after theirs, so a relaunch after a gate fix writes the docs, the PR body and the evidence again, against the code that passes (SECOND-CONTROL-FLOW-9). Never add their trailers by hand.
 - `blocked`: resume once, as above.
 - `ready`: it carries `pr.title` and `pr.body_file`. Push and open the PR (amendment A5) only when all of these hold:
   - `status` is `ready` and `gate.passed` is true;
