@@ -174,7 +174,7 @@ Wave: 2
 
 ### Task 4 `regress-sweeps`: One-sweep mode, and a regression check after every fix wave (spec §3.3)
 
-Owns: src/lib.js, src/stabilise.js, test/stabilise-fix.test.mjs, test/acceptance/stabilise.test.mjs, workflows/build.js, workflows/stabilise.js, workflows/publish.js
+Owns: src/lib.js, src/stabilise.js, test/stabilise-fix.test.mjs, test/acceptance/stabilise.test.mjs, workflows/build.js, workflows/stabilise.js, workflows/publish.js, test/acceptance/git-safety.test.mjs, test/stabilise-sweep.test.mjs
 Uses: args-v02, commits-result
 Provides: regress-per-fix
 Wave: 3
@@ -219,7 +219,7 @@ Wave: 3
 
 ### Task 5 `fix-minors`: Selected minor findings are fixed (spec §3.4, workflow and docs)
 
-Owns: src/stabilise.js, test/stabilise-fix.test.mjs, test/acceptance/stabilise.test.mjs, workflows/build.js, workflows/stabilise.js, workflows/publish.js
+Owns: src/stabilise.js, test/stabilise-fix.test.mjs, test/acceptance/stabilise.test.mjs, workflows/build.js, workflows/stabilise.js, workflows/publish.js, test/acceptance/git-safety.test.mjs, test/stabilise-sweep.test.mjs
 Uses: regress-per-fix
 Provides: none
 Wave: 4
@@ -241,7 +241,7 @@ Wave: 4
 
 ### Task 6 `flaky-quick-gates`: Known flaky tests in quick gates (spec §3.6, workflow side)
 
-Owns: src/lib.js, src/build.js, src/stabilise.js, test/lib-prompts.test.mjs, test/acceptance/build.test.mjs, test/acceptance/stabilise.test.mjs, workflows/build.js, workflows/stabilise.js, workflows/publish.js
+Owns: src/lib.js, src/build.js, src/stabilise.js, test/lib-prompts.test.mjs, test/acceptance/build.test.mjs, test/acceptance/stabilise.test.mjs, workflows/build.js, workflows/stabilise.js, workflows/publish.js, test/acceptance/git-safety.test.mjs, test/stabilise-sweep.test.mjs, test/stabilise-fix.test.mjs
 Uses: args-v02, with-rules-v02
 Provides: flaky-reruns-result
 Wave: 5
@@ -279,7 +279,7 @@ Wave: 5
 
 ### Task 7 `unverified-findings`: Redo SECOND-CONTROL-FLOW-5, a verifier that returns nothing (spec §3.9)
 
-Owns: src/lib.js, src/stabilise.js, test/stabilise-sweep.test.mjs, test/stabilise-fix.test.mjs, test/acceptance/stabilise.test.mjs, workflows/build.js, workflows/stabilise.js, workflows/publish.js
+Owns: src/lib.js, src/stabilise.js, test/stabilise-sweep.test.mjs, test/stabilise-fix.test.mjs, test/acceptance/stabilise.test.mjs, workflows/build.js, workflows/stabilise.js, workflows/publish.js, test/acceptance/git-safety.test.mjs
 Uses: regress-per-fix
 Provides: unverified-result
 Wave: 6
@@ -317,7 +317,7 @@ Wave: 6
 
 ### Task 8 `second-namespace`: Redo SECOND-TESTS-DOCS-2 and SECOND-CONTROL-FLOW-7, the second sweep's ids (spec §3.9)
 
-Owns: src/lib.js, src/stabilise.js, test/stabilise-fix.test.mjs, test/acceptance/stabilise.test.mjs, test/acceptance/git-safety.test.mjs, workflows/build.js, workflows/stabilise.js, workflows/publish.js
+Owns: src/lib.js, src/stabilise.js, test/stabilise-fix.test.mjs, test/acceptance/stabilise.test.mjs, test/acceptance/git-safety.test.mjs, workflows/build.js, workflows/stabilise.js, workflows/publish.js, test/stabilise-sweep.test.mjs
 Uses: unverified-result
 Provides: second-namespace
 Wave: 7

@@ -90,7 +90,9 @@
         "test/acceptance/stabilise.test.mjs",
         "workflows/build.js",
         "workflows/stabilise.js",
-        "workflows/publish.js"
+        "workflows/publish.js",
+        "test/acceptance/git-safety.test.mjs",
+        "test/stabilise-sweep.test.mjs"
       ],
       "uses": [
         "args-v02",
@@ -111,7 +113,9 @@
         "test/acceptance/stabilise.test.mjs",
         "workflows/build.js",
         "workflows/stabilise.js",
-        "workflows/publish.js"
+        "workflows/publish.js",
+        "test/acceptance/git-safety.test.mjs",
+        "test/stabilise-sweep.test.mjs"
       ],
       "uses": [
         "regress-per-fix"
@@ -132,7 +136,10 @@
         "test/acceptance/stabilise.test.mjs",
         "workflows/build.js",
         "workflows/stabilise.js",
-        "workflows/publish.js"
+        "workflows/publish.js",
+        "test/acceptance/git-safety.test.mjs",
+        "test/stabilise-sweep.test.mjs",
+        "test/stabilise-fix.test.mjs"
       ],
       "uses": [
         "args-v02",
@@ -155,7 +162,8 @@
         "test/acceptance/stabilise.test.mjs",
         "workflows/build.js",
         "workflows/stabilise.js",
-        "workflows/publish.js"
+        "workflows/publish.js",
+        "test/acceptance/git-safety.test.mjs"
       ],
       "uses": [
         "regress-per-fix"
@@ -177,7 +185,8 @@
         "test/acceptance/git-safety.test.mjs",
         "workflows/build.js",
         "workflows/stabilise.js",
-        "workflows/publish.js"
+        "workflows/publish.js",
+        "test/stabilise-sweep.test.mjs"
       ],
       "uses": [
         "unverified-result"
@@ -258,10 +267,13 @@
   ],
   "done": [
     "args-fields",
+    "commits",
+    "docs-v02",
     "project-skills",
+    "prompts-rule-wait",
     "run-skill"
   ],
   "answers": {
-    "docs-v02": "test/manifest.test.mjs is now in your owns (a plan error: the head fixed the plan). Change its version assertion to '0.2.0' and rename that test to say 0.2.0; keep the version bump in this task."
+    "regress-sweeps": "Yes: test/acceptance/git-safety.test.mjs (and the other shared stabilise test files) are now in your owns; the head fixed the plan. Make exactly the two-line edit you described: stabiliseRespond answers labels starting 'regress:fix:', and prompts() expects 'regress:'. Keep every other assertion as it is."
   }
 }

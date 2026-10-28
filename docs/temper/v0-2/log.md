@@ -34,3 +34,9 @@
 
 - **Wave 0.** `args-fields` merged (0d77370). `docs-v02` blocked: bumping `plugin.json` to 0.2.0 means changing `test/manifest.test.mjs`, which pins 0.1.0 and isn't in its owns.
 - **The head's call.** This was a plan error, so the plan is fixed, not the check: `test/manifest.test.mjs` is added to `docs-v02`'s owns (no other task owns it). The answer goes in `answers["docs-v02"]`, `done` is refreshed, and the run resumes.
+
+## 28 Oct 2026: build blocked at wave 3 (head)
+
+- **Waves 0–2.** `docs-v02`, `prompts-rule-wait` and `commits` merged (HEAD 5d804e8).
+- **Wave 3.** `regress-sweeps` blocked: its quick gate needs a two-line change in `test/acceptance/git-safety.test.mjs`, whose scripted responder knows only the old `regress` label. That file isn't in its owns.
+- **The head's call.** This was a plan error again: the shared stabilise test files belong to every stabilise task. The tasks in waves 3–7 run one per wave, so each of them now owns `test/acceptance/git-safety.test.mjs`, `test/stabilise-sweep.test.mjs`, `test/stabilise-fix.test.mjs` and `test/acceptance/stabilise.test.mjs`. `validateBuildArgs` still reports no errors. The answer goes in `answers["regress-sweeps"]`, `done` is refreshed, and the run resumes.
