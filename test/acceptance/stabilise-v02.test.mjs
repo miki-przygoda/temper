@@ -271,6 +271,35 @@ test("STABILISE-08 a regression agent that returns nothing blocks its fix as reg
   assert.deepEqual(result.blocked, [{ id: 'regress:fix:security-01', reason: 'agent returned nothing' }]);
 });
 
+test('STABILISE-08 a second-sweep regression agent that returns nothing blocks its fix too', async () => {
+  const sel = [finding('security-01', 'critical')];
+  const secondFindings = [finding('security-07', 'severe'), finding('security-08', 'severe')];
+  // Severe fixes made by this run's second sweep.
+  {
+    const { result } = await runWorkflow(WF, {
+      args: fixArgs({ selected: sel, sweeps: 2 }),
+      respond: responder({
+        second: { security: secondFindings },
+        regress: (id) => (id === 'second:security-07' ? undefined : { regressions: [] }),
+      }),
+    });
+    assert.deepEqual(result.blocked, [{ id: 'regress:fix:second:security-07', reason: 'agent returned nothing' }]);
+  }
+  // A second-sweep fix trailer with its saved findings lost: the committed fix is still checked.
+  {
+    const { calls, result } = await runWorkflow(WF, {
+      args: fixArgs({ selected: sel, done: ['fix:security-01', 'fix:second:security-08'], attempt: 1 }),
+      respond: responder({ regress: (id) => (id === 'second:security-08' ? undefined : { regressions: [] }) }),
+    });
+    assert.ok(labels(calls).includes('regress:fix:second:security-08'), 'the lost second-sweep fix was not checked');
+    assert.equal(result.status, 'handover');
+    assert.ok(
+      result.blocked.some((b) => b.id === 'regress:fix:second:security-08' && b.reason === 'agent returned nothing'),
+      `the empty regression agent is not reported: ${JSON.stringify(result.blocked)}`,
+    );
+  }
+});
+
 test("STABILISE-09 a regression prompt includes the attempt and ends with 'Run attempt <n>.'", async () => {
   const sel = [finding('security-01', 'critical')];
   for (const [attempt, n] of [[undefined, 0], [0, 0], [3, 3]]) {
