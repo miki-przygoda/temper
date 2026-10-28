@@ -84,6 +84,8 @@ async function fixLoop(findings, out) {
   for (const f of sortFindings(findings)) {
     if (args.done.includes(`fix:${f.id}`)) continue;
     const r = await agent(fixPrompt(f, args), { label: `fix:${f.id}`, phase: 'Fix', schema: FIX_SCHEMA });
+    // spec 3.1: the sha each fix agent reported, never an empty one.
+    if (r && isNonEmptyString(r.commit)) out.commits[`fix:${f.id}`] = r.commit;
     if (!r) out.blocked.push({ id: f.id, reason: 'agent returned nothing' });
     else if (r.status === 'fixed') { out.fixed.push(f.id); handled.push(f.id); }
     else if (r.status === 'reverted') out.reverted.push(f.id);
@@ -96,7 +98,7 @@ async function fixLoop(findings, out) {
 // Ids whose fix:<id> trailer is already on the branch (fixed in an earlier run).
 const doneIds = (findings) => findings.filter((f) => args.done.includes(`fix:${f.id}`)).map((f) => f.id);
 
-const out = { fixed: [], reverted: [], contract_items: [], blocked: [] };
+const out = { fixed: [], reverted: [], contract_items: [], blocked: [], commits: {} };
 
 // A Minor finding is never fixed in the code; it goes to the open items (spec 7.1).
 const selectedMinor = args.selected.filter((f) => f.severity === 'minor');
@@ -127,6 +129,7 @@ if (out.blocked.length > 0 || firstRegressions.length > 0) {
     blocked: out.blocked,
     open_items: selectedMinor,
     regressions: firstRegressions,
+    commits: out.commits,
   };
 }
 
@@ -146,6 +149,7 @@ if (lostSecondIds.length > 0) {
     blocked: out.blocked,
     open_items: selectedMinor,
     regressions: r && Array.isArray(r.regressions) ? r.regressions : [],
+    commits: out.commits,
   };
 }
 
@@ -190,4 +194,5 @@ return {
   second_sweep: { severe: severe.length, others: others.length },
   second_sweep_findings: secondFindings,
   regressions,
+  commits: out.commits,
 };

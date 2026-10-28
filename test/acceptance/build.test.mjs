@@ -750,3 +750,88 @@ test('BUILD-32 every agent prompt says a gate waiting for a slot is normal and n
     assert.ok(prompt.includes('that wait is normal and is not a failure'), `${stage} ${label}`);
   }
 });
+
+// ---- v0.2: commits that reach their branch (spec §3.1) ----
+
+test('BUILD-28 every agent that commits is told to commit on its branch and check it moved', async () => {
+  const failingG1 = {
+    'acceptance:g1': { group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'c' },
+  };
+  const local = await run(buildArgs(), failingG1);
+  const fix = await runWorkflow('workflows/stabilise.js', {
+    args: stabiliseArgs({ part: 'fix', selected: [ruleFinding] }),
+    respond: stabiliseResponder,
+  });
+  const pub = await runWorkflow('workflows/publish.js', {
+    args: { ...stabiliseArgs(), spec: 'docs/temper/e/spec.md' },
+    respond: publishResponder,
+  });
+  const committing = [
+    ...['impl:a', 'merge:wave0', 'checkpoint', 'behaviour-spec', 'acceptance:g1', 'green:1'].map((l) => [l, promptOf(local.calls, l)]),
+    ['fix:security-01', promptOf(fix.calls, 'fix:security-01')],
+    ['docs', promptOf(pub.calls, 'docs')],
+    ['evidence', promptOf(pub.calls, 'evidence')],
+  ];
+  for (const [l, p] of committing) {
+    assert.ok(p.includes('git symbolic-ref --short HEAD'), `${l}: no branch check before committing`);
+    assert.ok(p.includes('git rev-parse'), `${l}: no tip check after committing`);
+    assert.match(p, /never repair a branch by hand/i, l);
+  }
+  const impl = promptOf(local.calls, 'impl:a');
+  assert.ok(impl.includes('git worktree add -b temper/e/a'), impl);
+  assert.ok(impl.includes('git rev-parse temper/e/a'));
+  for (const [l, p] of committing.slice(1)) {
+    assert.ok(p.includes('.temper/worktrees/e/epic'), `${l}: no shared epic worktree`);
+    assert.ok(p.includes('git rev-parse temper/e'), l);
+  }
+
+  // On an ssh host: the shared epic worktree is under <root>/<epic>/, and detaching comes after the check.
+  const ssh = await run(
+    buildArgs({ epic: 'hard-1', branch: 'temper/hard-1', host: { kind: 'ssh', name: 'beast', root: '/srv/temper', clone: '/srv/repo' } }),
+    failingG1,
+  );
+  for (const l of ['merge:wave0', 'checkpoint', 'behaviour-spec', 'acceptance:g1', 'green:1']) {
+    const p = promptOf(ssh.calls, l);
+    assert.ok(p.includes('/srv/temper/hard-1/epic'), `${l}: no shared epic worktree on the host`);
+    assert.ok(p.includes('after the commit check'), l);
+  }
+});
+
+test('BUILD-29 the checker fails a task whose branch tip is not the reported commit, or is already on the epic branch', async () => {
+  const { calls } = await run(buildArgs(), {
+    'impl:a': { status: 'done', branch: 'temper/e/a', commit: 'deadbeef1', summary: 'did a' },
+  });
+  const p = promptOf(calls, 'check:a');
+  assert.ok(p.includes('deadbeef1'), 'the checker is not given the reported sha');
+  assert.ok(p.includes('git rev-parse temper/e/a'));
+  assert.ok(p.includes('git merge-base --is-ancestor deadbeef1 temper/e'));
+  assert.ok(p.includes("A tip that didn't move fails the check."));
+});
+
+test('BUILD-30 build returns commits: the sha each phase reported, never an empty one', async () => {
+  const over = {
+    checkpoint: {
+      gate_passed: true, gate_log: 'l', flows: [], gaps: [], commit: 'c1',
+    },
+    'behaviour-spec': { groups: GROUPS, commit: 'b1' },
+    'acceptance:g1': { group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'a1' },
+    'acceptance:g2': { group: 'g2', passing: ['G2-01'], failing: [], untestable: [] },
+    'green:1': { fixed: ['G1-01'], corrected: [], questions: [], still_failing: [], commit: '' },
+  };
+  const { result } = await run(buildArgs(), over);
+  assert.equal(result.status, 'mvp');
+  assert.deepEqual(result.commits, { checkpoint: 'c1', 'behaviour-spec': 'b1', 'acceptance:g1': 'a1' });
+
+  // A run blocked at acceptance still carries what was committed before it.
+  const blocked = await run(buildArgs(), { ...over, 'acceptance:g1': null });
+  assert.equal(blocked.result.status, 'blocked');
+  assert.deepEqual(blocked.result.commits, { checkpoint: 'c1', 'behaviour-spec': 'b1' });
+
+  // A run blocked in the waves carries an empty map; a refused args.json carries none.
+  const waves = await run(buildArgs(), { 'impl:a': null });
+  assert.equal(waves.result.status, 'blocked');
+  assert.deepEqual(waves.result.commits, {});
+  const invalid = await run({ ...buildArgs(), tasks: 'x' });
+  assert.equal(invalid.result.status, 'invalid');
+  assert.ok(!('commits' in invalid.result));
+});
