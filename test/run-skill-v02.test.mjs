@@ -53,3 +53,16 @@ test('answers reach a run by resuming, never by editing a launched script', () =
   const launch = section('## Launching and resuming', '## Stage 3');
   assert.match(launch, /never by editing or regenerating a launched script/);
 });
+
+test("the run skill's part-fix return names the v0.2 blocked ids regress:fix:<id> and second:verify:<id> (spec 3.3, 3.9)", () => {
+  const s4 = STAGE4();
+  // v1's single resume-only check is gone: every part-fix run checks each fix with its own agent.
+  assert.doesNotMatch(s4, /`regress:fix` with/);
+  assert.doesNotMatch(s4, /over the fixes made on a resume never ran/);
+  // A dead regression agent is not a fix question: no answer, resume once, then stop.
+  assert.match(s4, /An id `regress:fix:<id>` with `agent returned nothing` is not a fix question and gets no answer/);
+  assert.match(s4, /`regress:fix:<id>` with `agent returned nothing` is not a fix question[^]*?Write nothing to `args\.answers`; refresh `args\.done` and resume once[^]*?If the same id blocks again, stop and tell the user/);
+  // A second-sweep verifier that returned nothing: no answer, hand over.
+  assert.match(s4, /An id `second:verify:<id>` is not a fix and gets no answer: see `handover` below/);
+  assert.match(s4, /`status: "handover"`:[^]*`second:verify:<id>`/);
+});
