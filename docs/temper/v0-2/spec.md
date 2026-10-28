@@ -156,6 +156,23 @@ v0.2 removes the work the first run's head had to do by hand. Each item below co
 
 The spike's findings go into this spec as section 3.7a, with a proposal. The change is built in v0.2 only if the owner approves that proposal. Otherwise the item is documented as a known issue for v0.3, and SECOND-CONTROL-FLOW-6 stays open with it.
 
+### 3.7a The S7 spike's findings (28 Oct 2026)
+
+Run in this session with two small probe workflows (run wf_c3c11c26-605 and its resume).
+
+- **Run-time reads.** A workflow script can't read anything at run time except `args` and agent results:
+  - `require`, `process`, `fetch` and `readFileSync` are all `undefined`;
+  - `import()` is refused before launch ("import() is not available in workflow scripts").
+- **Agents inside a workflow** have Bash, Read, Edit and Write, but no Agent tool, so they can't start subagents of their own.
+- **Resume with changed args is accepted.**
+  - The probe made three calls, `b1`, `b2` and `b3`, in that order. It was resumed with `attempt` changed from 0 to 1, a value only `b2`'s prompt contains.
+  - `b1` returned its old result (the same random nonce), and `b2` and `b3` ran live with new nonces.
+  - So the cache replays the unchanged prefix of calls. From the first changed call on, everything runs live, unchanged prompts included.
+- **Consequence for 3.3.** The `attempt` counter works as specified: bumping it reruns the regression agents and everything after them, and keeps the fix calls before them cached.
+- **Consequence for item 7.** Changing an answer and resuming already works: launch the same workflow with the updated args and `resumeFromRunId`. Finished tasks don't rerun, because `args.done` skips them; a changed answer reaches only its own task's prompt, so that call and the later ones run live. That is exactly what the run skill already says ("Launching and resuming"). The first run's relaunches came from the head embedding args in generated wrapper scripts, not from temper.
+- **Decision.** Nothing is built for item 7. The README's known issue becomes a one-line note: change answers with `args` and `resumeFromRunId`, never by editing a generated script. It is recorded for the owner to confirm.
+- **Not shown:** whether a `null` agent result is replayed on resume. The runtime's own note says cached results "may themselves be empty", so the counter is the safe path either way.
+
 ### 3.8 Runs end with the head's session (open item 8): docs only
 
 The README's "Overnight runs" section and the known issues say plainly:
@@ -214,3 +231,60 @@ temper's own method:
 - The exact wording of each new prompt line, as long as it says what section 3 says.
 - How the new `project.md` keys are parsed. The run and plan skills read `project.md` as text, so this is skill wording, not code.
 - The test layout within `test/` and `tests_py/`.
+
+## 7. User flows
+
+temper's "real program" is its workflows and skills. The checkpoint runs each flow below by driving the committed `workflows/<stage>.js` through `test/harness.mjs` (`runWorkflow`), with a scripted responder in a throwaway script outside the repo. Skills are checked by reading them.
+
+1. **A v1 epic still runs.** Take a valid v1 build, stabilise and publish args object with none of the v0.2 fields. Each validator returns `[]`. A build with every agent answering done or merged returns `mvp`.
+2. **The build rule and the flaky list reach the agents.** Run a two-task build with `build_rule: "Use make test only."` and `flaky: ["t::a"]`:
+   - every prompt carries the rule, after the host text and before the fixed rules;
+   - the quick-gate prompts carry `t::a` and the rerun-once rule, and the checkpoint prompt says the full gate is never rerun;
+   - a checker that reports `flaky_reruns` shows up in the result.
+3. **Commits are reported.** In the same build, the checkpoint, behaviour-spec and acceptance agents report commit shas, and the result's `commits` maps each phase id to its sha.
+4. **One sweep.** `part: "fix"` with `sweeps: 1` and two selected findings (one critical, one minor):
+   - the critical is fixed first and the minor second;
+   - one `regress:fix:<id>` agent runs per fix;
+   - no `second:` agent runs, and the status is `stable`.
+5. **A resume re-checks.** Run the same fix run again with both fixes in `done` and `attempt: 1`. The regression agents run again; no fix agent runs.
+6. **The head's side.** `skills/run/SKILL.md` names each new result field (`commits`, `flaky_reruns`, `unverified`, `second_sweep: null`) and what the head does with it. `templates/project.md` has `sweeps`, `gate_slots`, `flaky` and `## Build rule`.
+
+## 8. Contracts between parts
+
+- **args** (all optional; v1 args stay valid):
+  - `build_rule: string` and `flaky: string[]`, in all three stages;
+  - `sweeps: 1 | 2` (missing means 2) and `attempt: integer >= 0` (missing means 0), in stabilise only.
+- **`src/lib.js` helpers:**
+  - `sweepsOf(args) -> 1 | 2`;
+  - `buildRuleText(args) -> string` (`''` when empty) and `const GATE_WAIT: string`;
+  - `commitCheckText(branch) -> string` and `epicWorktreeText(args) -> string`;
+  - `flakyText(args) -> string` (`''` when no list) and `const NO_RERUN: string`;
+  - `regressPrompt(fixId, args) -> string`, which ends with `Run attempt <n>.`;
+  - `dedupeAgainst(list, kept) -> list`;
+  - `const SECOND_PREFIX = 'second:'` and `isSecondId(id) -> boolean`.
+- **`withRules` order:** parts, host text, build rule, `GATE_WAIT`, `RULES_COMMON`.
+- **Results:**
+  - **`commits`:** `{[id]: sha}`, with only non-empty shas. It is on every build result after validation; on stabilise `part: "fix"` (keys `fix:<id>`); and on publish (`docs`, `evidence`).
+  - **`flaky_reruns`:** `[{id, test, gate}]` on build and stabilise results. In agent schemas, an optional `flaky_reruns: [{test, gate}]`.
+  - **Sweep:** `part: "sweep"` adds `unverified: finding[]`, each with `unverified: true`.
+  - **Fix:** `part: "fix"` gives `second_sweep: null` when no second sweep ran because of one-sweep mode.
+- **Labels:** `regress:fix:<id>`, for first-wave and second-sweep severe fixes alike. Blocked ids: `regress:fix:<id>` and `verify:<id>` (or `second:verify:<id>`).
+- **`.temper/project.md`:**
+  - `sweeps: 1|2`;
+  - `gate_slots: <n>`, where empty means 1;
+  - `flaky: a, b`, comma-separated;
+  - a `## Build rule` section of free text.
+
+## 9. Security notes
+
+- **The build rule and the flaky list are project text** that goes into every prompt. They are framed as data, except where they say how to build and test, and they come before `RULES_COMMON`, so the fixed rules have the last word.
+- **The build rule is not checked for privileged words.** A rule may rightly say "never run sudo". The fixed rules in every prompt still forbid running such commands.
+- **A flaky rerun never applies to the full gate,** so "push only on a green full gate" is unchanged.
+- **Unverified findings are never selected overnight,** and never fixed unless a person selects them.
+- **No new path pushes, merges, or deletes anything.**
+
+## 10. Deferred questions
+
+- **Item 7 (answers without a new launch):** decided by the S7 spike (section 3.7a). It is not part of this build.
+- **SECOND-CONTROL-FLOW-6 and SECOND-TESTS-DOCS-5:** stay open (section 2), with their redo notes in `docs/v1-log.md`.
+- **Item 8 (runs outliving the head's session):** documentation only. Building it waits for a decision on running Claude Code on the build host.

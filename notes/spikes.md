@@ -43,3 +43,12 @@ Run on 24 Oct 2026 with Claude Code 2.1.308 on macOS, in a scratch folder. Setti
 Both need a real usage-limit hit, so they're checked on the first real overnight run, with a fallback in the plan:
 - **S4:** does a check-in fire, and resume the run, after the limit is hit?
 - **S6:** does `autoContinueAtUsageLimit` wait while a workflow is running?
+
+## S7, run-time reads and the resume cache (28 Oct 2026, for v0.2): PASS
+
+- **Run-time reads.** A workflow script sees only `args` and agent results:
+  - `require`, `process`, `fetch` and `readFileSync` are `undefined`;
+  - `import()` is refused before launch.
+- **Agents in a workflow** have Bash, Read, Edit and Write, but no Agent tool.
+- **The cache.** `resumeFromRunId` with changed args is accepted. The cache replays the unchanged prefix of calls (the same nonce), and every call from the first changed prompt on runs live, unchanged prompts included.
+- **What this means for temper:** a value that only later prompts carry (v0.2's `attempt`) reruns those calls and keeps the earlier ones cached. Answers to blocked tasks need only a resume with the updated args, never a regenerated script. See `docs/temper/v0-2/spec.md` §3.7a.

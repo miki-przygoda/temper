@@ -1,8 +1,8 @@
-# temper v0.2 Implementation Plan
+# temper v0.2: plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Every task that edits `skills/*/SKILL.md` also follows **REQUIRED SUB-SKILL: superpowers:writing-skills** (see "Skill edits" below).
+> Written with superpowers:writing-plans plus temper's plan additions (`templates/plan-additions.md`). `args.json` beside this file is generated from it. temper's own workflows run it (see "How the run goes"), and every task that edits a `SKILL.md` also follows **superpowers:writing-skills** (see "Skill edits").
 
-**Goal:** Remove the hand work the first real run's head did: commits left on a detached HEAD, a build rule that missed most agents, no regression check in one-sweep mode, selected minors never fixed, gates that gave up waiting, merges blocked on known flakes. Also redo two reverted v1 fixes.
+**Goal:** Remove the hand work the first real run's head did: commits left on a detached HEAD, a build rule that missed most agents, no regression check in one-sweep mode, selected minors never fixed, gates that gave up waiting, and merges blocked on known flakes. Also redo two reverted v1 fixes.
 
 **Architecture:**
 - **Workflow code.** Prompt text and validation live in `src/lib.js`. The control flow lives in `src/build.js`, `src/stabilise.js` and `src/publish.js`. `scripts/bundle.mjs` bundles them into the committed `workflows/*.js`.
@@ -11,19 +11,21 @@
 
 **Tech Stack:** Node 20+ (`node --test`, no packages), Python 3.9+ stdlib, Markdown skills.
 
-**Spec:** `docs/specs/2026-10-28-temper-v0.2-design.md`. The v1 design is `docs/specs/2026-10-24-temper-design.md`, and the behaviour spec is `docs/v1-behaviour.md`.
+**Spec:** `docs/temper/v0-2/spec.md` (its §8 lists the contracts). The v1 design is `docs/specs/2026-10-24-temper-design.md`.
+
+**Gates** (from `.temper/project.md`):
+- quick: `npm test`
+- full: `npm test && node scripts/bundle.mjs --check && CLAUDE_CONFIG_DIR="$(mktemp -d)" claude plugin validate . --strict`
 
 ## Global Constraints
 
-- **Branches.** Work goes on branches off `v0.2`, with PRs into `v0.2`. Nothing goes to `main` until Task 13's PR, which the owner merges. Merge commits, no squash, no rebase on shared branches, no force pushes.
-- **Commit messages and PR bodies:** no `Co-Authored-By` and no Claude attribution lines.
+- **Branches.** The epic branch is `epic/v0-2`, cut from the branch that holds this plan. Task branches are `temper/v0-2/<id>`. temper's stage 5 opens the PR from `epic/v0-2` into `v0.2`, and the owner merges it. Nothing reaches `main` until the owner's `v0.2` → `main` PR. No force pushes, no squash, no rebase of shared branches.
+- **Commit messages:** no `Co-Authored-By` and no Claude attribution lines.
 - **The public repo.** No host names, IPs, absolute home paths or details of the first run's project. Say "a Rust project" and "the build host".
 - **The build host is off limits:** `sh scripts/ssh_host_smoke.sh --local` only.
 - **Every change to `src/`:** run `node scripts/bundle.mjs`, and commit `src/` and `workflows/` together.
-- **Every task ends with** `npm test` green. Before any PR: `node scripts/bundle.mjs --check` and `claude plugin validate . --strict` (run with `CLAUDE_CONFIG_DIR` set to a temp dir).
 - **Python scripts:** stdlib only, Python 3.9+. **Node tests:** run on Node 20, with no glob in `node --test`.
-- **Behaviour lines.** Each behaviour change adds a line to `docs/v1-behaviour.md` with the id this plan gives it, and a test whose name starts with that id under `test/acceptance/` (or `tests_py/acceptance/`). A text-asserting test is enough for skill, template and docs changes.
-- **Design spec amendments.** Each task that lands a spec section adds its amendment to `docs/specs/2026-10-24-temper-design.md`, numbered in landing order from **A14**. Each amendment is two to four sentences ending "(v0.2 spec §3.x)".
+- **Test names** in `test/acceptance/` start with the behaviour id this plan gives them. Task 11 adds those lines to `docs/v1-behaviour.md`.
 
 ## Skill edits (superpowers:writing-skills, owner's request)
 
@@ -31,7 +33,7 @@ Every task that edits a `SKILL.md` follows these steps, in order:
 1. **RED.**
    - Dispatch 3 fresh subagents (general-purpose, read-only).
    - Give each one the *current* SKILL.md plus the task's **scenario**: the situation the new text must handle, quoted in the task. Ask: "What exactly do you do next? List the commands and what you tell the user."
-   - Record the answers in the PR body. If none of them fails the scenario, the edit isn't needed: drop it and say so in the PR.
+   - Record the answers in the task's commit message. If none of them fails the scenario, the edit isn't needed: drop it and say so in the PR.
 2. **Edit, matching the form to the failure:**
    - **An omitted step** becomes a required item in the list the head already follows.
    - **Behaviour that depends on a condition** is keyed to an observable predicate ("when `commits` has a sha that isn't on the branch, …").
@@ -39,52 +41,28 @@ Every task that edits a `SKILL.md` follows these steps, in order:
    - **Prohibitions** only for a rule the RED run broke under pressure.
    - **No nuance clauses** ("unless it matters").
    - **No new finding-id narrative** in new lines: the id belongs in the commit message.
-3. **GREEN.** Run the same scenario on 3 fresh subagents with the edited skill. All 3 must do the right thing. If they don't, tighten the wording and rerun (refactor). Record the answers in the PR body.
-4. **Description.** When a task touches a skill whose frontmatter `description` summarises what the skill does (run, plan, setup), rewrite it to triggering conditions only, starting "Use when …". Keep every trigger it lists now. `test/skills.test.mjs` gets the test in Task 9.
+3. **GREEN.** Run the same scenario on 3 fresh subagents with the edited skill. All 3 must do the right thing. If they don't, tighten the wording and rerun (refactor). Record the answers in the task's commit message.
+4. **Description.** When a task touches a skill whose frontmatter `description` summarises what the skill does (run, plan, setup), rewrite it to triggering conditions only, starting "Use when …". Keep every trigger it lists now. Each skill task tests its own description.
 5. **Size.** Record `wc -w` before and after in the commit message. New text replaces old text where it supersedes it; don't append a second version of a rule.
 
 ## Review Focus
 
 1. **A v1 `args.json` with no new fields** (no `build_rule`, `flaky`, `sweeps`, `attempt`) is valid, and behaves exactly as v1 did, except for the regression check 3.3 adds. Tasks 1 and 4 test this.
-2. **A resume of `part: "fix"` with every fix already done and `attempt` unchanged** must not replay a cached `null` regression result as "clean". Tasks 0 and 4 cover it: the head bumps `attempt`, and the test asserts the prompts differ.
+2. **A resume of `part: "fix"` with every fix already done and `attempt` unchanged** must not replay a cached `null` regression result as "clean". S7 (spec §3.7a) and Task 4 cover it: the head bumps `attempt`, and the test asserts the prompts differ.
 3. **A build rule or flaky entry holding prompt-like text** ("ignore the rules above") stays inside its data framing, and comes after the host text but before `RULES_COMMON`. Task 2 tests the order.
 4. **An agent that reports a `commit` of `""` or no commit at all** (checkpoint with nothing to commit) is never put into `commits`, so the head doesn't check an empty sha. Task 3 tests it.
 5. **A selected minor finding overnight.** Selection is unchanged, so `minor` stays out of `overnight_fix_default`. Task 5 asserts that the setup skill's line still refuses it.
 
----
-
-### Task 0: Spike S7, the resume cache and run-time reads
-
-Not code. Its result decides the `attempt` mechanism in Task 4, and whether spec §3.7 is built.
-
-**Files:**
-- Modify: `docs/specs/2026-10-28-temper-v0.2-design.md` (new §3.7a)
-- Modify: `notes/spikes.md` (new "S7" section)
-
-- [ ] **Step 1: Ask the owner for the go-ahead to run the spike workflows.** The Workflow tool needs the user's explicit opt-in. These are four or five one-agent runs, in this session.
-- [ ] **Step 2: Run probe A, the run-time reads.** It is an inline Workflow script whose meta is `{name:'s7-probe-a', description:'S7: what a script can read at run time'}`. It returns:
-  - `typeof require`, `typeof process`, `typeof fetch`, `typeof readFileSync`, and `typeof globalThis.Deno`;
-  - the result of `await import('node:fs').then(()=>'ok',e=>String(e))`.
-
-  Record the return value verbatim.
-- [ ] **Step 3: Run probe B, the cache with changed args.** The script makes three agent calls in order, labels `b1`, `b2`, `b3`:
-  - prompts `'Reply with the word one.'`, `` `Reply with the word ${args.x}.` `` and `'Reply with the word three.'`;
-  - schema `{type:'object',properties:{w:{type:'string'}},required:['w']}`.
-
-  Run it with `args {x:'two'}`, then resume it with `resumeFromRunId` and `args {x:'deux'}`. Record which labels came from the cache. The run's journal shows it: cached calls cost no agent turn.
-- [ ] **Step 4: Run probe C, a null result.** Same script as B, but the `b2` prompt is `'Return nothing: end your turn without calling the result tool.'`, with args unchanged. Run it, then resume with identical args. Record whether `b2`'s `null` is replayed or rerun.
-- [ ] **Step 5: Run probe D, the `attempt` counter.** Same as C, but the `b2` prompt ends with `` ` (attempt ${args.attempt})` ``. Resume with `attempt` bumped from 0 to 1. Record whether `b2` and `b3` run live and `b1` is cached.
-- [ ] **Step 6: Write §3.7a and the S7 notes.**
-  - The facts from steps 2–5, verbatim.
-  - The consequence for 3.3: confirm `attempt` as specified, or say what replaces it.
-  - A proposal for item 7, either "build: …" or "defer: …", with one paragraph of reasoning.
-
-  Then ask the owner, with AskUserQuestion, recommendation first, whether to build item 7 in v0.2. Record the answer in §3.7a.
-- [ ] **Step 7: Commit.** `git commit -m "docs(spike): S7, the resume cache and run-time reads"`
 
 ---
 
-### Task 1: New args fields, validated
+### Task 1 `args-fields`: New args fields, validated
+
+Owns: src/lib.js, schemas/args.schema.json, test/lib-core.test.mjs, test/schema-cases.mjs, workflows/build.js, workflows/stabilise.js, workflows/publish.js
+Uses: none
+Provides: args-v02
+Wave: 0
+
 
 **Files:**
 - Modify: `src/lib.js`: `checkCommon` and `validateStabiliseArgs`
@@ -117,12 +95,17 @@ Not code. Its result decides the `attempt` mechanism in Task 4, and whether spec
 
 ---
 
-### Task 2: The build rule and the gate wait reach every agent (spec §3.2, §3.5 prompts)
+### Task 2 `prompts-rule-wait`: The build rule and the gate wait reach every agent (spec §3.2, §3.5 prompts)
+
+Owns: src/lib.js, test/lib-prompts.test.mjs, test/acceptance/build.test.mjs, workflows/build.js, workflows/stabilise.js, workflows/publish.js
+Uses: args-v02
+Provides: with-rules-v02
+Wave: 1
+
 
 **Files:**
 - Modify: `src/lib.js`: `withRules`, plus new `buildRuleText(args)` and `GATE_WAIT`
 - Test: `test/lib-prompts.test.mjs`, `test/acceptance/build.test.mjs`
-- Modify: `docs/v1-behaviour.md`, and the design spec (amendment)
 
 **Interfaces:**
 - Produces `buildRuleText(args) -> string`:
@@ -142,14 +125,17 @@ test('BUILD-32 every agent prompt says a gate waiting for a slot is normal and n
 - [ ] **Step 2: Run them and see them fail.** `node --test test/acceptance/build.test.mjs test/lib-prompts.test.mjs`
 - [ ] **Step 3: Implement** the interfaces above.
 - [ ] **Step 4: Run them and see them pass.** `npm test`
-- [ ] **Step 5: Docs.**
-  - Add BUILD-31 and BUILD-32 to `docs/v1-behaviour.md` under build, in its given/when/then form.
-  - Add an amendment to the design spec: "the project's build rule and the gate wait go into every prompt (v0.2 spec §3.2, §3.5)".
 - [ ] **Step 6: Commit.** Bundle first, then `git commit -m "feat(prompts): the project's build rule and the gate-wait rule in every agent prompt"`
 
 ---
 
-### Task 3: Commits that reach their branch (spec §3.1, workflow side)
+### Task 3 `commits`: Commits that reach their branch (spec §3.1, workflow side)
+
+Owns: src/lib.js, src/build.js, src/stabilise.js, src/publish.js, test/lib-prompts.test.mjs, test/acceptance/build.test.mjs, test/acceptance/stabilise.test.mjs, test/acceptance/publish.test.mjs, workflows/build.js, workflows/stabilise.js, workflows/publish.js
+Uses: with-rules-v02
+Provides: commits-result
+Wave: 2
+
 
 **Files:**
 - Modify: `src/lib.js`: new `commitCheckText(branch)` and `epicWorktreeText(args)`; `implementerPrompt`, `checkerPrompt`, `mergePrompt`, `checkpointPrompt`, `behaviourSpecPrompt`, `acceptancePrompt`, `greenPrompt`, `fixPrompt`, `docsPrompt` and `evidencePrompt`; `CHECKPOINT_SCHEMA` and `GREEN_SCHEMA` gain `commit: STR` (not required); `hostText` for ssh
@@ -182,12 +168,17 @@ test('BUILD-32 every agent prompt says a gate waiting for a slot is normal and n
   - a `const commits = {}` filled as each result comes back;
   - spread into every return after `validate…`. The `invalid` returns stay without it.
 - [ ] **Step 5: Run the tests and see them pass.** `npm test`
-- [ ] **Step 6: Docs.** Add BUILD-28/29/30, STABILISE-22 and PUBLISH-09 to the behaviour spec, and the amendment to the design spec.
 - [ ] **Step 7: Commit.** Bundle, then `git commit -m "feat(git): agents commit on their branch and check it moved; every stage returns its commits"`
 
 ---
 
-### Task 4: One-sweep mode, and a regression check after every fix wave (spec §3.3)
+### Task 4 `regress-sweeps`: One-sweep mode, and a regression check after every fix wave (spec §3.3)
+
+Owns: src/lib.js, src/stabilise.js, test/stabilise-fix.test.mjs, test/acceptance/stabilise.test.mjs, workflows/build.js, workflows/stabilise.js, workflows/publish.js
+Uses: args-v02, commits-result
+Provides: regress-per-fix
+Wave: 3
+
 
 **Files:**
 - Modify: `src/lib.js`: `regressPrompt(fixId, args)` (one fix; was a list)
@@ -222,18 +213,20 @@ test('BUILD-32 every agent prompt says a gate waiting for a slot is normal and n
 
   Keep v1's `lostSecondIds` path, using `regressEach`.
 - [ ] **Step 4: Run them and see them pass.** `npm test`
-- [ ] **Step 5: Docs.**
-  - Add STABILISE-23..27 to the behaviour spec, and the amendment to the design spec.
-  - In design spec §7, "Second sweep and stop", add one line: with `sweeps: 1` the stage stops after the fix wave's regression check.
 - [ ] **Step 6: Commit.** Bundle, then `git commit -m "feat(stabilise): sweeps 1|2 and a per-fix regression check after every fix wave"`
 
 ---
 
-### Task 5: Selected minor findings are fixed (spec §3.4, workflow and docs)
+### Task 5 `fix-minors`: Selected minor findings are fixed (spec §3.4, workflow and docs)
+
+Owns: src/stabilise.js, test/stabilise-fix.test.mjs, test/acceptance/stabilise.test.mjs, workflows/build.js, workflows/stabilise.js, workflows/publish.js
+Uses: regress-per-fix
+Provides: none
+Wave: 4
+
 
 **Files:**
 - Modify: `src/stabilise.js`: remove `selectedMinor`; `toFix = args.selected`
-- Modify: the design spec §7.1 rubric line and `docs/v1-behaviour.md` STABILISE-09
 - Test: `test/acceptance/stabilise.test.mjs`, `test/stabilise-fix.test.mjs`
 
 - [ ] **Step 1: Write the failing tests.**
@@ -242,15 +235,17 @@ test('BUILD-32 every agent prompt says a gate waiting for a slot is normal and n
 - [ ] **Step 2: Run them and see them fail.**
 - [ ] **Step 3: Implement.** `open_items` keeps only the second sweep's non-severe findings.
 - [ ] **Step 4: Run them and see them pass.**
-- [ ] **Step 5: Docs.**
-  - In spec 7.1, the Minor line becomes "Everything else that is real. It goes to the open items unless the user selects it."
-  - STABILISE-09 is edited in place, with "(changed in v0.2, spec §3.4)".
-  - Add the amendment to the design spec.
 - [ ] **Step 6: Commit.** Bundle, then `git commit -m "feat(stabilise): fix every selected finding, minors included"`
 
 ---
 
-### Task 6: Known flaky tests in quick gates (spec §3.6, workflow side)
+### Task 6 `flaky-quick-gates`: Known flaky tests in quick gates (spec §3.6, workflow side)
+
+Owns: src/lib.js, src/build.js, src/stabilise.js, test/lib-prompts.test.mjs, test/acceptance/build.test.mjs, test/acceptance/stabilise.test.mjs, workflows/build.js, workflows/stabilise.js, workflows/publish.js
+Uses: args-v02, with-rules-v02
+Provides: flaky-reruns-result
+Wave: 5
+
 
 **Files:**
 - Modify: `src/lib.js`: new `flakyText(args)` and `const NO_RERUN`; add them to prompts; the `flaky_reruns` schema field
@@ -278,12 +273,17 @@ test('BUILD-32 every agent prompt says a gate waiting for a slot is normal and n
 - [ ] **Step 2: Run them and see them fail.**
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run them and see them pass.** `npm test`
-- [ ] **Step 5: Docs.** Add the behaviour lines and the amendment.
 - [ ] **Step 6: Commit.** Bundle, then `git commit -m "feat(gates): a listed flaky test is rerun once in quick gates, never in the full gate"`
 
 ---
 
-### Task 7: Redo SECOND-CONTROL-FLOW-5, a verifier that returns nothing (spec §3.9)
+### Task 7 `unverified-findings`: Redo SECOND-CONTROL-FLOW-5, a verifier that returns nothing (spec §3.9)
+
+Owns: src/lib.js, src/stabilise.js, test/stabilise-sweep.test.mjs, test/stabilise-fix.test.mjs, test/acceptance/stabilise.test.mjs, workflows/build.js, workflows/stabilise.js, workflows/publish.js
+Uses: regress-per-fix
+Provides: unverified-result
+Wave: 6
+
 
 **Files:**
 - Modify: `src/lib.js`: new `dedupeAgainst(list, kept)`
@@ -311,14 +311,17 @@ test('BUILD-32 every agent prompt says a gate waiting for a slot is normal and n
 - [ ] **Step 2: Run them and see them fail.**
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run them and see them pass.** `npm test`
-- [ ] **Step 5: Docs.**
-  - Add the behaviour line and the amendment.
-  - In `docs/v1-log.md`, under "Reopened by the reverts", add a line saying v0.2 redid SECOND-CONTROL-FLOW-5, with its commit.
 - [ ] **Step 6: Commit.** Bundle, then `git commit -m "fix(stabilise): a verifier that returns nothing leaves its finding unverified, deduped against verified ones (SECOND-CONTROL-FLOW-5, redo)"`
 
 ---
 
-### Task 8: Redo SECOND-TESTS-DOCS-2 and SECOND-CONTROL-FLOW-7, the second sweep's ids (spec §3.9)
+### Task 8 `second-namespace`: Redo SECOND-TESTS-DOCS-2 and SECOND-CONTROL-FLOW-7, the second sweep's ids (spec §3.9)
+
+Owns: src/lib.js, src/stabilise.js, test/stabilise-fix.test.mjs, test/acceptance/stabilise.test.mjs, test/acceptance/git-safety.test.mjs, workflows/build.js, workflows/stabilise.js, workflows/publish.js
+Uses: unverified-result
+Provides: second-namespace
+Wave: 7
+
 
 **Files:**
 - Modify: `src/lib.js`: `const SECOND_PREFIX = 'second:'` and `isSecondId(id)`; `reviewPrompt` drops its `second-` prefix
@@ -340,18 +343,23 @@ test('BUILD-32 every agent prompt says a gate waiting for a slot is normal and n
 - [ ] **Step 2: Run them and see them fail.**
 - [ ] **Step 3: Implement**, following ec33aad (`git show ec33aad`) plus the legacy rule.
 - [ ] **Step 4: Run them and see them pass.** `npm test`
-- [ ] **Step 5: Docs.** Add the behaviour line, the amendment, and the `docs/v1-log.md` line, as in Task 7.
 - [ ] **Step 6: Commit.** Bundle, then `git commit -m "fix(stabilise): second-sweep ids in their own second: namespace; legacy trailers still count (SECOND-TESTS-DOCS-2, SECOND-CONTROL-FLOW-7, redo)"`
 
 ---
 
-### Task 9: The run skill (spec §3.1, §3.3, §3.4, §3.5, §3.6, §3.9, the head's side)
+### Task 9 `run-skill`: The run skill (spec §3.1, §3.3, §3.4, §3.5, §3.6, §3.9, the head's side)
 
-Follows **Skill edits**.
+Owns: skills/run/SKILL.md, test/run-skill-v02.test.mjs, test/skills.test.mjs, test/acceptance/skills-packaging.test.mjs
+Uses: none
+Provides: none
+Wave: 0
+
+
+Follows **Skill edits**. Run by the head's skill-edit workflow (see "How the run goes"), not by `build.js`: its agents have no Agent tool for the RED and GREEN subagents.
 
 **Files:**
 - Modify: `skills/run/SKILL.md`
-- Test: `test/skills.test.mjs` (descriptions), `test/acceptance/skills-packaging.test.mjs`
+- Test: `test/run-skill-v02.test.mjs` (new), `test/skills.test.mjs` (descriptions), `test/acceptance/skills-packaging.test.mjs` (existing assertions the edit changes)
 
 **Interfaces:**
 - Consumes: the `commits`, `flaky_reruns`, `unverified` and `second_sweep: null` results from Tasks 3, 4, 6 and 7; the args from Task 1.
@@ -386,9 +394,15 @@ Follows **Skill edits**.
 
 ---
 
-### Task 10: Project settings, the plan and setup skills, and the gate-slots guidance (spec §3.2, §3.5, §3.6)
+### Task 10 `project-skills`: Project settings, the plan and setup skills, and the gate-slots guidance (spec §3.2, §3.5, §3.6)
 
-Follows **Skill edits**.
+Owns: skills/plan/SKILL.md, skills/setup/SKILL.md, templates/project.md, templates/gate-slots.md, templates/plan-additions.md, test/templates.test.mjs, test/project-skills-v02.test.mjs, test/skills.test.mjs, test/acceptance/skills-packaging.test.mjs
+Uses: none
+Provides: none
+Wave: 1
+
+
+Follows **Skill edits**. Run by the head's skill-edit workflow (see "How the run goes"), not by `build.js`: its agents have no Agent tool for the RED and GREEN subagents.
 
 **Files:**
 - Modify: `templates/project.md`: new keys `sweeps: 2`, `gate_slots:`, `flaky:`, each with a one-line comment; new section `## Build rule` with an HTML comment explaining it
@@ -411,54 +425,67 @@ Follows **Skill edits**.
   - The descriptions of plan and setup start with `Use when`.
 - [ ] **Step 3: Write the templates and edit the skills.**
 - [ ] **Step 4: GREEN.** Rerun G–I with the edits, until all pass. Then `npm test`.
-- [ ] **Step 5: Docs.** Add the behaviour lines (SKILLS-PACKAGING-30, STATE-22: "project.md holds sweeps, gate_slots, flaky and the Build rule section").
 - [ ] **Step 6: Commit**, with `wc -w` in the message: `git commit -m "feat(project): build rule, flaky list, sweeps and gate slots; generic gate-slot guidance"`
 
 ---
 
-### Task 11: README and the session limit (spec §3.8, §3.10)
+### Task 11 `docs-v02`: README, design-spec amendments, behaviour lines and the version (spec §3.4 rubric, §3.7a, §3.8, §3.10)
 
-**Files:**
-- Modify: `README.md`: "Overnight runs" (the session limit, spec §3.8), "Known issues" (rewritten to what is still open), "The stages" (sweeps)
-- Test: `test/acceptance/skills-packaging.test.mjs`
+Owns: README.md, docs/specs/2026-10-24-temper-design.md, docs/v1-log.md, docs/v1-behaviour.md, .claude-plugin/plugin.json, test/readme-v02.test.mjs
+Uses: none
+Provides: none
+Wave: 0
 
-- [ ] **Step 1: Write the failing test.** `the README's known issues list only what v0.2 left open`:
-  - it no longer mentions "detached HEAD", "build rule" or "never fixed by the fix part";
-  - it does mention the head's session ending the run, and CONTROL-FLOW-6.
-- [ ] **Step 2: Run it and see it fail.**
-- [ ] **Step 3: Edit the README.** "Overnight runs" gets 2–3 sentences saying every agent belongs to the head's session, and that running the head on the build host would need Claude Code installed and logged in there.
-- [ ] **Step 4: Run it and see it pass.** `npm test`
-- [ ] **Step 5: Commit.** `git commit -m "docs(readme): v0.2's known issues and the session limit"`
+Docs only; it describes what the other tasks build, from the spec.
 
----
+- [ ] **Step 1: Write the failing tests** in `test/readme-v02.test.mjs`:
+  - `the README's known issues list only what v0.2 left open`:
+    - no "detached HEAD", "build rule" or "never fixed by the fix part";
+    - it does name the head's session ending the run, and CONTROL-FLOW-6;
+    - it has the one-line note on changing answers with `args` and `resumeFromRunId`.
+  - `plugin.json and the README say 0.2.0`.
+  - `the design spec has amendments A14 to A21, each citing a v0.2 spec section`: a regex over `### A1[4-9]|### A2[01]` (or list items, matching the A13 style), each with `v0.2 spec §3.`.
+  - `docs/v1-behaviour.md has the v0.2 ids`: BUILD-28 to BUILD-34, STABILISE-22 to STABILISE-30, PUBLISH-09, STATE-22, SKILLS-PACKAGING-29 to SKILLS-PACKAGING-31, and the edited STABILISE-09 marked "(changed in v0.2, spec §3.4)".
+- [ ] **Step 2: Run them and see them fail.** `node --test test/readme-v02.test.mjs`
+- [ ] **Step 3: Write the docs.**
+  - **README:**
+    - "Overnight runs": 2–3 sentences on the session limit (spec §3.8).
+    - "Known issues": rewritten to what is still open.
+    - "The stages": one line on `sweeps`.
+    - The status line: v0.2.0.
+  - **`.claude-plugin/plugin.json`:** `"version": "0.2.0"`.
+  - **Design spec:** amendments A14–A21, one per spec section §3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.9, plus §3.7a (S7). Each is 2–4 sentences ending "(v0.2 spec §3.x)". The spec 7.1 Minor line becomes "Everything else that is real. It goes to the open items unless the user selects it."; §7 gets the one-sweep line.
+  - **`docs/v1-behaviour.md`:** one given/when/then line per id above, written from the spec and the test names in Tasks 2–10.
+  - **`docs/v1-log.md`,** under "Reopened by the reverts": "SECOND-CONTROL-FLOW-5, SECOND-TESTS-DOCS-2 and SECOND-CONTROL-FLOW-7 are redone in v0.2 (docs/temper/v0-2/spec.md §3.9)."
+- [ ] **Step 4: Run them and see them pass.** `npm test`
+- [ ] **Step 5: Commit.** `git commit -m "docs: v0.2 amendments, behaviour lines, known issues and version 0.2.0"`
 
-### Task 12: Item 7, only if the owner said yes in Task 0
+## Waves
 
-**Files:** as the §3.7a proposal names them.
+| Wave | Tasks | Why |
+|---|---|---|
+| 0 | args-fields, run-skill, docs-v02 | the args contract; the run skill and the docs need only the spec's contracts |
+| 1 | prompts-rule-wait, project-skills | `withRules` builds on the args; the project skills are separate files |
+| 2 | commits | the prompts again (`lib.js`), then all three bodies |
+| 3 | regress-sweeps | `stabilise.js`; uses `commits` |
+| 4 | fix-minors | `stabilise.js` |
+| 5 | flaky-quick-gates | `lib.js` and two bodies |
+| 6 | unverified-findings | `stabilise.js` and `lib.js` |
+| 7 | second-namespace | `stabilise.js` and `lib.js` |
 
-- [ ] **Step 1:** Write the plan steps for §3.7a's approved proposal, in this plan's format (failing test, implement, pass, behaviour line, amendment, commit). Add them here before starting.
-- [ ] **Step 2:** Run them.
+The code tasks share `src/lib.js`, `src/stabilise.js` and the generated `workflows/*.js`, so they go one per wave. At most 3 tasks gate at once, which this Mac takes easily (A13).
 
----
+## Behaviour groups
 
-### Task 13: Release
+- `commits`: commits reach their branch, and every stage reports its commits (spec §3.1)
+- `prompts`: the build rule, the gate wait and the flaky list reach the right agents (spec §3.2, §3.5, §3.6)
+- `stabilise`: one-sweep mode, the per-fix regression check, selected minors, unverified findings and second-sweep ids (spec §3.3, §3.4, §3.9)
+- `head`: the run, plan and setup skills and the project template carry the head's side (spec §3.1–§3.6, head side)
 
-- [ ] **Step 1: The version.** Set `"version": "0.2.0"` in `.claude-plugin/plugin.json`, and change "v0.1.0" to "v0.2.0" in the README's status line.
-- [ ] **Step 2: The full verification.** Run:
-  - `npm test`;
-  - `node scripts/bundle.mjs --check`;
-  - `CLAUDE_CONFIG_DIR=$(mktemp -d) claude plugin validate . --strict`;
-  - `sh scripts/install_smoke.sh`.
+## How the run goes (temper's own method)
 
-  Expected: all exit 0. Record the counts.
-- [ ] **Step 3: The PR.** Open a PR from `v0.2` to `main` listing the changes, the amendments, the test counts and what is still open. Tell the owner it changes behaviour, so they can merge in a gap between the main account's runs.
-
----
-
-## After the tasks (temper's own method)
-
-1. **Behaviour check.** A fresh agent reads only the v0.2 spec and the new behaviour lines (BUILD-28..34, STABILISE-09 and 22..30, PUBLISH-09, STATE-22, SKILLS-PACKAGING-29..31). It lists any spec requirement with no line, or any line the spec doesn't support.
-2. **One sweep, before Task 13.** Three reviewers (security; failure paths and lifecycle; test strength and docs) review `git diff main...v0.2`. Each finding is adversarially verified. The owner selects the fixes.
-3. **One fix wave.** Each fix gets a failing test first, and its own commit.
-4. **Regression check.** One agent per fix, each trying to prove what its fix broke. A proven regression is reverted, with a redo note in `docs/v1-log.md`.
-5. **Stop.** Then Task 13.
+The head (this session) follows `skills/run/SKILL.md`:
+- **The runner.** It launches temper's committed v0.1.0 workflows from a scratch copy (`git show <v0.1.0>:workflows/build.js`), so the run doesn't change under itself.
+- **Skill tasks.** `run-skill` and `project-skills` run first, in a skill-edit workflow: RED subagents → implementer → checker (temper's checker prompt) → GREEN subagents, one retry. Their task branches carry the same `Temper-Task` trailers, and a merge agent merges them into `epic/v0-2` with the quick gate. Then `done_tasks.py` lists them in `done`, and `build.js` skips them.
+- **The build.** `build.js` runs the waves, the MVP checkpoint (spec §7's user flows), the behaviour spec (`docs/temper/v0-2/behaviour.md`, from the spec only), the acceptance tests per group, and at most 2 to-green rounds.
+- **Stage 4:** one sweep, with the fixes the owner selects, then the regression check over the fix wave. Stage 5 publishes, and the head opens the PR into `v0.2` once the owner says yes. Then stop.
