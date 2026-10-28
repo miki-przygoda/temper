@@ -72,6 +72,16 @@ test('a task id that is a phase id is refused, so its trailer never skips that p
   assert.deepEqual(lib.validateBuildArgs(ok), []);
 });
 
+test('a task id of epic is refused, so its worktree never takes the shared epic worktree path (spec 3.1)', () => {
+  const args = goodArgs();
+  args.tasks[0].id = 'epic';
+  const errors = lib.validateBuildArgs(args);
+  assert.ok(hasError(errors, 'task id epic is reserved for the shared epic worktree'), errors.join('\n'));
+  const ok = goodArgs();
+  ok.tasks[0].id = 'epic-notes';
+  assert.deepEqual(lib.validateBuildArgs(ok), []);
+});
+
 test('a duplicate id, a missing full gate and an ssh host without a name are each refused', () => {
   const dup = goodArgs();
   dup.tasks[1].id = 'a';
