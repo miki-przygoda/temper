@@ -129,3 +129,5 @@
 ## 29 Oct 2026: stage 5 (head)
 
 - **The runner.** v0.2's `publish.js` at 132b895 (after the sha fix).
+- **The publish result.** wf_fdfd62fa-d92 returned `ready`, with the full gate green (exit 0). docs is at 3aeb69e and evidence at 0394a31; both are on the branch.
+- **The head's edit.** The docs agent ended `pr-body.md` with a Claude Code attribution line, which the owner's rules forbid, so the head removed it. Nothing else in the branch has attribution. The head reran `npm test` after the edit before pushing.

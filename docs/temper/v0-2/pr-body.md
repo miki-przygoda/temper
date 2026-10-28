@@ -56,5 +56,3 @@ From `docs/temper/v0-2/log.md`, not fixed in this PR:
   - CONTROL-FLOW-6 and TESTS-DOCS-5 are not redone.
   - The private fetch refs under `refs/temper/host/` are never pruned.
   - A run stops when the head's session closes.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
