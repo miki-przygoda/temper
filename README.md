@@ -93,6 +93,8 @@ claude plugin validate . --strict     # the plugin manifest, skills and hooks
 sh scripts/install_smoke.sh           # install into a throwaway config (needs network)
 ```
 
+CI (`.github/workflows/ci.yml`) runs the bundle check and `npm test` on every PR and push to `main`, on Node 20 with Python 3.9 and on Node 24 with Python 3.13.
+
 Run them with `CLAUDE_CONFIG_DIR` set to a temporary directory, so nothing touches your own config. `scripts/install_smoke.sh` makes its own: it adds this checkout as a local marketplace in a temporary `CLAUDE_CONFIG_DIR`, installs superpowers and then temper, checks that `temper@temper` is enabled, and deletes the directory either way.
 
 ## Known issues
