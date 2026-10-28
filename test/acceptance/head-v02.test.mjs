@@ -124,7 +124,7 @@ test('HEAD-10 run checks every commits sha with git merge-base --is-ancestor', (
   assert.match(STAGE4, /`commits`: check them as in stage 3/);
   assert.match(STAGE5, /When the result has `commits`, check them as in stage 3/);
   // spec 8 (security-01): the values are hex shas; anything else was left out and blocked.
-  assert.match(STAGE3, /Each value is a hex sha \(`\/\^\[0-9a-f\]\{7,40\}\$\/`\)/);
+  assert.match(STAGE3, /Each value is a hex sha \(`\/\^\[0-9a-f\]\{7,64\}\$\/`\)/);
   assert.match(STAGE3, /`commit is not a sha`/);
 });
 

@@ -424,7 +424,54 @@ test('COMMITS-13 a reported commit that is not a hex sha is left out of commits 
       assert.equal(p.result.status, 'blocked', `publish ${id} ${bad}: ${JSON.stringify(p.result)}`);
       assert.deepEqual(p.result.blocked, [{ id, reason: 'commit is not a sha' }], bad);
       assert.deepEqual(p.result.commits, id === 'docs' ? {} : { docs: 'd0c50001' }, bad);
-      for (const v of Object.values(p.result.commits)) assert.match(v, /^[0-9a-f]{7,40}$/);
+      for (const v of Object.values(p.result.commits)) assert.match(v, /^[0-9a-f]{7,64}$/);
     }
+  }
+});
+
+// Owner's decision (spec 8, regress-security-01): the pattern is /^[0-9a-f]{7,64}$/, so a SHA-256 sha
+// (64 hex) goes into commits like a SHA-1 one; an uppercase sha, a 6-character one or a 65-character
+// one is not a sha and blocks its id.
+const SHA256 = 'f'.repeat(24) + '0123456789abcdef0123456789abcdef01234567';
+const NOT_SHAS_BY_FORM = ['ABCDEF12', SHA256.toUpperCase(), 'abcdef', 'a'.repeat(65)];
+
+test('COMMITS-13 a 64-character SHA-256 sha goes into commits in build, stabilise and publish', async () => {
+  assert.equal(SHA256.length, 64);
+  const b = await runBuild(buildArgs(), {
+    checkpoint: { gate_passed: true, gate_log: 'full.log', flows: [], gaps: [], commit: SHA256 },
+  });
+  assert.equal(b.result.commits.checkpoint, SHA256, JSON.stringify(b.result));
+  assert.ok(!(b.result.blocked || []).some((x) => x.id === 'checkpoint'), JSON.stringify(b.result));
+
+  const s = await runWorkflow('workflows/stabilise.js', { args: stabiliseFixArgs(), respond: stabiliseResponder({ f1: SHA256, f2: 'f2f2f2f2' }) });
+  assert.deepEqual(s.result.commits, { 'fix:f1': SHA256, 'fix:f2': 'f2f2f2f2' }, JSON.stringify(s.result));
+  assert.ok(s.result.fixed.includes('f1'));
+
+  const p = await runWorkflow('workflows/publish.js', {
+    args: publishArgs(),
+    respond: (q) => (q.label === 'evidence' ? { ...publishResponder(q), commit: SHA256 } : publishResponder(q)),
+  });
+  assert.deepEqual(p.result.commits, { docs: 'd0c50001', evidence: SHA256 }, JSON.stringify(p.result));
+});
+
+test('COMMITS-13 an uppercase, 6-character or 65-character sha is left out of commits and blocked', async () => {
+  for (const bad of NOT_SHAS_BY_FORM) {
+    const cp = await runBuild(buildArgs(), {
+      checkpoint: { gate_passed: true, gate_log: 'full.log', flows: [], gaps: [], commit: bad },
+    });
+    assert.equal(cp.result.status, 'blocked', bad);
+    assert.deepEqual(cp.result.blocked, [{ id: 'checkpoint', reason: 'commit is not a sha' }], bad);
+    assert.deepEqual(cp.result.commits, {}, bad);
+
+    const s = await runWorkflow('workflows/stabilise.js', { args: stabiliseFixArgs(), respond: stabiliseResponder({ f1: bad, f2: 'f2f2f2f2' }) });
+    assert.deepEqual(s.result.commits, { 'fix:f2': 'f2f2f2f2' }, bad);
+    assert.deepEqual(s.result.blocked, [{ id: 'f1', reason: 'commit is not a sha' }], bad);
+
+    const p = await runWorkflow('workflows/publish.js', {
+      args: publishArgs(),
+      respond: (q) => (q.label === 'evidence' ? { ...publishResponder(q), commit: bad } : publishResponder(q)),
+    });
+    assert.deepEqual(p.result.blocked, [{ id: 'evidence', reason: 'commit is not a sha' }], bad);
+    assert.deepEqual(p.result.commits, { docs: 'd0c50001' }, bad);
   }
 });

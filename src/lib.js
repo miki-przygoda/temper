@@ -615,9 +615,9 @@ function epicWorktreeText(args) {
   return lines.join(' ');
 }
 
-// spec 8 (owner, security-01): the head runs git on every sha an agent reports, so only a hex sha
-// counts as one; any other text is agent data and never reaches a command.
-const SHA_RE = /^[0-9a-f]{7,40}$/;
+// spec 8 (owner, security-01, regress-security-01): the head runs git on every sha an agent reports, so only a hex sha
+// counts as one (7-64 lowercase hex: SHA-1 and SHA-256); any other text is agent data and never reaches a command.
+const SHA_RE = /^[0-9a-f]{7,64}$/;
 const isSha = (v) => typeof v === 'string' && SHA_RE.test(v);
 const NOT_A_SHA = 'commit is not a sha';
 

