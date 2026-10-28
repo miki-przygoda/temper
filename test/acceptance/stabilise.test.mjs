@@ -682,3 +682,39 @@ test("a blocked fix's answer reaches only its own fix prompt on resume, and the 
     }
   });
 });
+
+// ---- v0.2: commits that reach their branch (spec §3.1) ----
+
+test('STABILISE-22 part fix returns commits for each fix', async () => {
+  const f1 = finding('f1', 'critical');
+  const f2 = finding('f2', 'important');
+  const f3 = finding('f3', 'important');
+  const s1 = finding('second-security-01', 'severe');
+  const { result } = await runWorkflow(WF, {
+    args: fixArgs({ selected: [f1, f2, f3] }),
+    respond: responder({
+      second: { security: [s1] },
+      fixes: { f3: { status: 'blocked', commit: '', note: 'needs the owner' } },
+    }),
+  });
+  // f3 blocked with no commit: the run stops before the second sweep.
+  assert.deepEqual(result.commits, { 'fix:f1': 'sha-f1', 'fix:f2': 'sha-f2' });
+
+  const second = await runWorkflow(WF, {
+    args: fixArgs({ selected: [f1, f2], lenses: ['security'] }),
+    respond: responder({ second: { security: [s1] } }),
+  });
+  assert.equal(second.result.status, 'handover');
+  assert.deepEqual(second.result.commits, {
+    'fix:f1': 'sha-f1',
+    'fix:f2': 'sha-f2',
+    'fix:second-security-01': 'sha-second-security-01',
+  });
+
+  // The sweep part returns no commits; a refused args.json returns none either.
+  const sweep = await runWorkflow(WF, { args: args(), respond: responder() });
+  assert.ok(!('commits' in sweep.result));
+  const invalid = await runWorkflow(WF, { args: fixArgs({ selected: [] }), respond: responder() });
+  assert.equal(invalid.result.status, 'invalid');
+  assert.ok(!('commits' in invalid.result));
+});

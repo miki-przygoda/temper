@@ -349,3 +349,34 @@ test('PUBLISH-08 an open PR is never merged by temper', async () => {
   assert.match(read('README.md'), /^- temper never merges\.$/m);
   assert.match(read('templates/preferences.md'), /It never merges\./);
 });
+
+// ---- v0.2: commits that reach their branch (spec §3.1) ----
+
+test('PUBLISH-09 publish returns commits for docs and evidence', async () => {
+  const respond = (over = {}) => ({ label }) => {
+    if (Object.prototype.hasOwnProperty.call(over, label)) return over[label];
+    if (label === 'docs') return { commit: 'sha-docs', files: ['README.md'], summary: 'docs' };
+    if (label === 'evidence') return { script: 's.sh', checklist: 'c.md', commit: 'sha-ev' };
+    if (label === 'gate') return { passed: true, exit_status: 0, log_path: 'full.log' };
+    throw new Error(`unexpected label ${label}`);
+  };
+  const ready = await runWorkflow(WF, { args: args('/r'), respond: respond() });
+  assert.equal(ready.result.status, 'ready');
+  assert.deepEqual(ready.result.commits, { docs: 'sha-docs', evidence: 'sha-ev' });
+
+  // Every result after validation carries it, the failing ones too; an empty sha never goes in.
+  const failed = await runWorkflow(WF, {
+    args: args('/r'),
+    respond: respond({ evidence: { script: 's.sh', checklist: 'c.md', commit: '' }, gate: { passed: false, exit_status: 1, log_path: 'l' } }),
+  });
+  assert.equal(failed.result.status, 'gate_failed');
+  assert.deepEqual(failed.result.commits, { docs: 'sha-docs' });
+  const blocked = await runWorkflow(WF, { args: args('/r'), respond: respond({ evidence: null }) });
+  assert.equal(blocked.result.status, 'blocked');
+  assert.deepEqual(blocked.result.commits, { docs: 'sha-docs' });
+  const resumed = await runWorkflow(WF, { args: args('/r', { done: ['docs'] }), respond: respond() });
+  assert.deepEqual(resumed.result.commits, { evidence: 'sha-ev' });
+  const invalid = await runWorkflow(WF, { args: args('/r', { spec: '' }), respond: respond() });
+  assert.equal(invalid.result.status, 'invalid');
+  assert.ok(!('commits' in invalid.result));
+});
