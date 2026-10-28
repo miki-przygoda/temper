@@ -585,10 +585,11 @@ test('SKILLS-PACKAGING-21 each answer goes to args.answers for its own task, and
   for (const c of calls) if (c !== cli && !c.opts.label.endsWith(':cli')) assert.ok(!c.prompt.includes(answer), `${c.opts.label} doesn't see it`);
 });
 
-test('SKILLS-PACKAGING-22 the overnight pre-flight checks auto mode, autoContinueAtUsageLimit, the statusline, limits.json and wakeups, and says the session must stay open', (t) => {
+test('SKILLS-PACKAGING-22 the overnight pre-flight checks auto mode, reports the optional autoContinueAtUsageLimit, checks the statusline, limits.json and wakeups, and says the session must stay open', (t) => {
   const pre = flat(section(SKILL.run, '### Pre-flight', '### Wakeups'));
   assert.match(pre, /\*\*Auto mode is on\.\*\*/);
-  assert.match(pre, /\*\*`autoContinueAtUsageLimit` is on\*\*/);
+  assert.match(pre, /\*\*`autoContinueAtUsageLimit` is optional\.\*\* Report whether it is on/);
+  assert.match(pre, /don't hold the launch because it is off/);
   assert.match(pre, /\*\*The statusline is installed\*\*, it wraps any statusline the user had, and `limits\.json` is fresh: `install_statusline\.py status` reports `installed: true` and `limits_age_s` under about 600/);
   assert.match(pre, /\*\*Wakeups are approved:\*\* `wakeups_approved: yes`/);
   assert.match(pre, /Tell the user this session must stay open all night/);
