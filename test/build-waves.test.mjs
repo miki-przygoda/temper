@@ -60,6 +60,14 @@ test('invalid args return status invalid and call no agent', async () => {
   assert.equal(calls.length, 0);
 });
 
+test('a task id of epic is refused before any agent, so impl:epic never gets the shared epic worktree path (spec 3.1)', async () => {
+  const epicTask = { ...taskA, id: 'epic' };
+  const { result, calls } = await runWorkflow(WF, { args: buildArgs({ tasks: [epicTask] }), respond: responder() });
+  assert.equal(result.status, 'invalid');
+  assert.ok(result.errors.some((e) => e.includes('task id epic is reserved for the shared epic worktree')), result.errors.join('\n'));
+  assert.equal(calls.length, 0);
+});
+
 test('two waves run implement, check and merge in order', async () => {
   const { result, calls } = await runWorkflow(WF, { args: buildArgs(), respond: responder() });
   assert.deepEqual(labels(calls).slice(0, 8), [
