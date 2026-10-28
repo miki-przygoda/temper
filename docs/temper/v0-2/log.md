@@ -99,3 +99,11 @@
 - **The owner's decision.** Hex shas only. Spec §8 is amended: a value that isn't a sha is left out and blocked with `commit is not a sha`. This should also close security-02.
 - **The head's check at 3e30e75.** `npm test`: 436/436 Node and 107/107 Python; the bundle check exits 0. Every fix commit is on the branch, and no added line names the old example host.
 - **The resume.** It continues with the same `selected`, `done` refreshed, `attempt: 1` (so the regression check runs again over every fix) and `answers["security-01"]`.
+
+## 29 Oct 2026: the fix wave's regression check (head)
+
+- **The resume.** It returned `handover`. security-01 was fixed in 06739d8 and test-strength-and-docs-01 in 1da789a.
+- **The proven regression.** The per-fix regression agent reproduced it with a real SHA-256 repo. 06739d8 also tightened `shaOf()`, which builds the checker's tip check, from `/^[0-9a-f]{4,64}$/i` to `SHA_RE = /^[0-9a-f]{7,40}$/`, so 64-character and uppercase shas read as "no sha reported" and every task fails its check. The cause is the head's `{7,40}` recommendation, which left out SHA-256. The other 10 regression agents found nothing.
+- **The owner's decision.** A forward fix, as with the stale-private-ref fix in v0.1: one pattern, `/^[0-9a-f]{7,64}$/`, for `commits` and the checker. Spec §8 is amended.
+  - It runs as the selected finding `regress-security-01` (critical), with `attempt: 2`, so every fix's regression check runs again.
+  - Then the stage stops: no further sweep.
