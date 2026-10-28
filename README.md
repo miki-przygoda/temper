@@ -8,7 +8,14 @@ It exists because repeated review-and-fix sweeps don't converge: fixes create ne
 
 Every hand-off is a file, so any stage can start from a file a person wrote. Finished work is read from `Temper-Task` commit trailers, so a run survives blocked questions and usage-limit resets without redoing anything.
 
-Status: v0.1.0. The design is `docs/specs/2026-10-24-temper-design.md` and the build plan is `docs/plans/2026-10-24-temper-v1.md`.
+Status: v0.1.0, early. It has done one real job: a 29-task epic in a Rust project, built on an ssh build host from plan to a merged PR. What that run turned up and what is still open is under [Known issues](#known-issues). The design is `docs/specs/2026-10-24-temper-design.md` and the build plan is `docs/plans/2026-10-24-temper-v1.md`.
+
+## Requirements
+
+- Claude Code with saved workflows (the Workflow tool), and auto mode for overnight runs.
+- The superpowers plugin (below).
+- Node 20 or later and Python 3.9 or later, for its scripts; no npm or pip packages.
+- git. A build host over ssh is optional: without one, everything runs locally.
 
 ## Install
 
@@ -20,7 +27,7 @@ claude plugin marketplace add miki-przygoda/temper
 claude plugin install temper@temper
 ```
 
-The repo is private for now, so the marketplace add works through your own git credentials. Then restart Claude Code and run `/temper:setup`.
+Then restart Claude Code and run `/temper:setup`.
 
 ## The stages
 
@@ -58,7 +65,7 @@ To change a preference, ask Claude to change it ("temper may push without asking
 
 An overnight run goes on while you sleep, through usage-limit resets. Before it starts, the head checks:
 - **auto mode** is on (temper's prompt hook warns when it isn't);
-- **`autoContinueAtUsageLimit`** is on in your settings;
+- **`autoContinueAtUsageLimit`**, if you want it. It's optional: on, the session carries on by itself after a usage-limit reset; off, the run waits at the limit until the next scheduled check-in resumes it;
 - **the statusline** is installed and `limits.json` is fresh. temper's statusline writes the reset times to `limits.json` and wraps any statusline you already had, so yours still shows. Setup asks before installing it;
 - **wakeups** are approved in your preferences. The head schedules a check-in 2 minutes after each five-hour reset, resumes the run and answers what it can.
 
@@ -87,3 +94,20 @@ sh scripts/install_smoke.sh           # install into a throwaway config (needs n
 ```
 
 Run them with `CLAUDE_CONFIG_DIR` set to a temporary directory, so nothing touches your own config. `scripts/install_smoke.sh` makes its own: it adds this checkout as a local marketplace in a temporary `CLAUDE_CONFIG_DIR`, installs superpowers and then temper, checks that `temper@temper` is enabled, and deletes the directory either way.
+
+## Known issues
+
+From the first real run (`docs/v1-log.md` has the detail and the redo notes):
+- Agents can leave a commit on a detached HEAD without moving their branch; the head has to rescue it.
+- Acceptance and checkpoint agents don't get the project's build rule, so they may build into their own `./target`.
+- One-sweep mode skips the regression check of the fix wave.
+- Minor findings you select are never fixed by the fix part; they go to the open items.
+- Gates run one at a time behind one lock, and a checker that can't get it in time stops with "not finished". A project can run several gates at once in its own gate scripts.
+- The merge agent blocks on any red gate, including tests known to flake.
+- Changing an answer or the done list means regenerating the launched script and starting a new run.
+- A run stops when the head's Claude Code session closes.
+- Four review fixes were reverted after their regression checks (CONTROL-FLOW-5 and 6, TESTS-DOCS-2 and 5), and some minors are open; each has a redo note in `docs/v1-log.md`.
+
+## Licence
+
+MIT, see `LICENSE`.

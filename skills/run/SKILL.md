@@ -154,7 +154,7 @@ Update the epic's `Status` in `epics.md` at every stage change: `building`, `sta
 
 Before an overnight launch, check and report each:
 - **Auto mode is on.** Skills can't read the mode; temper's prompt hook says when the session isn't in auto mode. If it did, ask the user to switch.
-- **`autoContinueAtUsageLimit` is on** in the user's Claude settings.
+- **`autoContinueAtUsageLimit` is optional.** Report whether it is on in the user's Claude settings. On, the session carries on by itself after a usage-limit reset; off, the run waits at the limit until the next scheduled check-in resumes it. Never turn it on for the user, and don't hold the launch because it is off.
 - **The statusline is installed**, it wraps any statusline the user had, and `limits.json` is fresh: `install_statusline.py status` reports `installed: true` and `limits_age_s` under about 600.
 - **Wakeups are approved:** `wakeups_approved: yes`.
 - **The plan was reviewed**, unless `overnight_without_plan_review` is `yes`.
