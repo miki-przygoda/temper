@@ -1,0 +1,36 @@
+# The tests on the oldest supported Node and Python (the README's requirements) and on current ones,
+# plus the check that workflows/*.js is bundled from src/.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - node: '20'
+            python: '3.9'
+          - node: '24'
+            python: '3.13'
+    name: node ${{ matrix.node }}, python ${{ matrix.python }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: bundle is up to date
+        run: node scripts/bundle.mjs --check
+      - name: npm test
+        run: npm test
