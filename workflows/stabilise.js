@@ -363,16 +363,25 @@ function sortFindings(fs) {
     .map((x) => x.f);
 }
 
+// Two findings are the same bug when file, line and summary (case and outer spaces aside) match.
+const dedupeKey = (f) => `${f.file}:${f.line}:${String(f.summary ?? '').toLowerCase().trim()}`;
+
 function dedupeFindings(fs) {
   const seen = new Set();
   const out = [];
   for (const f of fs) {
-    const key = `${f.file}:${f.line}:${String(f.summary ?? '').toLowerCase().trim()}`;
+    const key = dedupeKey(f);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(f);
   }
   return out;
+}
+
+// The entries of `list` that are not already in `kept`, by dedupeFindings' key (spec 3.9).
+function dedupeAgainst(list, kept) {
+  const seen = new Set(kept.map(dedupeKey));
+  return list.filter((f) => !seen.has(dedupeKey(f)));
 }
 
 function lensesOr(lenses) {
@@ -895,9 +904,13 @@ function gatePrompt(args) {
 // fixes with a regression check per fix, the stop.
 
 // One sweep: a review per lens, then a verify per finding. Keeps the findings the verifier
-// reproduced, with the verifier's severity, merged and ordered. A verdict of real:false or
-// null (the agent died or was skipped) counts as refuted. A review that returns nothing leaves its
-// lens unreviewed: it is blocked ("agent returned nothing"), never a lens with no findings.
+// reproduced, with the verifier's severity, merged and ordered. A verdict of real:false counts as
+// refuted. A verify that returns nothing (the agent died or was skipped) leaves its finding
+// unverified (spec 3.9): kept with the reviewer's severity and marked `unverified: true`, never
+// refuted or fixed. The unverified list is deduped within itself and against the verified one, so a
+// bug that one lens's verifier reproduced is listed once, verified. An unverified finding above minor
+// is blocked ("agent returned nothing"). A review that returns nothing leaves its lens unreviewed: it
+// is blocked ("agent returned nothing"), never a lens with no findings.
 // A finding needs an input and the wrong result it produces (spec 7 4a.1); one without is not accepted.
 const hasInputAndWrongResult = (f) => !!f
   && typeof f.input === 'string' && f.input.trim() !== ''
@@ -930,6 +943,7 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
     },
   );
   const kept = [];
+  const raw = [];
   const blocked = [];
   let refuted = 0;
   for (const [i, lensResult] of perLens.entries()) {
@@ -941,14 +955,23 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
       blocked.push({ id: `${labelPrefix}review:${lenses[i]}`, reason: 'a finding id did not match ID_RE; that finding was not verified' });
     }
     for (const { finding, verdict } of lensResult.pairs) {
-      if (!verdict || verdict.real !== true) {
+      if (!verdict) {
+        raw.push(finding);
+        continue;
+      }
+      if (verdict.real !== true) {
         refuted += 1;
         continue;
       }
       kept.push({ ...finding, severity: verdict.severity ?? finding.severity });
     }
   }
-  return { findings: sortFindings(dedupeFindings(kept)), refuted, blocked };
+  const findings = sortFindings(dedupeFindings(kept));
+  const unverified = sortFindings(dedupeAgainst(dedupeFindings(raw), findings)).map((f) => ({ ...f, unverified: true }));
+  for (const f of unverified) {
+    if (f.severity !== 'minor') blocked.push({ id: `${labelPrefix}verify:${f.id}`, reason: 'agent returned nothing' });
+  }
+  return { findings, refuted, blocked, unverified };
 }
 
 const errors = validateStabiliseArgs(args);
@@ -956,8 +979,8 @@ if (errors.length > 0) return { status: 'invalid', errors };
 
 if (args.part === 'sweep') {
   phase('Sweep');
-  const { findings, refuted, blocked } = await sweepAndVerify(lensesOr(args.lenses), [], '');
-  return { status: 'list', findings, refuted, blocked };
+  const { findings, refuted, blocked, unverified } = await sweepAndVerify(lensesOr(args.lenses), [], '');
+  return { status: 'list', findings, unverified, refuted, blocked };
 }
 
 // part 'fix' (4b): careful fixes one at a time in severity order, one more sweep, then the stop.
@@ -1078,15 +1101,24 @@ if (sweepsOf(args) === 1 || (savedSecond && savedSecond.length === 0 && args.swe
 }
 
 // Saved findings stand in for the sweep; their done severe fixes still get the regression check below.
+// Unverified ones are saved with them, marked, and stay unverified on resume (spec 3.9): never fixed,
+// and one above minor still blocks, so the result can't be stable.
 let secondFindings;
+let unverified;
 let unreviewed = false;
 if (savedSecond) {
-  secondFindings = sortFindings(savedSecond);
+  secondFindings = sortFindings(savedSecond.filter((f) => f.unverified !== true));
+  unverified = sortFindings(savedSecond.filter((f) => f.unverified === true));
+  const unclean = unverified.filter((f) => f.severity !== 'minor');
+  out.blocked.push(...unclean.map((f) => ({ id: `second:verify:${f.id}`, reason: 'agent returned nothing' })));
+  unreviewed = unclean.length > 0;
 } else {
   const alreadyFixed = [...doneIds(toFix), ...out.fixed];
   const second = await sweepAndVerify(lensesOr(args.lenses), alreadyFixed, 'second:');
   secondFindings = second.findings;
-  // A lens the second sweep never reviewed means the stage is not done: hand over, never 'stable'.
+  unverified = second.unverified;
+  // A lens the second sweep never reviewed, or an unverified finding above minor, means the stage is
+  // not done: hand over, never 'stable'.
   out.blocked.push(...second.blocked);
   unreviewed = second.blocked.length > 0;
 }
@@ -1109,9 +1141,10 @@ return {
   reverted: out.reverted,
   contract_items: out.contract_items,
   blocked: out.blocked,
-  open_items: others,
+  open_items: [...others, ...unverified],
   second_sweep: { severe: severe.length, others: others.length },
-  second_sweep_findings: secondFindings,
+  second_sweep_findings: [...secondFindings, ...unverified],
+  unverified,
   regressions,
   commits: out.commits,
   flaky_reruns: out.flaky_reruns,

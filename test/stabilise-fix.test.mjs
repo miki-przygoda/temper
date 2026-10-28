@@ -271,3 +271,60 @@ test('a regression check that finds a regression or returns nothing stops before
     }
   }
 });
+
+test('an unverified second-sweep finding above minor makes the result handover, and is saved marked', async () => {
+  for (const severity of ['severe', 'critical', 'important', 'minor']) {
+    const u = finding('u1', severity, { line: 60 });
+    const base = responder({ second: [u] });
+    const respond = (q) => (q.label === 'second:verify:u1' ? null : base(q));
+    const { result, calls } = await runWorkflow(WF, { args: fixArgs(), respond });
+    assert.ok(!labels(calls).includes('fix:u1'), `${severity}: an unverified finding went to a fix agent`);
+    assert.equal(result.status, severity === 'minor' ? 'stable' : 'handover', severity);
+    assert.deepEqual(
+      result.blocked,
+      severity === 'minor' ? [] : [{ id: 'second:verify:u1', reason: 'agent returned nothing' }],
+      severity,
+    );
+    assert.deepEqual(result.second_sweep_findings.map((f) => [f.id, f.unverified]), [['u1', true]], severity);
+    assert.deepEqual(result.unverified.map((f) => f.id), ['u1'], severity);
+    assert.ok(result.open_items.some((f) => f.id === 'u1' && f.unverified === true), `${severity}: not in the open items`);
+    assert.deepEqual(result.second_sweep, { severe: 0, others: 0 }, severity);
+  }
+});
+
+test('an unverified second-sweep finding that duplicates a verified one is listed once, verified', async () => {
+  const v = finding('v1', 'important', { line: 61, summary: 'Same Bug' });
+  const u = finding('u1', 'important', { line: 61, summary: 'same bug', lens: 'failure paths and lifecycle' });
+  const base = responder({ second: [v] });
+  const respond = (q) => {
+    if (q.label === 'second:review:failure paths and lifecycle') return { findings: [u] };
+    if (q.label === 'second:verify:u1') return null;
+    return base(q);
+  };
+  const { result } = await runWorkflow(WF, { args: fixArgs(), respond });
+  assert.equal(result.status, 'stable');
+  assert.deepEqual(result.blocked, []);
+  assert.deepEqual(result.second_sweep_findings.map((f) => f.id), ['v1']);
+  assert.deepEqual(result.unverified, []);
+});
+
+test('a saved unverified finding is never fixed on resume', async () => {
+  for (const severity of ['severe', 'important', 'minor']) {
+    const u = { ...finding('u1', severity, { line: 62 }), unverified: true };
+    const { result, calls } = await runWorkflow(WF, {
+      args: fixArgs({ done: ['fix:f1', 'fix:f2'], second_sweep_findings: [u] }),
+      respond: responder(),
+    });
+    assert.ok(!labels(calls).includes('fix:u1'), `${severity}: a saved unverified finding was fixed`);
+    assert.ok(!labels(calls).some((l) => l.startsWith('second:review:')), `${severity}: swept again`);
+    assert.equal(result.status, severity === 'minor' ? 'stable' : 'handover', severity);
+    assert.deepEqual(
+      result.blocked,
+      severity === 'minor' ? [] : [{ id: 'second:verify:u1', reason: 'agent returned nothing' }],
+      severity,
+    );
+    assert.deepEqual(result.second_sweep_findings.map((f) => [f.id, f.unverified]), [['u1', true]], severity);
+    assert.deepEqual(result.unverified.map((f) => f.id), ['u1'], severity);
+    assert.deepEqual(result.second_sweep, { severe: 0, others: 0 }, severity);
+  }
+});
