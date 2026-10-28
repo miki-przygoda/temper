@@ -446,7 +446,7 @@ test('STABILISE-17 nothing severe in the second sweep: the stage is done and the
   assert.deepEqual(result.open_items.map((f) => f.id).sort(), ['second:security-01', 'second:security-02']);
   const ls = labels(calls);
   assert.ok(!ls.includes('fix:second:security-01') && !ls.includes('fix:second:security-02'));
-  assert.ok(!ls.some((l) => l.startsWith('regress:fix:second-')), 'no second-sweep regression check');
+  assert.ok(!ls.some((l) => l.startsWith('regress:fix:second:')), 'no second-sweep regression check');
   assert.match(STAGE4, /`open_items`: append them to the open items in `log\.md`/);
   assert.match(STAGE4, /`status: "stable"`: go to stage 5/);
 });
