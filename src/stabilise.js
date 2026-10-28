@@ -87,6 +87,8 @@ async function fixLoop(findings, out) {
     const r = await agent(fixPrompt(f, args), { label: `fix:${f.id}`, phase: 'Fix', schema: FIX_SCHEMA });
     // spec 3.1: the sha each fix agent reported, never an empty one.
     if (r && isNonEmptyString(r.commit)) out.commits[`fix:${f.id}`] = r.commit;
+    // spec 3.6: the listed flaky tests it reran once and saw pass.
+    out.flaky_reruns.push(...flakyRerunsOf(`fix:${f.id}`, r));
     if (!r) out.blocked.push({ id: f.id, reason: 'agent returned nothing' });
     else if (r.status === 'fixed') { out.fixed.push(f.id); handled.push(f.id); }
     else if (r.status === 'reverted') out.reverted.push(f.id);
@@ -99,7 +101,7 @@ async function fixLoop(findings, out) {
 // Ids whose fix:<id> trailer is already on the branch (fixed in an earlier run).
 const doneIds = (findings) => findings.filter((f) => args.done.includes(`fix:${f.id}`)).map((f) => f.id);
 
-const out = { fixed: [], reverted: [], contract_items: [], blocked: [], commits: {} };
+const out = { fixed: [], reverted: [], contract_items: [], blocked: [], commits: {}, flaky_reruns: [] };
 
 // spec 3.4: every selected finding is fixed, whatever its severity; fixLoop's severity order puts
 // minors last. Only the second sweep's non-severe findings, which nobody selected, go to the open items.
@@ -145,6 +147,7 @@ if (out.blocked.length > 0 || firstRegressions.length > 0) {
     open_items: [],
     regressions: firstRegressions,
     commits: out.commits,
+    flaky_reruns: out.flaky_reruns,
   };
 }
 
@@ -162,6 +165,7 @@ if (lostSecondIds.length > 0) {
     open_items: [],
     regressions: r.regressions,
     commits: out.commits,
+    flaky_reruns: out.flaky_reruns,
   };
 }
 
@@ -178,6 +182,7 @@ if (sweepsOf(args) === 1 || (savedSecond && savedSecond.length === 0 && args.swe
     second_sweep: null,
     regressions: [],
     commits: out.commits,
+    flaky_reruns: out.flaky_reruns,
   };
 }
 
@@ -218,4 +223,5 @@ return {
   second_sweep_findings: secondFindings,
   regressions,
   commits: out.commits,
+  flaky_reruns: out.flaky_reruns,
 };
