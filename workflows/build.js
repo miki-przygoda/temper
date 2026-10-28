@@ -367,16 +367,25 @@ function sortFindings(fs) {
     .map((x) => x.f);
 }
 
+// Two findings are the same bug when file, line and summary (case and outer spaces aside) match.
+const dedupeKey = (f) => `${f.file}:${f.line}:${String(f.summary ?? '').toLowerCase().trim()}`;
+
 function dedupeFindings(fs) {
   const seen = new Set();
   const out = [];
   for (const f of fs) {
-    const key = `${f.file}:${f.line}:${String(f.summary ?? '').toLowerCase().trim()}`;
+    const key = dedupeKey(f);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(f);
   }
   return out;
+}
+
+// The entries of `list` that are not already in `kept`, by dedupeFindings' key (spec 3.9).
+function dedupeAgainst(list, kept) {
+  const seen = new Set(kept.map(dedupeKey));
+  return list.filter((f) => !seen.has(dedupeKey(f)));
 }
 
 function lensesOr(lenses) {

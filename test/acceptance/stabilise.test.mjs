@@ -1,4 +1,4 @@
-// Acceptance tests for the stabilise group (docs/v1-behaviour.md, STABILISE-01..28).
+// Acceptance tests for the stabilise group (docs/v1-behaviour.md, STABILISE-01..29).
 // They drive the bundled workflows/stabilise.js through the harness with scripted agents, the way the
 // head launches it (args from args.json and .temper/project.md, per skills/run/SKILL.md), and read the
 // skills and templates for what the head does with the result. A test that fails because of the
@@ -858,4 +858,47 @@ test('STABILISE-28 stabilise collects flaky_reruns from fix agents', async () =>
   const clean = await runWorkflow(WF, { args: fixArgs({ selected: [f1], sweeps: 1 }), respond: responder() });
   assert.equal(clean.result.status, 'stable');
   assert.deepEqual(clean.result.flaky_reruns, []);
+});
+
+// ---- v0.2: a verifier that returns nothing (spec §3.9, SECOND-CONTROL-FLOW-5 redo) ----
+
+test('STABILISE-29 a verify that returns nothing leaves its finding unverified, deduped against verified ones, and blocks above minor', async () => {
+  // First sweep: a bug two lenses report, verified by one and not the other, is listed once as verified
+  // (REGRESS-STAB-1); a lone unverified important finding is returned marked and blocks as verify:<id>.
+  const a = finding('a1', 'important', { summary: 'Same Bug' });
+  const b = finding('b1', 'important', { line: a.line, summary: 'same bug ', lens: 'failure paths and lifecycle' });
+  const u = finding('u1', 'important');
+  const m = finding('m1', 'minor');
+  const sweep = await runWorkflow(WF, {
+    args: args(),
+    respond: responder({
+      reviews: { security: [a, u, m], 'failure paths and lifecycle': [b] },
+      verdicts: { b1: null, u1: null, m1: null },
+    }),
+  });
+  assert.equal(sweep.result.status, 'list');
+  assert.equal(sweep.result.refuted, 0);
+  assert.deepEqual(sweep.result.findings.map((f) => f.id), ['a1']);
+  assert.deepEqual(sweep.result.unverified.map((f) => [f.id, f.unverified]), [['u1', true], ['m1', true]]);
+  assert.deepEqual(sweep.result.blocked, [{ id: 'verify:u1', reason: 'agent returned nothing' }]);
+
+  // Second sweep: an unverified important finding is never fixed, keeps the result from stable, and is
+  // saved marked; a resume with the saved findings keeps it unverified and unfixed.
+  const s = finding('s1', 'critical');
+  const fix = await runWorkflow(WF, {
+    args: fixArgs({ selected: [finding('f1', 'critical')] }),
+    respond: responder({ second: { security: [s] }, verdicts: { s1: null } }),
+  });
+  assert.equal(fix.result.status, 'handover');
+  assert.ok(!labels(fix.calls).includes('fix:s1'));
+  assert.deepEqual(fix.result.blocked, [{ id: 'second:verify:s1', reason: 'agent returned nothing' }]);
+  assert.deepEqual(fix.result.second_sweep_findings.map((f) => [f.id, f.unverified]), [['s1', true]]);
+
+  const resumed = await runWorkflow(WF, {
+    args: fixArgs({ selected: [finding('f1', 'critical')], done: ['fix:f1'], second_sweep_findings: fix.result.second_sweep_findings }),
+    respond: responder(),
+  });
+  assert.equal(resumed.result.status, 'handover');
+  assert.ok(!labels(resumed.calls).some((l) => l === 'fix:s1' || l.startsWith('second:review:')));
+  assert.deepEqual(resumed.result.second_sweep_findings.map((f) => [f.id, f.unverified]), [['s1', true]]);
 });
