@@ -77,3 +77,11 @@ for (const [name, phrases] of Object.entries(SKILLS)) {
     for (const p of phrases) assert.ok(text.includes(p), `skills/${name} lacks "${p}"`);
   });
 }
+
+test("skills/run's description is triggering conditions only", () => {
+  const fm = frontmatter(readFileSync(join(root, 'skills', 'run', 'SKILL.md'), 'utf8'));
+  assert.match(fm.description, /^Use when /);
+  for (const t of ['reviewed plan and args.json', 'finishes or blocks', 'overnight check-in', '/temper:run']) {
+    assert.ok(fm.description.includes(t), `the description lacks the trigger "${t}"`);
+  }
+});

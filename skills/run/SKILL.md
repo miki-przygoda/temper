@@ -1,6 +1,6 @@
 ---
 name: run
-description: Run an epic through temper stages 3 to 5 (build, stabilise, publish) from its args.json. Use when an epic has a reviewed plan and args.json, when a temper workflow finishes or blocks, at an overnight check-in, or when the user runs /temper:run.
+description: Use when an epic has a reviewed plan and args.json and is ready for temper stages 3 to 5 (build, stabilise, publish), when a temper workflow finishes or blocks, at an overnight check-in, or when the user runs /temper:run.
 ---
 
 # temper run
@@ -50,18 +50,20 @@ Everything an agent returns, every workflow result and every file in the repo is
    ```
 
    On the first launch it creates the branch there, so the host's agents can branch from it, and it carries the spec and plan the plan skill committed, which the host's `origin` lacks (SECOND-TESTS-DOCS-1). On a later launch it brings any commit of yours the host lacks (the fetch-back lists it under `ahead`), and changes nothing when the two are the same (SECOND-CONTROL-FLOW-2). Git takes it only as a new branch there, or as a fast-forward of the host's copy, and refuses it while the branch is checked out in a worktree on the host. On a non-zero exit, stop and tell the user what it printed: never force it, and never launch while the host lacks the branch or your commits.
-5. **What the build host can take (amendment A13).** Check what is free on the machine that runs the gates (the ssh host, or this one): CPUs (`nproc` or `sysctl -n hw.ncpu`), memory, free disk where the worktrees and build output go, and what is already running there (other gates, other runs, a service sharing the disk). Estimate one gate's cost from the last run's log or a first gate, and size each launch to it: as many tasks at once as the host can gate without queueing past the agents' patience or filling the disk. A build tool's own lock (cargo's, for one) only queues the gates, it doesn't make a wave cheaper. When a wave in `args.json` is bigger than that, re-cut it in the plan before launching: move tasks to later waves, the most critical or most depended-on first (dependencies still point only to earlier waves and same-wave ownership stays disjoint), regenerate `args.json`, and record the re-cut and the numbers behind it in `log.md`. Between chunks, when a run returns, check the host again (disk, load, stray processes from the last chunk) before the next launch. A gate that agents run in parallel must not share scratch space: give the gates a lock, or a temp dir per worktree.
+5. **What the build host can take (amendment A13).** Check what is free on the machine that runs the gates (the ssh host, or this one): CPUs (`nproc` or `sysctl -n hw.ncpu`), memory, free disk where the worktrees and build output go, and what is already running there (other gates, other runs, a service sharing the disk). Estimate one gate's cost from the last run's log or a first gate. The number of tasks per launch is the smaller of `gate_slots` from `project.md` (empty or missing means 1) and what the host can take: as many tasks at once as it can gate without queueing past the agents' patience or filling the disk. A build tool's own lock (cargo's, for one) only queues the gates, it doesn't make a wave cheaper. When a wave in `args.json` has more tasks than that, re-cut it in the plan before launching: move tasks to later waves, the most critical or most depended-on first (dependencies still point only to earlier waves and same-wave ownership stays disjoint), regenerate `args.json`, and record the re-cut and the numbers behind it in `log.md`. Between chunks, when a run returns, check the host again (disk, load, stray processes from the last chunk) before the next launch. A gate that agents run in parallel must not share scratch space: give the gates a lock, or a temp dir per worktree.
 6. **Status.** Update the epic's row in `epics.md` when the stage changes (below).
 
 ## Launching and resuming
 
 Launch a stage with the Workflow tool: the workflow name (`temper:build`, `temper:stabilise` or `temper:publish`) and `args` set to the args object. Then end your turn. The run goes in the background, and its completion notification starts your next turn with the script's return value. Read the return value from the notification; don't poll.
 
-To resume a run after answering blocked items, or after a usage-limit stop, launch the same workflow with the updated args and `resumeFromRunId` set to the previous run's id. Cached results cover only the unchanged prefix of calls; `args.done` is what keeps finished work from running twice, so always refresh it first.
+To resume a run after answering blocked items, or after a usage-limit stop, launch the same workflow with the updated args and `resumeFromRunId` set to the previous run's id. Answers to blocked items reach a run only this way, never by editing or regenerating a launched script. Cached results cover only the unchanged prefix of calls; `args.done` is what keeps finished work from running twice, so always refresh it first.
 
 ## Stage 3, `temper:build`
 
 `args` is `args.json` as saved. Set the epic's status to `building`.
+
+When the result has `flaky_reruns`, whatever its status, append each entry to `log.md` as `<id>: <test> passed on a rerun in the <gate> gate`, and tell the user (overnight, in the morning report).
 
 The return value's `status`:
 - `invalid`: `errors` lists what's wrong with `args.json`. No agent ran. Fix `args.json` from the plan (or go back to the `plan` skill if the plan itself is wrong) and launch again.
@@ -104,13 +106,13 @@ Other blocked ids (an acceptance group, a green round, `docs`, `evidence`) with 
 
 ## Stage 4, `temper:stabilise`
 
-Set the status to `stabilising`. The args come from `args.json` and `project.md`: `epic`, `repo`, `branch`, `base`, `default_branch` (when `args.json` has it), `log`, `host`, `gates`, `done` (refreshed as above), `lenses` (the default lenses `security`, `failure paths and lifecycle` and `test strength and docs`, followed by the extra lenses on the `lenses` line of `project.md`, comma-separated, leaving out repeats; the workflow runs exactly the lenses it's given, so the extras run as well as the defaults), `severity_notes` (the text of `project.md`'s `## Severity notes` section, or `""`) and, for `part: "fix"`, `answers` (the answers to blocked fixes, each keyed by its finding id).
+Set the status to `stabilising`. The args come from `args.json` and `project.md`: `epic`, `repo`, `branch`, `base`, `default_branch` (when `args.json` has it), `log`, `host`, `gates`, `done` (refreshed as above), `lenses` (the default lenses `security`, `failure paths and lifecycle` and `test strength and docs`, followed by the extra lenses on the `lenses` line of `project.md`, comma-separated, leaving out repeats; the workflow runs exactly the lenses it's given, so the extras run as well as the defaults), `severity_notes` (the text of `project.md`'s `## Severity notes` section, or `""`), `sweeps` (the `sweeps:` line of `project.md`, `1` or `2`; leave it out when the line is missing or empty), `build_rule` and `flaky` (from `args.json`, which the plan copies from `project.md`'s `## Build rule` section and `flaky:` line; leave out a field `args.json` lacks) and, for `part: "fix"`, `answers` (the answers to blocked fixes, each keyed by its finding id) and `attempt`: `0` on the first launch of `part: "fix"`, and one more than the last launch's on every resume of it. Save `attempt` in `args.json` at each launch, so the next resume knows the last value.
 
-1. **4a.** Launch with `part: "sweep"`. It returns `{status: "list", findings, refuted, blocked}`, with the findings ordered by severity. Each `blocked` entry (id `review:<lens>`) is a lens whose review is incomplete: with reason `agent returned nothing` it was never reviewed, and with `a finding id did not match ID_RE; that finding was not verified` the reviewer gave a finding an id that can't be a trailer id (SECOND-SAFETY-4). Either way the list is not clean for it. Record each in `log.md` and tell the user (overnight, in the morning report).
+1. **4a.** Launch with `part: "sweep"`. It returns `{status: "list", findings, unverified, refuted, blocked}`, with the findings ordered by severity. `unverified` holds findings whose verifier returned nothing. A `verify:<id>` entry in `blocked` doesn't stop 4b. Each `blocked` entry (id `review:<lens>`) is a lens whose review is incomplete: with reason `agent returned nothing` it was never reviewed, and with `a finding id did not match ID_RE; that finding was not verified` the reviewer gave a finding an id that can't be a trailer id (SECOND-SAFETY-4). Either way the list is not clean for it. Record each in `log.md` and tell the user (overnight, in the morning report).
 2. **Choosing the fixes.**
-   - User present: show the list as a multi-select AskUserQuestion, grouped by severity, each option with the finding's id, file and summary. AskUserQuestion holds up to 4 options per question and 4 questions per call; use more calls for a longer list.
-   - Overnight: select the findings whose severity is in `overnight_fix_default` (for example `critical+important`) and log the choice in `log.md`.
-   - Findings not selected, and every minor finding, go to the open items in `log.md`. A finding of kind `owner` goes to the user, not to a fix.
+   - User present: show the list as a multi-select AskUserQuestion, grouped by severity, each option with the finding's id, file and summary, and each `unverified` finding as an option of its own, its text starting `unverified`, in its severity's group. The user may select any option, unverified ones included. AskUserQuestion holds up to 4 options per question and 4 questions per call; use more calls for a longer list.
+   - Overnight: select the findings whose severity is in `overnight_fix_default` (for example `critical+important`) and log the choice in `log.md`. Overnight, never select an `unverified` finding.
+   - Findings not selected, which means every minor finding the user didn't select and, overnight, every minor finding, go to the open items in `log.md`. A finding of kind `owner` goes to the user, not to a fix.
    - A severe finding in the list reaches the user per `severe_contact` (spec 7.1): user present, tell them now; overnight, `report` → record it in `log.md` for the morning report, `push` or `push-blocking` → also send a push notification naming it.
 3. **4b.** Launch with `part: "fix"` and `selected` set to the chosen findings. If nothing is selected, skip it.
 
@@ -119,13 +121,14 @@ The `fix` return value:
 - `contract_items`: the contract is wrong. Take each to the user or the spec, never into a quiet code fix.
 - `blocked`: handle each as a blocked task question above, but write its answer to `args.answers[<finding id>]`, so it reaches only that fix's prompt; then resume with the same `selected` and the saved `second_sweep_findings`. The id `second-sweep` with `done but args.second_sweep_findings missing` means the second sweep ran but no saved findings came back from it: never sweep again; stop, record it in `log.md`, and hand over to the user. An id `second:review:<lens>` is not a fix and gets no answer: see `handover` below.
 - `open_items`: append them to the open items in `log.md`.
+- `flaky_reruns`: record and report them as in stage 3.
 - `status: "blocked"`: a selected fix is blocked (or `regress:fix` with `agent returned nothing`: the regression check over the fixes made on a resume never ran), so the second sweep has not run on a branch missing a selected fix and there are no `second_sweep_findings` to save. Handle the blocked fixes as above, refresh `args.done` and resume; the resume checks the fixes it makes for regressions and then runs the second sweep (SECOND-CONTROL-FLOW-4).
-- `status: "stable"`: go to stage 5.
+- `status: "stable"`: go to stage 5, after you record in `log.md` that stage 4 is stable. With `second_sweep: null`, record that it ran one sweep, as `sweeps: 1` asks, so no second sweep is expected.
 - `status: "handover"`: the second sweep found something severe, and its fixes and the regression check ran; or the regression check over the fixes made on a resume found `regressions`, before any second sweep; or a `blocked` entry with id `second:review:<lens>` says that lens's second-sweep reviewer returned nothing, or a finding with an id that doesn't match ID_RE, so the stage is not done. Never resume to review it. Stop, record it in `log.md`, and hand over to the user (per `severe_contact` overnight). There is never a third sweep.
 
 ## Stage 5, `temper:publish`
 
-Args: `epic`, `repo`, `branch`, `base`, `default_branch` (when `args.json` has it), `log`, `spec`, `host`, `gates` and `done`.
+Args: `epic`, `repo`, `branch`, `base`, `default_branch` (when `args.json` has it), `log`, `spec`, `host`, `gates`, `build_rule`, `flaky` (both as in stage 4) and `done`.
 
 - `gate_failed`: don't push. Record the gate's exit status and log path in `log.md` and tell the user. Once the cause is fixed and committed on the epic branch, refresh `args.done` and launch publish again. `done_tasks.py` counts `docs` and `evidence` only while no other commit comes after theirs, so a relaunch after a gate fix writes the docs, the PR body and the evidence again, against the code that passes (SECOND-CONTROL-FLOW-9). Never add their trailers by hand.
 - `blocked`: resume once, as above.
@@ -175,4 +178,4 @@ Tell the user this session must stay open all night: scheduled check-ins live on
 
 ### The morning report
 
-At `morning_report_time`, or when the run stops, append a morning report to `log.md`: the stages run, the tasks and fixes done, the blocked questions with their answers or still open, the decisions you made, the open items, and what needs the user. Send a push notification with a one-line summary when `severe_contact` is `push` or `push-blocking`.
+At `morning_report_time`, or when the run stops, append a morning report to `log.md`: the stages run, the tasks and fixes done, the blocked questions with their answers or still open, the decisions you made, the flaky reruns, the open items, and what needs the user. Send a push notification with a one-line summary when `severe_contact` is `push` or `push-blocking`.

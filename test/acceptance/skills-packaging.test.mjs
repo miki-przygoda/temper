@@ -678,3 +678,9 @@ test('SKILLS-PACKAGING-27 every stage change updates the epic\'s status in epics
   const all = Object.values(SKILL).map(flat).join('\n');
   assert.match(all, /(set|update|record)[^.]*status[^.]*(to|as) `merged`|`merged`[^.]*in `epics\.md`/i, 'no skill records the merged status');
 });
+
+test('SKILLS-PACKAGING-31 the A13 step bounds gates at once by gate_slots', () => {
+  const step = flat(section(SKILL.run, '5. **What the build host can take', '6. **Status.**'));
+  assert.match(step, /The number of tasks per launch is the smaller of `gate_slots` from `project\.md` \(empty or missing means 1\) and what the host can take/);
+  assert.match(step, /When a wave in `args\.json` has more tasks than that, re-cut it/);
+});
