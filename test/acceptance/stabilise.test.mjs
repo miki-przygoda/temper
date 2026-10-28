@@ -1,4 +1,4 @@
-// Acceptance tests for the stabilise group (docs/v1-behaviour.md, STABILISE-01..27).
+// Acceptance tests for the stabilise group (docs/v1-behaviour.md, STABILISE-01..28).
 // They drive the bundled workflows/stabilise.js through the harness with scripted agents, the way the
 // head launches it (args from args.json and .temper/project.md, per skills/run/SKILL.md), and read the
 // skills and templates for what the head does with the result. A test that fails because of the
@@ -833,4 +833,29 @@ test('STABILISE-27 second_sweep_findings [] with no sweeps behaves as one sweep,
   assert.deepEqual(regressLabels(calls), ['regress:fix:f1', 'regress:fix:f2']);
   assert.ok(!labels(calls).some((l) => l.startsWith('second:')), labels(calls).join(', '));
   assert.equal(result.second_sweep, null);
+});
+
+// ---- v0.2: known flaky tests in quick gates (spec §3.6) ----
+
+test('STABILISE-28 stabilise collects flaky_reruns from fix agents', async () => {
+  const f1 = finding('f1', 'critical');
+  const f2 = finding('f2', 'important');
+  const { result } = await runWorkflow(WF, {
+    args: fixArgs({ selected: [f1, f2], sweeps: 1, flaky: ['t::a', 't::b'] }),
+    respond: responder({
+      fixes: {
+        f1: { status: 'fixed', commit: 'sha-f1', note: 'done', flaky_reruns: [{ test: 't::a', gate: 'quick' }] },
+        f2: { status: 'blocked', note: 'needs the owner', flaky_reruns: [{ test: 't::b', gate: 'acceptance' }] },
+      },
+    }),
+  });
+  assert.equal(result.status, 'blocked');
+  assert.deepEqual(result.flaky_reruns, [
+    { id: 'fix:f1', test: 't::a', gate: 'quick' },
+    { id: 'fix:f2', test: 't::b', gate: 'acceptance' },
+  ]);
+
+  const clean = await runWorkflow(WF, { args: fixArgs({ selected: [f1], sweeps: 1 }), respond: responder() });
+  assert.equal(clean.result.status, 'stable');
+  assert.deepEqual(clean.result.flaky_reruns, []);
 });

@@ -11,6 +11,13 @@ function recordCommit(id, result) {
   if (result && isNonEmptyString(result.commit)) commits[id] = result.commit;
 }
 
+// spec 3.6: [{id, test, gate}], every listed flaky test an agent reran once and saw pass. Like
+// commits, it goes on every result after validation.
+const flaky_reruns = [];
+function recordReruns(id, result) {
+  flaky_reruns.push(...flakyRerunsOf(id, result));
+}
+
 function blockedEntry(id, reason) {
   return { id, reason };
 }
@@ -24,13 +31,17 @@ function implBlocked(task, impl) {
   return null;
 }
 
-function implement(task, retryReport) {
+async function implement(task, retryReport) {
   const label = retryReport === undefined ? `impl:${task.id}` : `retry:${task.id}`;
-  return agent(implementerPrompt(task, args, retryReport), { schema: IMPL_SCHEMA, label, phase: 'Waves' });
+  const r = await agent(implementerPrompt(task, args, retryReport), { schema: IMPL_SCHEMA, label, phase: 'Waves' });
+  recordReruns(label, r);
+  return r;
 }
 
-function check(task, impl, label) {
-  return agent(checkerPrompt(task, impl, args), { schema: CHECK_SCHEMA, label, phase: 'Waves' });
+async function check(task, impl, label) {
+  const r = await agent(checkerPrompt(task, impl, args), { schema: CHECK_SCHEMA, label, phase: 'Waves' });
+  recordReruns(label, r);
+  return r;
 }
 
 function problemsOf(result) {
@@ -99,11 +110,12 @@ async function runWaves(doneNow) {
     if (passed.length > 0) {
       const id = `merge:wave${wave}`;
       const merge = await agent(mergePrompt(passed, args), { schema: MERGE_SCHEMA, label: id, phase: 'Waves' });
+      recordReruns(id, merge);
       const mergeIssue = mergeBlocked(id, merge);
       if (mergeIssue) blocked.push(mergeIssue);
       else doneNow.push(...passed.map((t) => t.id));
     }
-    if (blocked.length > 0) return { status: 'blocked', wave, blocked, done_now: doneNow, commits };
+    if (blocked.length > 0) return { status: 'blocked', wave, blocked, done_now: doneNow, commits, flaky_reruns };
   }
   return null;
 }
@@ -117,7 +129,7 @@ const isDone = (id) => args.done.includes(id);
 const arr = (v) => (Array.isArray(v) ? v : []);
 
 function phaseBlocked(id, reason, doneNow) {
-  return { status: 'blocked', blocked: [blockedEntry(id, reason)], done_now: doneNow, commits };
+  return { status: 'blocked', blocked: [blockedEntry(id, reason)], done_now: doneNow, commits, flaky_reruns };
 }
 
 // Returns {blocked} or {checkpoint}; checkpoint is null when it was done in an earlier run.
@@ -190,6 +202,7 @@ async function runGreen(failing, markedToo, doneNow) {
     const g = await agent(greenPrompt(left, r, args, markedToo), { schema: GREEN_SCHEMA, label: id, phase: 'Green' });
     if (g === null || g === undefined) return { blocked: phaseBlocked(id, NOTHING, doneNow) };
     recordCommit(id, g);
+    recordReruns(id, g);
     markedToo = false;
     out.rounds = r;
     out.fixed.push(...arr(g.fixed));
@@ -233,4 +246,5 @@ return {
   blocked: [],
   done_now,
   commits,
+  flaky_reruns,
 };

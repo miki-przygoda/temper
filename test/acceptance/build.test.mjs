@@ -1,4 +1,4 @@
-// Acceptance tests for the build group (docs/v1-behaviour.md, BUILD-01..27).
+// Acceptance tests for the build group (docs/v1-behaviour.md, BUILD-01..34).
 // They drive the bundled workflows/build.js through the harness with scripted agents, the way the
 // head launches it with args.json. A test that fails because of the product is skipped with
 // "acceptance-failing: <id>".
@@ -834,4 +834,60 @@ test('BUILD-30 build returns commits: the sha each phase reported, never an empt
   const invalid = await run({ ...buildArgs(), tasks: 'x' });
   assert.equal(invalid.result.status, 'invalid');
   assert.ok(!('commits' in invalid.result));
+});
+
+// ---- v0.2: known flaky tests in quick gates (spec §3.6) ----
+
+test('BUILD-33 quick-gate prompts carry the flaky list and the rerun-once rule; full-gate prompts say never rerun', async () => {
+  const failingG1 = {
+    'acceptance:g1': { group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'c' },
+  };
+  const b = await run(buildArgs({ flaky: ['t::a'] }), failingG1);
+  const fix = await runWorkflow('workflows/stabilise.js', {
+    args: stabiliseArgs({ part: 'fix', selected: [ruleFinding], flaky: ['t::a'] }),
+    respond: stabiliseResponder,
+  });
+  const pub = await runWorkflow('workflows/publish.js', {
+    args: { ...stabiliseArgs(), spec: 'docs/temper/e/spec.md', flaky: ['t::a'] },
+    respond: publishResponder,
+  });
+  const quick = [
+    ...['impl:a', 'check:a', 'merge:wave0', 'green:1'].map((l) => [l, promptOf(b.calls, l)]),
+    ['fix:security-01', promptOf(fix.calls, 'fix:security-01')],
+  ];
+  for (const [l, p] of quick) {
+    assert.ok(p.includes('t::a'), `${l}: no flaky list`);
+    assert.ok(p.includes('rerun it once'), `${l}: no rerun-once rule`);
+  }
+  for (const [l, p] of [['checkpoint', promptOf(b.calls, 'checkpoint')], ['gate', promptOf(pub.calls, 'gate')]]) {
+    assert.ok(p.includes('it is never rerun'), `${l}: does not say the full gate is never rerun`);
+    assert.ok(!p.includes('t::a'), `${l}: carries the flaky list`);
+    assert.ok(!p.includes('rerun it once'), `${l}: carries the rerun-once rule`);
+  }
+
+  const none = await allStageCalls({});
+  for (const { stage, label, prompt } of none) assert.ok(!prompt.includes('rerun it once'), `${stage} ${label}`);
+});
+
+test('BUILD-34 build collects flaky_reruns from every agent that reports them', async () => {
+  const reruns = [{ test: 't::a', gate: 'quick' }];
+  const { result } = await run(buildArgs({ tasks: [task('t1', 0)], flaky: ['t::a'] }), {
+    'check:t1': { pass: true, problems: [], flaky_reruns: reruns },
+    'merge:wave0': { status: 'merged', merged: ['t1'], gate_passed: true, flaky_reruns: reruns },
+  });
+  assert.equal(result.status, 'mvp');
+  assert.deepEqual(result.flaky_reruns, [
+    { id: 'check:t1', test: 't::a', gate: 'quick' },
+    { id: 'merge:wave0', test: 't::a', gate: 'quick' },
+  ]);
+
+  // A blocked run still carries the reruns reported before it; a run with none carries [].
+  const blocked = await run(buildArgs({ tasks: [task('t1', 0)] }), {
+    'check:t1': { pass: true, problems: [], flaky_reruns: reruns },
+    'merge:wave0': { status: 'blocked', merged: [], gate_passed: false },
+  });
+  assert.equal(blocked.result.status, 'blocked');
+  assert.deepEqual(blocked.result.flaky_reruns, [{ id: 'check:t1', test: 't::a', gate: 'quick' }]);
+  const plain = await run(buildArgs());
+  assert.deepEqual(plain.result.flaky_reruns, []);
 });
