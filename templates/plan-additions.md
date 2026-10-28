@@ -44,6 +44,9 @@ A list of the behaviour groups the stage 3 behaviour spec is written in, each a 
 | the spec, plan and log paths | `spec`, `plan`, `log` (`<specs_dir>/<epic>/spec.md`, `plan.md`, `log.md`) |
 | `host` in `.temper/project.md` | `host`: `{"kind":"local"}` or `{"kind":"ssh","name":…,"root":…,"clone":…}`, `clone` from `host_clone` |
 | `gate_quick` and `gate_full` in `.temper/project.md` | `gates`: `{"quick":…,"full":…}` |
+| the `## Build rule` section of `.temper/project.md` | `build_rule`: its text without the HTML comment, `""` when empty; never copied into `tasks[].text` |
+| `flaky` in `.temper/project.md` | `flaky`: the comma-separated names as an array of strings, `[]` when empty; never copied into `tasks[].text` |
+| `gate_slots` in `.temper/project.md` | no field of its own; no wave holds more tasks than it (empty means 1) |
 | each task's id and heading | `tasks[].id`, `tasks[].title` |
 | each task's `Wave:` line | `tasks[].wave` |
 | each task's `Owns:` line | `tasks[].owns` |

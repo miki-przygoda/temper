@@ -85,3 +85,16 @@ test("skills/run's description is triggering conditions only", () => {
     assert.ok(fm.description.includes(t), `the description lacks the trigger "${t}"`);
   }
 });
+
+for (const [name, triggers] of Object.entries({
+  plan: ['finished spec', 'build plan'],
+  setup: ['preferences.md is missing', '/temper:setup', 'redo their temper preferences', 'statusline', ".temper/project.md"],
+})) {
+  test(`skills/${name}'s description is triggering conditions only`, () => {
+    const fm = frontmatter(readFileSync(join(root, 'skills', name, 'SKILL.md'), 'utf8'));
+    assert.match(fm.description, /^Use when /);
+    for (const t of triggers) {
+      assert.ok(fm.description.includes(t), `the description lacks the trigger "${t}"`);
+    }
+  });
+}

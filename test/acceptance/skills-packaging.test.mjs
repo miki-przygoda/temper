@@ -690,6 +690,17 @@ test('SKILLS-PACKAGING-29 the run skill checks every returned commit is on the b
   assert.match(run, /never cherry-pick/);
 });
 
+test('SKILLS-PACKAGING-30 the plan skill copies build_rule and flaky into args.json and never into task texts', () => {
+  const gen = flat(section(SKILL.plan, '## 2. Generate args.json', '## 3.'));
+  assert.match(gen, /`build_rule`: the text of `project\.md`'s `## Build rule` section[^;]*, or `""`/);
+  assert.match(gen, /`flaky`: the `flaky:` line of `project\.md`, split on commas[^;]*, or `\[\]`/);
+  assert.match(gen, /Write both fields every time, without asking the user/);
+  const plan = flat(section(SKILL.plan, '## 1.', '## 2.'));
+  assert.match(plan, /Never copy the build rule or the flaky list into a task's text: every agent's prompt already carries both from `args\.json`/);
+  assert.match(flat(section(SKILL.plan, '## 0.', '## 1.')), /`gate_slots`, `flaky` and the `## Build rule` section/);
+  assert.match(flat(section(SKILL.plan, '## 3.', '## 4.')), /`build_rule` is a string and `flaky` an array of strings/);
+});
+
 test('SKILLS-PACKAGING-31 the A13 step bounds gates at once by gate_slots', () => {
   const step = flat(section(SKILL.run, '5. **What the build host can take', '6. **Status.**'));
   assert.match(step, /The number of tasks per launch is the smaller of `gate_slots` from `project\.md` \(empty or missing means 1\) and what the host can take/);
