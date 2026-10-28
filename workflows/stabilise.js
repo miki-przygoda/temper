@@ -164,6 +164,9 @@ function checkCommon(args, errors) {
   checkHost(args.host, args.epic, errors);
   checkGates(args.gates, errors);
   checkDone(args.done, errors);
+  // v0.2 fields, all optional (spec §8).
+  if (args.build_rule !== undefined && typeof args.build_rule !== 'string') errors.push('build_rule must be a string');
+  if (args.flaky !== undefined && !isStringArray(args.flaky)) errors.push('flaky must be an array of strings');
 }
 
 function checkTask(t, i, errors) {
@@ -267,6 +270,9 @@ function validateBuildArgs(args) {
   return errors;
 }
 
+// One-sweep or two-sweep mode for stabilise: missing (or anything but 1) means 2.
+const sweepsOf = (args) => (args.sweeps === 1 ? 1 : 2);
+
 function validateStabiliseArgs(args) {
   const errors = [];
   if (!isObject(args)) return ['args must be an object'];
@@ -274,6 +280,10 @@ function validateStabiliseArgs(args) {
   if (args.part !== 'sweep' && args.part !== 'fix') errors.push("part must be 'sweep' or 'fix'");
   if (!isStringArray(args.lenses)) errors.push('lenses must be an array of strings');
   if (typeof args.severity_notes !== 'string') errors.push('severity_notes must be a string');
+  if (args.sweeps !== undefined && args.sweeps !== 1 && args.sweeps !== 2) errors.push('sweeps must be 1 or 2');
+  if (args.attempt !== undefined && !(Number.isInteger(args.attempt) && args.attempt >= 0)) {
+    errors.push('attempt must be an integer >= 0');
+  }
   if (args.part === 'fix') {
     if (!Array.isArray(args.selected) || args.selected.length === 0) {
       errors.push('selected must be a non-empty array of findings when part is fix');
