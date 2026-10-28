@@ -20,3 +20,11 @@
 - **The check.** `validateBuildArgs` on `args.json` returns `[]`.
 - **The runner.** v0.2.0's committed workflows (`main` at 16c11c8), from a scratch copy. That runner still commits a red checkpoint, so after a checkpoint block the head relaunches without `resumeFromRunId`.
 - **The owner's plan review** is pending.
+
+## 28 Oct 2026: plan audit and the owner's decision (head)
+
+- **The audit.** An independent ownership audit (git grep over `test/` and `tests_py/`) found 22 existing test files that tasks assert against but didn't own. Each is now in its task's owns. With one task per wave, no conflicts arise. `validateBuildArgs` reports no errors.
+- **The owner's decision: keep the fixed rule.** "Never delete branches or worktrees" stays in every prompt. Agents name their throwaway worktree under `tmp/<label>`, reuse it if it exists, and never remove it. The cleanup skill removes them with `cleanup_check.py --detached`. Spec §Contracts and plan Task 6 are changed to match.
+- **Plan wording fixed by the head.**
+  - `build-attempt` changes the existing `lib-core` test that pins "build ignores attempt", and adds `attempt: 0` to BUILD-01's base so the generated cases cover it.
+  - `cleanup-skill` edits SECOND_SAFETY_7 and `epic_dir_command()` to accept its new lines.

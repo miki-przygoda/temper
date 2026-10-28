@@ -28,7 +28,10 @@
         "test/project-skills-v02.test.mjs",
         "test/acceptance/skills-packaging.test.mjs",
         "test/acceptance/head-v02.test.mjs",
-        "test/acceptance/state.test.mjs"
+        "test/acceptance/state.test.mjs",
+        "test/acceptance/build.test.mjs",
+        "test/acceptance/git-safety.test.mjs",
+        "test/acceptance/publish.test.mjs"
       ],
       "uses": [],
       "provides": [],
@@ -44,7 +47,9 @@
         "test/skills.test.mjs",
         "test/acceptance/skills-packaging.test.mjs",
         "tests_py/acceptance/test_skills_packaging.py",
-        "tests_py/acceptance/test_git_safety.py"
+        "tests_py/acceptance/test_git_safety.py",
+        "test/acceptance/git-safety.test.mjs",
+        "test/acceptance/publish.test.mjs"
       ],
       "uses": [],
       "provides": [],
@@ -63,7 +68,13 @@
         "test/acceptance/head-v02.test.mjs",
         "test/acceptance/state.test.mjs",
         "tests_py/acceptance/test_skills_packaging.py",
-        "tests_py/acceptance/test_git_safety.py"
+        "tests_py/acceptance/test_git_safety.py",
+        "test/acceptance/publish.test.mjs",
+        "test/publish.test.mjs",
+        "test/acceptance/git-safety.test.mjs",
+        "test/acceptance/stabilise.test.mjs",
+        "test/acceptance/stabilise-v02.test.mjs",
+        "tests_py/acceptance/test_state.py"
       ],
       "uses": [],
       "provides": [],
@@ -115,7 +126,14 @@
         "test/build-phases.test.mjs",
         "test/acceptance/build.test.mjs",
         "test/acceptance/commits.test.mjs",
-        "test/acceptance/prompts.test.mjs"
+        "test/acceptance/prompts.test.mjs",
+        "test/acceptance/stabilise-v02.test.mjs",
+        "test/acceptance/git-safety.test.mjs",
+        "test/acceptance/state.test.mjs",
+        "test/acceptance/skills-packaging.test.mjs",
+        "test/acceptance/stabilise.test.mjs",
+        "test/acceptance/publish.test.mjs",
+        "test/templates.test.mjs"
       ],
       "uses": [
         "phase-status-v03"
@@ -148,7 +166,8 @@
         "test/acceptance/stabilise.test.mjs",
         "test/acceptance/stabilise-v02.test.mjs",
         "test/acceptance/publish.test.mjs",
-        "test/acceptance/git-safety.test.mjs"
+        "test/acceptance/git-safety.test.mjs",
+        "test/lib-core.test.mjs"
       ],
       "uses": [
         "phase-status-v03"
@@ -190,7 +209,8 @@
         "scripts/cleanup_check.py",
         "tests_py/test_git_scripts.py",
         "tests_py/acceptance/test_git_safety.py",
-        "tests_py/acceptance/test_skills_packaging.py"
+        "tests_py/acceptance/test_skills_packaging.py",
+        "test/acceptance/git-safety.test.mjs"
       ],
       "uses": [],
       "provides": [
@@ -204,7 +224,9 @@
       "wave": 8,
       "owns": [
         "scripts/host_sync.py",
-        "tests_py/acceptance/test_git_safety.py"
+        "tests_py/acceptance/test_git_safety.py",
+        "test/acceptance/git-safety.test.mjs",
+        "test/acceptance/publish.test.mjs"
       ],
       "uses": [],
       "provides": [
@@ -242,7 +264,8 @@
         "test/acceptance/git-safety.test.mjs",
         "test/acceptance/publish.test.mjs",
         "tests_py/test_layout.py",
-        "tests_py/acceptance/test_hook.py"
+        "tests_py/acceptance/test_hook.py",
+        "test/acceptance/state.test.mjs"
       ],
       "uses": [],
       "provides": [],

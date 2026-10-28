@@ -70,7 +70,7 @@ Every task that edits a `SKILL.md` follows these steps, in order:
 
 ### Task 1 `plan-skill`: The plan skill makes a task own the tests its change breaks
 
-Owns: skills/plan/SKILL.md, templates/plan-additions.md, test/plan-skill-v03.test.mjs, test/skills.test.mjs, test/templates.test.mjs, test/project-skills-v02.test.mjs, test/acceptance/skills-packaging.test.mjs, test/acceptance/head-v02.test.mjs, test/acceptance/state.test.mjs
+Owns: skills/plan/SKILL.md, templates/plan-additions.md, test/plan-skill-v03.test.mjs, test/skills.test.mjs, test/templates.test.mjs, test/project-skills-v02.test.mjs, test/acceptance/skills-packaging.test.mjs, test/acceptance/head-v02.test.mjs, test/acceptance/state.test.mjs, test/acceptance/build.test.mjs, test/acceptance/git-safety.test.mjs, test/acceptance/publish.test.mjs
 Uses: none
 Provides: none
 Wave: 0
@@ -113,7 +113,7 @@ Follows **Skill edits**. Run by the head's skill-edit workflow (see "How the run
 
 ### Task 2 `cleanup-skill`: The cleanup skill removes detached throwaway worktrees
 
-Owns: skills/cleanup/SKILL.md, test/cleanup-skill-v03.test.mjs, test/skills.test.mjs, test/acceptance/skills-packaging.test.mjs, tests_py/acceptance/test_skills_packaging.py, tests_py/acceptance/test_git_safety.py
+Owns: skills/cleanup/SKILL.md, test/cleanup-skill-v03.test.mjs, test/skills.test.mjs, test/acceptance/skills-packaging.test.mjs, tests_py/acceptance/test_skills_packaging.py, tests_py/acceptance/test_git_safety.py, test/acceptance/git-safety.test.mjs, test/acceptance/publish.test.mjs
 Uses: none
 Provides: none
 Wave: 1
@@ -142,7 +142,7 @@ Follows **Skill edits**. Run by the head's skill-edit workflow, not by `build.js
   - `the cleanup skill removes <root>/<epic>/tmp before <root>/<epic> on an ssh host`: `indexOf("rmdir <root>/<epic>/tmp")` is ≥ 0 and less than the index of the existing `ssh <host> 'rmdir <root>/<epic>'` command.
   - `the cleanup skill never pins a detached worktree to a temporary branch`: the flattened skill matches `/never (pin|put) [^.]*temporary branch/`.
   - `skills/cleanup's description is triggering conditions only`: it starts with `Use when`, and still names `/temper:cleanup` and a merged PR.
-  - The existing tests stay green unchanged. If an edit moves a line one of them matches, update that test in this task, keeping what it checks.
+  - Two owned Python tests must change, keeping what they check: SECOND_SAFETY_7 (`tests_py/acceptance/test_git_safety.py`) expects exactly one `ssh <host> python3` line, so it must accept the new `--detached` form as well; and `epic_dir_command()` (`tests_py/acceptance/test_skills_packaging.py`) takes the first `ssh <host> '...<root>/<epic>...'` match, so it must pick the `rmdir <root>/<epic>` line, not the new `rmdir <root>/<epic>/tmp` one. Any other existing test that an edit moves stays green, updated in this task if needed.
 - [ ] **Step 3: Run them and see them fail.** `node --test test/cleanup-skill-v03.test.mjs`. Expected: all FAIL.
 - [ ] **Step 4: Edit the skill.**
   - **What to check:** add every detached worktree under `.temper/worktrees/<epic>/` (on an ssh host, `<root>/<epic>/`), `tmp/` included, from `git worktree list --porcelain` (a `detached` line under its `worktree` line).
@@ -156,7 +156,7 @@ Follows **Skill edits**. Run by the head's skill-edit workflow, not by `build.js
 
 ### Task 3 `run-skill`: The run skill bumps attempt on every build resume and handles blocked phases
 
-Owns: skills/run/SKILL.md, test/run-skill-v03.test.mjs, test/run-skill-v02.test.mjs, test/skills.test.mjs, test/acceptance/skills-packaging.test.mjs, test/acceptance/head-v02.test.mjs, test/acceptance/state.test.mjs, tests_py/acceptance/test_skills_packaging.py, tests_py/acceptance/test_git_safety.py
+Owns: skills/run/SKILL.md, test/run-skill-v03.test.mjs, test/run-skill-v02.test.mjs, test/skills.test.mjs, test/acceptance/skills-packaging.test.mjs, test/acceptance/head-v02.test.mjs, test/acceptance/state.test.mjs, tests_py/acceptance/test_skills_packaging.py, tests_py/acceptance/test_git_safety.py, test/acceptance/publish.test.mjs, test/publish.test.mjs, test/acceptance/git-safety.test.mjs, test/acceptance/stabilise.test.mjs, test/acceptance/stabilise-v02.test.mjs, tests_py/acceptance/test_state.py
 Uses: none
 Provides: none
 Wave: 2
@@ -242,7 +242,7 @@ Wave: 3
 
 ### Task 5 `build-attempt`: The build's attempt, and a checkpoint that commits only on a green gate
 
-Owns: src/lib.js, schemas/args.schema.json, workflows/build.js, workflows/stabilise.js, workflows/publish.js, test/lib-core.test.mjs, test/schema-cases.mjs, test/lib-prompts.test.mjs, test/build-phases.test.mjs, test/acceptance/build.test.mjs, test/acceptance/commits.test.mjs, test/acceptance/prompts.test.mjs
+Owns: src/lib.js, schemas/args.schema.json, workflows/build.js, workflows/stabilise.js, workflows/publish.js, test/lib-core.test.mjs, test/schema-cases.mjs, test/lib-prompts.test.mjs, test/build-phases.test.mjs, test/acceptance/build.test.mjs, test/acceptance/commits.test.mjs, test/acceptance/prompts.test.mjs, test/acceptance/stabilise-v02.test.mjs, test/acceptance/git-safety.test.mjs, test/acceptance/state.test.mjs, test/acceptance/skills-packaging.test.mjs, test/acceptance/stabilise.test.mjs, test/acceptance/publish.test.mjs, test/templates.test.mjs
 Uses: phase-status-v03
 Provides: build-attempt-v03
 Wave: 4
@@ -274,7 +274,8 @@ Redoes SECOND-CONTROL-FLOW-6 (`docs/v1-log.md`): the resume-cache problem that g
     - `BUILD-41 a resume with attempt bumped gives a checkpoint prompt that differs, and identical task prompts`. Two runs with the same args except `attempt` 0 and 1: the `impl:*`, `check:*` and `merge:*` prompts are equal pairwise; the `checkpoint` prompts differ.
     - `BUILD-42 a red checkpoint is told to commit nothing and return blocked`: the prompt the `checkpoint` agent received includes the two step-4 sentences.
   - In `test/acceptance/prompts.test.mjs`, PROMPTS-02's tail rule becomes: a `regress:`, `checkpoint`, `behaviour-spec`, `acceptance:` or `green:` prompt has exactly `/^\n\nRun attempt \d+\.$/` after the fixed rules; every other prompt has nothing.
-  - The generated BUILD-01 cases pick up `attempt` from the schema; keep them green.
+  - The generated BUILD-01 cases don't pick up `attempt` by themselves: `schemaCases()` adds an optional field's cases only when the base has it, and `sampleFor()` has no integer sample. Add `attempt: 0` to BUILD-01's base args in `test/acceptance/build.test.mjs`, so the generated cases cover it, and keep them green.
+  - `test/lib-core.test.mjs:504` pins that build *ignores* `attempt` (`!matches(validateBuildArgs({...goodArgs(), attempt: -1}), /attempt/)`). That assertion changes to *refuses*, inside the same test, keeping the stabilise half.
 - [ ] **Step 2: Run them and see them fail.** `node --test test/lib-core.test.mjs test/lib-prompts.test.mjs test/acceptance/build.test.mjs test/acceptance/prompts.test.mjs`. Expected: the new tests FAIL.
 - [ ] **Step 3: Implement** the interfaces above.
 - [ ] **Step 4: Run them and see them pass.** `node scripts/bundle.mjs`, then `npm test`. Expected: all pass.
@@ -284,7 +285,7 @@ Redoes SECOND-CONTROL-FLOW-6 (`docs/v1-log.md`): the resume-cache problem that g
 
 ### Task 6 `throwaway`: Throwaway worktrees are named and removed
 
-Owns: src/lib.js, src/build.js, src/stabilise.js, src/publish.js, workflows/build.js, workflows/stabilise.js, workflows/publish.js, test/lib-prompts.test.mjs, test/build-waves.test.mjs, test/stabilise-sweep.test.mjs, test/stabilise-fix.test.mjs, test/publish.test.mjs, test/acceptance/build.test.mjs, test/acceptance/commits.test.mjs, test/acceptance/prompts.test.mjs, test/acceptance/stabilise.test.mjs, test/acceptance/stabilise-v02.test.mjs, test/acceptance/publish.test.mjs, test/acceptance/git-safety.test.mjs
+Owns: src/lib.js, src/build.js, src/stabilise.js, src/publish.js, workflows/build.js, workflows/stabilise.js, workflows/publish.js, test/lib-prompts.test.mjs, test/build-waves.test.mjs, test/stabilise-sweep.test.mjs, test/stabilise-fix.test.mjs, test/publish.test.mjs, test/acceptance/build.test.mjs, test/acceptance/commits.test.mjs, test/acceptance/prompts.test.mjs, test/acceptance/stabilise.test.mjs, test/acceptance/stabilise-v02.test.mjs, test/acceptance/publish.test.mjs, test/acceptance/git-safety.test.mjs, test/lib-core.test.mjs
 Uses: phase-status-v03
 Provides: throwaway-v03
 Wave: 5
@@ -299,29 +300,29 @@ Wave: 5
 - `tmpLabel(label) -> string`: `String(label).toLowerCase().replace(/[^a-z0-9-]/g, '-')`, then `-`, then the 32-bit FNV-1a hash of the *raw* label as 8 lowercase hex digits. FNV-1a: start `0x811c9dc5`; for each UTF-16 code unit `c` (`charCodeAt`): `h ^= c; h = Math.imul(h, 0x01000193)`; finally `(h >>> 0).toString(16).padStart(8, '0')`.
 - `throwawayText(args, label) -> string`, with `path = ${worktreesDir(args)}/tmp/${tmpLabel(label)}` (so `<repo>/.temper/worktrees/<epic>/tmp/<label>` locally, `<root>/<epic>/tmp/<label>` on an ssh host). It says, in order:
   - `` Your throwaway worktree is `<path>`. ``
-  - `` If that path already exists (an agent that died left it), first remove it with `git worktree remove <path>`, never `--force`; if that fails, stop and report the reason in your result as blocked. ``
-  - `` Create it detached: `git worktree add --detach <path> <the branch or commit you check>`. Change nothing on any branch and commit nothing. ``
-  - `` Before you return, remove it with `git worktree remove <path>`, never `--force`. If the removal fails, say so in your result: as one of `problems` when your result has them, otherwise in its `reason`, `note` or `evidence`. ``
+  - `` If that path does not exist, create it detached: `git worktree add --detach <path> <the branch or commit you check>`. If it already exists (an earlier agent left it), reuse it: `git -C <path> checkout --detach <the branch or commit you check>`; if that fails, stop and report the reason in your result as blocked. ``
+  - `` Change nothing on any branch and commit nothing. Leave the worktree in place when you finish: you never delete a worktree (a fixed rule); temper's cleanup removes it. ``
 - Prompt signatures (the bodies pass the label they give `agent`):
   - `checkerPrompt(task, implResult, args, label = \`check:${task.id}\`)`; `build.js` passes `check:<id>` or `recheck:<id>`;
   - `reviewPrompt(lens, args, alreadyFixed, label = \`${args.part === 'fix' ? 'second:' : ''}review:${lens}\`)`;
   - `verifyPrompt(finding, args, label = \`verify:${finding.id}\`)`; `stabilise.js` passes `${labelPrefix}verify:${f.id}`;
   - `regressPrompt(fixId, args)` uses `` `regress:fix:${fixId}` ``;
   - `gatePrompt(args)` uses `'gate'`. The gate now runs the full gate in its throwaway worktree, detached at `args.branch`'s tip. This is new behaviour.
-- Each of these prompts replaces its "throwaway worktree" sentence with `throwawayText(args, label)`. No prompt names `--force` except in "never `--force`".
+- Each of these prompts replaces its "throwaway worktree" sentence with `throwawayText(args, label)`. No prompt tells an agent to run `git worktree remove` (RULES_COMMON's "never ... delete branches or worktrees" stays, owner's decision 28 Oct).
 
 - [ ] **Step 1: Write the failing tests.**
   - In `test/lib-prompts.test.mjs`:
     - `tmpLabel sanitises the label and appends its FNV-1a hash`: `tmpLabel('a:b') === 'a-b-08bd8540'`; `tmpLabel('a-b') === 'a-b-2a89df63'`; `tmpLabel('check:t1') === 'check-t1-be2b7968'`; `tmpLabel('gate') === 'gate-1660eb12'`; `tmpLabel('review:failure paths and lifecycle') === 'review-failure-paths-and-lifecycle-20db6b18'`; `tmpLabel('regress:fix:f1') === 'regress-fix-f1-57318b86'`.
     - `tmpLabel never leaves tmp/`: for `'../x'`, `'a/b'`, `'A B'` and `'é'`, the result matches `/^[a-z0-9-]+-[0-9a-f]{8}$/`.
-    - `throwawayText names the path, creates it detached and removes it without --force`: local `/r/.temper/worktrees/e/tmp/check-t1-be2b7968`; ssh (`root: '~/o'`) `~/o/e/tmp/check-t1-be2b7968`. Each text includes `` `git worktree add --detach <path> ``, `` `git worktree remove <path>` `` (twice: before creating and before returning) and `never \`--force\``.
-  - In `test/acceptance/build.test.mjs`: `BUILD-43 the checker's prompt names its throwaway worktree under tmp/ and removes it`. The `check:a` and `recheck:a` prompts include `throwawayText(args, 'check:a')` and `throwawayText(args, 'recheck:a')`, which are different paths.
-  - In `test/acceptance/stabilise.test.mjs`: `STABILISE-32 reviewer, verifier and regression prompts name their throwaway worktree under tmp/ and remove it`. For each `review:*`, `verify:*`, `second:review:*`, `second:verify:*` and `regress:fix:*` call, the prompt includes `throwawayText(args, <its label>)`. STABILISE-01's `/throwaway worktree/i` stays green.
-  - In `test/acceptance/publish.test.mjs`: `PUBLISH-11 the gate runs in a throwaway worktree under tmp/ and removes it`. The `gate` prompt includes `throwawayText(args, 'gate')`.
+    - `throwawayText names the path, creates it detached or reuses it, and never removes it`: local `/r/.temper/worktrees/e/tmp/check-t1-be2b7968`; ssh (`root: '~/o'`) `~/o/e/tmp/check-t1-be2b7968`. Each text includes `` `git worktree add --detach <path> `` and `` `git -C <path> checkout --detach ``, and does not include `git worktree remove`.
+    - `no prompt tells an agent to remove a worktree`: across every prompt of build, stabilise and publish (local and ssh), none matches `/git worktree remove/`, and each still contains RULES_COMMON's `never push, merge, or delete branches or worktrees`.
+  - In `test/acceptance/build.test.mjs`: `BUILD-43 the checker's prompt names its throwaway worktree under tmp/`. The `check:a` and `recheck:a` prompts include `throwawayText(args, 'check:a')` and `throwawayText(args, 'recheck:a')`, which are different paths.
+  - In `test/acceptance/stabilise.test.mjs`: `STABILISE-32 reviewer, verifier and regression prompts name their throwaway worktree under tmp/`. For each `review:*`, `verify:*`, `second:review:*`, `second:verify:*` and `regress:fix:*` call, the prompt includes `throwawayText(args, <its label>)`. STABILISE-01's `/throwaway worktree/i` stays green.
+  - In `test/acceptance/publish.test.mjs`: `PUBLISH-11 the gate runs in a throwaway worktree under tmp/`. The `gate` prompt includes `throwawayText(args, 'gate')`.
 - [ ] **Step 2: Run them and see them fail.** `node --test test/lib-prompts.test.mjs test/acceptance/build.test.mjs test/acceptance/stabilise.test.mjs test/acceptance/publish.test.mjs`. Expected: the new tests FAIL.
 - [ ] **Step 3: Implement** the interfaces above, then pass the labels from the three bodies.
 - [ ] **Step 4: Run them and see them pass.** `node scripts/bundle.mjs`, then `npm test`. Expected: all pass.
-- [ ] **Step 5: Commit.** `git commit -m "feat(worktrees): every throwaway worktree is named under tmp/ and removed without --force"`
+- [ ] **Step 5: Commit.** `git commit -m "feat(worktrees): every throwaway worktree is named under tmp/<label>, reused, never removed by an agent"`
 
 ---
 
@@ -355,7 +356,7 @@ Wave: 6
 
 ### Task 8 `cleanup-detached`: cleanup_check.py checks a detached worktree
 
-Owns: scripts/cleanup_check.py, tests_py/test_git_scripts.py, tests_py/acceptance/test_git_safety.py, tests_py/acceptance/test_skills_packaging.py
+Owns: scripts/cleanup_check.py, tests_py/test_git_scripts.py, tests_py/acceptance/test_git_safety.py, tests_py/acceptance/test_skills_packaging.py, test/acceptance/git-safety.test.mjs
 Uses: none
 Provides: cleanup-detached-cli
 Wave: 7
@@ -401,7 +402,7 @@ Wave: 7
 
 ### Task 9 `host-prune`: The private host refs are pruned
 
-Owns: scripts/host_sync.py, tests_py/acceptance/test_git_safety.py
+Owns: scripts/host_sync.py, tests_py/acceptance/test_git_safety.py, test/acceptance/git-safety.test.mjs, test/acceptance/publish.test.mjs
 Uses: none
 Provides: host-prune-v03
 Wave: 8
@@ -451,7 +452,7 @@ Wave: 9
 
 ### Task 11 `docs-v03`: README, design-spec amendments, logs, behaviour lines and the version
 
-Owns: README.md, docs/specs/2026-10-24-temper-design.md, docs/v1-log.md, docs/v1-behaviour.md, .claude-plugin/plugin.json, test/readme-v03.test.mjs, test/readme-v02.test.mjs, test/manifest.test.mjs, test/acceptance/head-v02.test.mjs, test/acceptance/skills-packaging.test.mjs, test/acceptance/git-safety.test.mjs, test/acceptance/publish.test.mjs, tests_py/test_layout.py, tests_py/acceptance/test_hook.py
+Owns: README.md, docs/specs/2026-10-24-temper-design.md, docs/v1-log.md, docs/v1-behaviour.md, .claude-plugin/plugin.json, test/readme-v03.test.mjs, test/readme-v02.test.mjs, test/manifest.test.mjs, test/acceptance/head-v02.test.mjs, test/acceptance/skills-packaging.test.mjs, test/acceptance/git-safety.test.mjs, test/acceptance/publish.test.mjs, tests_py/test_layout.py, tests_py/acceptance/test_hook.py, test/acceptance/state.test.mjs
 Uses: none
 Provides: none
 Wave: 10
