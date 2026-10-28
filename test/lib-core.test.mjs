@@ -413,3 +413,84 @@ test('the ownership rule keys on wave and path: the same path in another wave, o
   clash.tasks.push({ id: 'c', title: 'C', wave: 1, owns: ['src/c.rs', 'src/b.rs'], uses: [], provides: [], text: 'do c' });
   assert.deepEqual(lib.validateBuildArgs(clash), ['wave 1: tasks b and c both own src/b.rs']);
 });
+
+// ---- v0.2 args fields (spec §8): build_rule, flaky, sweeps, attempt ----
+
+function stabiliseArgs() {
+  return {
+    epic: 'e', repo: '/r', branch: 'temper/e', base: 'main', log: 'docs/temper/e/log.md',
+    host: { kind: 'local' }, gates: { quick: 'q', full: 'f' },
+    part: 'sweep', lenses: [], severity_notes: '', done: [],
+  };
+}
+
+function publishArgs() {
+  return {
+    epic: 'e', repo: '/r', branch: 'temper/e', base: 'main', log: 'l', spec: 's',
+    host: { kind: 'local' }, gates: { quick: 'q', full: 'f' }, done: [],
+  };
+}
+
+const allValidators = () => [
+  ['validateBuildArgs', lib.validateBuildArgs, goodArgs],
+  ['validateStabiliseArgs', lib.validateStabiliseArgs, stabiliseArgs],
+  ['validatePublishArgs', lib.validatePublishArgs, publishArgs],
+];
+
+const matches = (errors, re) => errors.some((e) => re.test(e));
+
+test('validators accept a v1 args object with none of the v0.2 fields', () => {
+  for (const [name, validate, fixture] of allValidators()) {
+    const args = fixture();
+    for (const f of ['build_rule', 'flaky', 'sweeps', 'attempt']) assert.equal(args[f], undefined);
+    assert.deepEqual(validate(args), [], name);
+  }
+});
+
+test('build_rule must be a string', () => {
+  for (const [name, validate, fixture] of allValidators()) {
+    const errors = validate({ ...fixture(), build_rule: 3 });
+    assert.ok(matches(errors, /build_rule must be a string/), `${name}: ${errors.join('\n')}`);
+    assert.deepEqual(validate({ ...fixture(), build_rule: '' }), [], name);
+    assert.deepEqual(validate({ ...fixture(), build_rule: 'cargo build -j 4' }), [], name);
+  }
+});
+
+test('flaky must be an array of strings', () => {
+  for (const [name, validate, fixture] of allValidators()) {
+    for (const bad of ['x', [1]]) {
+      const errors = validate({ ...fixture(), flaky: bad });
+      assert.ok(matches(errors, /flaky must be an array of strings/), `${name} ${JSON.stringify(bad)}: ${errors.join('\n')}`);
+    }
+    assert.deepEqual(validate({ ...fixture(), flaky: [] }), [], name);
+    assert.deepEqual(validate({ ...fixture(), flaky: ['net::timeout'] }), [], name);
+  }
+});
+
+test('sweeps must be 1 or 2', () => {
+  for (const bad of [0, 3, '1']) {
+    const errors = lib.validateStabiliseArgs({ ...stabiliseArgs(), sweeps: bad });
+    assert.ok(matches(errors, /sweeps must be 1 or 2/), `${JSON.stringify(bad)}: ${errors.join('\n')}`);
+  }
+  for (const ok of [1, 2]) assert.deepEqual(lib.validateStabiliseArgs({ ...stabiliseArgs(), sweeps: ok }), []);
+  // Only stabilise checks it.
+  assert.ok(!matches(lib.validateBuildArgs({ ...goodArgs(), sweeps: 3 }), /sweeps/));
+  assert.ok(!matches(lib.validatePublishArgs({ ...publishArgs(), sweeps: 3 }), /sweeps/));
+});
+
+test('sweepsOf: missing means 2', () => {
+  assert.equal(lib.sweepsOf({}), 2);
+  assert.equal(lib.sweepsOf({ sweeps: 2 }), 2);
+  assert.equal(lib.sweepsOf({ sweeps: 1 }), 1);
+});
+
+test('attempt must be an integer >= 0', () => {
+  for (const bad of [-1, 1.5, '0']) {
+    const errors = lib.validateStabiliseArgs({ ...stabiliseArgs(), attempt: bad });
+    assert.ok(matches(errors, /attempt must be an integer >= 0/), `${JSON.stringify(bad)}: ${errors.join('\n')}`);
+  }
+  for (const ok of [0, 4]) assert.deepEqual(lib.validateStabiliseArgs({ ...stabiliseArgs(), attempt: ok }), []);
+  // Only stabilise checks it.
+  assert.ok(!matches(lib.validateBuildArgs({ ...goodArgs(), attempt: -1 }), /attempt/));
+  assert.ok(!matches(lib.validatePublishArgs({ ...publishArgs(), attempt: -1 }), /attempt/));
+});

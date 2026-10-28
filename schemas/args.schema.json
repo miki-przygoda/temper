@@ -13,6 +13,8 @@
     "spec": { "type": "string" },
     "plan": { "type": "string" },
     "log": { "type": "string" },
+    "build_rule": { "type": "string", "description": "Optional. The project's build rule (project.md's ## Build rule), passed to every agent as data." },
+    "flaky": { "type": "array", "items": { "type": "string" }, "description": "Optional. Known flaky tests (project.md's flaky:), which a quick gate may rerun once." },
     "host": {
       "oneOf": [
         {
