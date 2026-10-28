@@ -659,3 +659,94 @@ test('BUILD-27 local tasks use git worktrees under a temper-owned directory; ssh
     assert.ok(!p.includes('.temper/worktrees'), `${l}: local worktree path on an ssh host`);
   }
 });
+
+// ---- v0.2: the build rule and the gate wait reach every agent (spec §3.2, §3.5) ----
+
+const RULE = 'Use `make test` only.';
+const HOST_LOCAL = 'Work in git worktrees under /r/.temper/worktrees/';
+const FIXED = 'Fixed rules (no exception):';
+
+function stabiliseArgs(extra = {}) {
+  return {
+    epic: EPIC,
+    repo: '/r',
+    branch: 'temper/e',
+    base: 'main',
+    log: 'docs/temper/e/log.md',
+    host: { kind: 'local' },
+    gates: { quick: 'QUICK-GATE-CMD', full: 'FULL-GATE-CMD' },
+    lenses: [],
+    severity_notes: '',
+    done: [],
+    ...extra,
+  };
+}
+
+const ruleFinding = {
+  id: 'security-01',
+  lens: 'security',
+  file: 'src/a.rs',
+  line: 7,
+  summary: 'a summary',
+  input: 'an input',
+  wrong_result: 'a wrong result',
+  severity: 'critical',
+  kind: 'fix',
+};
+
+function stabiliseResponder({ label }) {
+  if (label.startsWith('second:review:')) return { findings: [] };
+  if (label.startsWith('review:')) return { findings: label === 'review:security' ? [ruleFinding] : [] };
+  if (/^(second:)?verify:/.test(label)) return { real: true, severity: 'critical', reason: 'reproduced' };
+  if (label.startsWith('fix:')) return { status: 'fixed', commit: 'sha-fix', note: 'done' };
+  if (label.startsWith('regress')) return { regressions: [] };
+  throw new Error(`unexpected label ${label}`);
+}
+
+function publishResponder({ label }) {
+  if (label === 'docs') return { commit: 'ddd', files: ['README.md'], summary: 'docs' };
+  if (label === 'evidence') return { script: 's.sh', checklist: 'c.md', commit: 'eee' };
+  if (label === 'gate') return { passed: true, exit_status: 0, log: 'full.log' };
+  throw new Error(`unexpected label ${label}`);
+}
+
+// Every agent call of build, stabilise sweep and fix, and publish, with the given extra args.
+async function allStageCalls(extra) {
+  const b = await run(buildArgs(extra));
+  const sweep = await runWorkflow('workflows/stabilise.js', {
+    args: stabiliseArgs({ part: 'sweep', lenses: ['security'], ...extra }),
+    respond: stabiliseResponder,
+  });
+  const fix = await runWorkflow('workflows/stabilise.js', {
+    args: stabiliseArgs({ part: 'fix', selected: [ruleFinding], ...extra }),
+    respond: stabiliseResponder,
+  });
+  const pub = await runWorkflow('workflows/publish.js', {
+    args: { ...stabiliseArgs(), spec: 'docs/temper/e/spec.md', ...extra },
+    respond: publishResponder,
+  });
+  const stages = { build: b.calls, sweep: sweep.calls, fix: fix.calls, publish: pub.calls };
+  for (const [name, calls] of Object.entries(stages)) assert.ok(calls.length > 0, `${name}: no agent calls`);
+  assert.ok(labels(fix.calls).some((l) => l.startsWith('fix:')), 'the fix part ran a fix agent');
+  return Object.entries(stages).flatMap(([name, calls]) => calls.map((c) => ({ stage: name, label: c.opts.label, prompt: c.prompt })));
+}
+
+test('BUILD-31 the project build rule is in every agent prompt of all three stages, after the host text and before the fixed rules', async () => {
+  const calls = await allStageCalls({ build_rule: RULE });
+  for (const { stage, label, prompt } of calls) {
+    const where = `${stage} ${label}`;
+    assert.ok(prompt.includes(RULE), `${where}: no build rule`);
+    const h = prompt.indexOf(HOST_LOCAL);
+    const r = prompt.indexOf(RULE);
+    const f = prompt.indexOf(FIXED);
+    assert.ok(h >= 0, `${where}: no host text`);
+    assert.ok(h < r && r < f, `${where}: order host ${h}, rule ${r}, fixed ${f}`);
+  }
+});
+
+test('BUILD-32 every agent prompt says a gate waiting for a slot is normal and never a failure', async () => {
+  const calls = await allStageCalls({});
+  for (const { stage, label, prompt } of calls) {
+    assert.ok(prompt.includes('that wait is normal and is not a failure'), `${stage} ${label}`);
+  }
+});
