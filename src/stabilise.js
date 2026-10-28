@@ -1,6 +1,7 @@
 // ---- stage 4: stabilise ----
 // part 'sweep' (4a): reviewers by lens, an adversarial verify per finding, a severity-ordered list.
-// part 'fix' (4b): the selected fixes, the second sweep, severe fixes with a regression check, the stop.
+// part 'fix' (4b): the selected fixes, a regression check per fix, the second sweep (sweeps 2), severe
+// fixes with a regression check per fix, the stop.
 
 // One sweep: a review per lens, then a verify per finding. Keeps the findings the verifier
 // reproduced, with the verifier's severity, merged and ordered. A verdict of real:false or
@@ -104,22 +105,36 @@ const out = { fixed: [], reverted: [], contract_items: [], blocked: [], commits:
 const selectedMinor = args.selected.filter((f) => f.severity === 'minor');
 const toFix = args.selected.filter((f) => f.severity !== 'minor');
 
+// spec 3.3: one regression agent per fix, in parallel, labelled regress:fix:<id>. The prompt carries
+// args.attempt, so a resume that bumps it reruns these live. An agent that returns nothing blocks its fix.
+async function regressEach(ids, phaseTitle = 'Fix') {
+  const results = await parallel(ids.map((id) => () => agent(regressPrompt(id, args), {
+    label: `regress:fix:${id}`,
+    phase: phaseTitle,
+    schema: REGRESS_SCHEMA,
+  })));
+  const regressions = [];
+  const blocked = [];
+  for (const [i, r] of results.entries()) {
+    if (!r) blocked.push({ id: `regress:fix:${ids[i]}`, reason: 'agent returned nothing' });
+    else if (Array.isArray(r.regressions)) regressions.push(...r.regressions);
+  }
+  return { regressions, blocked };
+}
+
 phase('Fix');
 const fixedFirst = await fixLoop(toFix, out);
 
-// A resume after a block (an earlier run committed some of these fixes, or the head answered one):
-// the fixes made now get the regression check over their diffs before the second sweep.
-const answered = (f) => isObject(args.answers) && typeof args.answers[f.id] === 'string';
-const resumed = toFix.some((f) => args.done.includes(`fix:${f.id}`) || answered(f));
-const firstRegressions = [];
-if (resumed && fixedFirst.length > 0) {
-  const r = await agent(regressPrompt(fixedFirst, args), { label: 'regress:fix', phase: 'Fix', schema: REGRESS_SCHEMA });
-  if (!r) out.blocked.push({ id: 'regress:fix', reason: 'agent returned nothing' });
-  else if (Array.isArray(r.regressions)) firstRegressions.push(...r.regressions);
-}
+// Every part-fix run checks every first-wave fix on the branch: those done in an earlier run and those
+// made now. Reverted and contract items left no commit, and blocked ones landed nothing. It runs even
+// when the fix loop was not clean, so a landed fix is never left unchecked because a later one blocked.
+const landed = [...doneIds(toFix), ...fixedFirst];
+const firstCheck = await regressEach(landed);
+out.blocked.push(...firstCheck.blocked);
+const firstRegressions = firstCheck.regressions;
 
-// A blocked first-sweep fix, or a regression from one, stops part fix here: the second sweep
-// never runs on a branch missing a selected fix (SECOND-CONTROL-FLOW-4).
+// A regression hands over first; then a blocked fix or regression agent stops part fix here: the
+// second sweep never runs on a branch missing a selected fix (SECOND-CONTROL-FLOW-4).
 if (out.blocked.length > 0 || firstRegressions.length > 0) {
   return {
     status: firstRegressions.length > 0 ? 'handover' : 'blocked',
@@ -136,11 +151,8 @@ if (out.blocked.length > 0 || firstRegressions.length > 0) {
 phase('Second sweep');
 if (lostSecondIds.length > 0) {
   out.blocked.push({ id: 'second-sweep', reason: 'done but args.second_sweep_findings missing' });
-  const r = await agent(regressPrompt(lostSecondIds, args), {
-    label: 'regress',
-    phase: 'Second sweep',
-    schema: REGRESS_SCHEMA,
-  });
+  const r = await regressEach(lostSecondIds, 'Second sweep');
+  out.blocked.push(...r.blocked);
   return {
     status: 'handover',
     fixed: out.fixed,
@@ -148,7 +160,23 @@ if (lostSecondIds.length > 0) {
     contract_items: out.contract_items,
     blocked: out.blocked,
     open_items: selectedMinor,
-    regressions: r && Array.isArray(r.regressions) ? r.regressions : [],
+    regressions: r.regressions,
+    commits: out.commits,
+  };
+}
+
+// One-sweep mode (spec 3.3): stable after a clean regression check. A saved empty second sweep with no
+// sweeps field is how a v1 head asked for one sweep, and keeps that meaning.
+if (sweepsOf(args) === 1 || (savedSecond && savedSecond.length === 0 && args.sweeps === undefined)) {
+  return {
+    status: 'stable',
+    fixed: out.fixed,
+    reverted: out.reverted,
+    contract_items: out.contract_items,
+    blocked: out.blocked,
+    open_items: selectedMinor,
+    second_sweep: null,
+    regressions: [],
     commits: out.commits,
   };
 }
@@ -173,14 +201,9 @@ let regressions = [];
 if (severe.length > 0) {
   const fixedNow = await fixLoop(severe, out);
   const toCheck = [...doneIds(severe), ...fixedNow];
-  if (toCheck.length > 0) {
-    const r = await agent(regressPrompt(toCheck, args), {
-      label: 'regress',
-      phase: 'Second sweep',
-      schema: REGRESS_SCHEMA,
-    });
-    regressions = r && Array.isArray(r.regressions) ? r.regressions : [];
-  }
+  const r = await regressEach(toCheck, 'Second sweep');
+  out.blocked.push(...r.blocked);
+  regressions = r.regressions;
 }
 
 // There is never a third sweep: the run ends here either way.

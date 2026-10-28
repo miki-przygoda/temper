@@ -76,7 +76,7 @@ function stabiliseRespond({ label }) {
   if (label.includes('review:')) return { findings: [] };
   if (label.includes('verify:')) return { real: true, severity: label.includes('second-') ? 'severe' : 'critical', reason: 'ran it' };
   if (label.startsWith('fix:')) return { status: 'fixed', commit: 'f', note: 'n' };
-  if (label === 'regress') return { regressions: [] };
+  if (label.startsWith('regress:fix:')) return { regressions: [] };
   throw new Error(`unexpected label ${label}`);
 }
 
@@ -117,7 +117,7 @@ async function prompts() {
   const { runs, prompts: ps } = await allRuns();
   const labels = new Set(ps.map((p) => p.label.replace(/:.*$/, ':')));
   for (const l of ['impl:', 'check:', 'retry:', 'recheck:', 'merge:', 'checkpoint', 'behaviour-spec', 'acceptance:', 'green:',
-    'review:', 'verify:', 'fix:', 'second:', 'regress', 'docs', 'evidence', 'gate']) {
+    'review:', 'verify:', 'fix:', 'second:', 'regress:', 'docs', 'evidence', 'gate']) {
     assert.ok(labels.has(l), `the scripted runs reach a ${l} agent (labels: ${[...labels].join(', ')})`);
   }
   assert.equal(runs.find((r) => r.wf === 'build').result.status, 'mvp');

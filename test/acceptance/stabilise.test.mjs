@@ -1,4 +1,4 @@
-// Acceptance tests for the stabilise group (docs/v1-behaviour.md, STABILISE-01..21).
+// Acceptance tests for the stabilise group (docs/v1-behaviour.md, STABILISE-01..27).
 // They drive the bundled workflows/stabilise.js through the harness with scripted agents, the way the
 // head launches it (args from args.json and .temper/project.md, per skills/run/SKILL.md), and read the
 // skills and templates for what the head does with the result. A test that fails because of the
@@ -64,6 +64,7 @@ const reviewsOf = (calls) => calls.filter((c) => /(^|:)review:/.test(c.opts?.lab
 // Scripted agents. `reviews[lens]` is what that lens reports (nothing by default); every verify
 // reproduces the finding with the reviewer's severity unless `verdicts[id]` overrides it; every fix
 // is `fixed` unless `fixes[id]` overrides it. `second` holds the second sweep's reviews by lens.
+// Every `regress:fix:<id>` agent returns `regress`, or `regress(id)` when it is a function.
 function responder({ reviews = {}, second = {}, verdicts = {}, fixes = {}, regress = { regressions: [] } } = {}) {
   const all = {};
   for (const fs of [...Object.values(reviews), ...Object.values(second)]) for (const f of fs) all[f.id] = f;
@@ -80,7 +81,10 @@ function responder({ reviews = {}, second = {}, verdicts = {}, fixes = {}, regre
       if (Object.prototype.hasOwnProperty.call(fixes, id)) return fixes[id];
       return { status: 'fixed', commit: `sha-${id}`, note: 'done' };
     }
-    if (label === 'regress' || label === 'regress:fix') return regress;
+    if (label.startsWith('regress:fix:')) {
+      const id = label.slice('regress:fix:'.length);
+      return typeof regress === 'function' ? regress(id) : regress;
+    }
     throw new Error(`unexpected label ${label}`);
   };
 }
@@ -296,7 +300,7 @@ test('STABILISE-06 the list is ordered Severe first, Minor last, and 4a fixes no
   assert.equal(result.findings[0].severity, 'severe');
   assert.equal(result.findings.at(-1).severity, 'minor');
   assert.equal(result.findings.length, fs.length);
-  assert.ok(!labels(calls).some((l) => l.startsWith('fix:') || l === 'regress'), 'no fix in 4a');
+  assert.ok(!labels(calls).some((l) => l.startsWith('fix:') || l.startsWith('regress')), 'no fix in 4a');
   for (const c of calls) assert.match(c.prompt, /Change nothing/);
 });
 
@@ -432,7 +436,7 @@ test('STABILISE-17 nothing severe in the second sweep: the stage is done and the
   assert.deepEqual(result.open_items.map((f) => f.id).sort(), ['second-security-01', 'second-security-02']);
   const ls = labels(calls);
   assert.ok(!ls.includes('fix:second-security-01') && !ls.includes('fix:second-security-02'));
-  assert.ok(!ls.includes('regress'));
+  assert.ok(!ls.some((l) => l.startsWith('regress:fix:second-')), 'no second-sweep regression check');
   assert.match(STAGE4, /`open_items`: append them to the open items in `log\.md`/);
   assert.match(STAGE4, /`status: "stable"`: go to stage 5/);
 });
@@ -448,12 +452,12 @@ test('STABILISE-18 something severe in the second sweep: fixed with the five ste
   const fix = calls.find((c) => c.opts.label === 'fix:second-security-01');
   assert.ok(fix, 'the severe finding is fixed');
   assert.ok(FIX_STEPS_ORDER(fix.prompt).every((i) => i > -1), 'with the same five steps');
-  const regress = calls.filter((c) => c.opts.label === 'regress');
-  assert.equal(regress.length, 1);
-  assert.ok(ls.indexOf('regress') > ls.indexOf('fix:second-security-01'));
+  const iFix = ls.indexOf('fix:second-security-01');
+  const regress = calls.slice(iFix).filter((c) => c.opts.label.startsWith('regress'));
+  assert.deepEqual(labels(regress), ['regress:fix:second-security-01']);
   assert.ok(regress[0].prompt.includes('Temper-Task: e/fix:second-security-01'));
   assert.ok(!regress[0].prompt.includes('Temper-Task: e/fix:security-01'), 'only the second-sweep fixes are checked');
-  assert.match(regress[0].prompt, /Check only the diffs/);
+  assert.match(regress[0].prompt, /Check only the diff/);
   assert.ok(!ls.includes('fix:second-security-02'));
   assert.equal(result.status, 'handover');
   assert.match(STAGE4, /`status: "handover"`[^\n]*Stop, record it in `log\.md`, and hand over to the user/);
@@ -565,9 +569,9 @@ test('STABILISE-19 there is never a third sweep', async (t) => {
       respond: responder(),
     });
     assert.equal(reviewsOf(calls).length, 0, 'the resume swept again');
-    assert.deepEqual(labels(calls), ['regress'], 'the committed severe second-sweep fix got no regression check');
-    assert.ok(calls[0].prompt.includes('Temper-Task: e/fix:second-security-01'));
-    assert.ok(!calls[0].prompt.includes('Temper-Task: e/fix:security-01'), 'only the second-sweep fixes are checked');
+    assert.deepEqual(labels(calls), ['regress:fix:security-01', 'regress:fix:second-security-01'], 'a committed fix got no regression check');
+    assert.ok(calls[1].prompt.includes('Temper-Task: e/fix:second-security-01'));
+    assert.ok(!calls[1].prompt.includes('Temper-Task: e/fix:security-01'), 'one fix per regression agent');
     assert.equal(result.status, 'handover');
     assert.deepEqual(result.blocked, [{ id: 'second-sweep', reason: 'done but args.second_sweep_findings missing' }]);
   });
@@ -659,9 +663,10 @@ test("a blocked fix's answer reaches only its own fix prompt on resume, and the 
     assert.ok(fix, 'the answered fix did not run again');
     assert.ok(fix.prompt.includes('Answer from the head:') && fix.prompt.includes('ANSWER-do-X'), 'the answer never reached the fix agent');
     const ls = labels(resumed.calls);
-    assert.ok(ls.indexOf('regress:fix') > ls.indexOf('fix:security-01'), 'the resolved fix got no regression check');
+    assert.ok(ls.indexOf('regress:fix:security-01') > ls.indexOf('fix:security-01'), 'the resolved fix got no regression check');
+    assert.ok(ls.includes('regress:fix:security-02'), 'the fix done in the earlier run got no regression check');
     assert.equal(reviewsOf(resumed.calls).length, DEFAULTS.length, 'the second sweep did not run exactly once');
-    assert.ok(reviewsOf(resumed.calls).every((c) => ls.indexOf(c.opts.label) > ls.indexOf('regress:fix')));
+    assert.ok(reviewsOf(resumed.calls).every((c) => ls.indexOf(c.opts.label) > ls.indexOf('regress:fix:security-01')));
     assert.deepEqual(resumed.result.fixed, ['security-01']);
     assert.deepEqual(resumed.result.blocked, []);
     assert.equal(resumed.result.status, 'stable');
@@ -717,4 +722,105 @@ test('STABILISE-22 part fix returns commits for each fix', async () => {
   const invalid = await runWorkflow(WF, { args: fixArgs({ selected: [] }), respond: responder() });
   assert.equal(invalid.result.status, 'invalid');
   assert.ok(!('commits' in invalid.result));
+});
+
+// ---- v0.2: one-sweep mode, and a regression check after every fix wave (spec §3.3) ----
+
+const regressLabels = (calls) => labels(calls).filter((l) => l.startsWith('regress'));
+
+test('STABILISE-23 sweeps 1 returns stable after a clean regression check, with no second sweep', async () => {
+  const { calls, result } = await runWorkflow(WF, {
+    args: fixArgs({ selected: [finding('f1', 'critical'), finding('f2', 'important')], sweeps: 1 }),
+    respond: responder({ second: { security: [finding('second-security-01', 'severe')] } }),
+  });
+  assert.ok(!labels(calls).some((l) => l.startsWith('second:')), labels(calls).join(', '));
+  assert.deepEqual(regressLabels(calls), ['regress:fix:f1', 'regress:fix:f2']);
+  assert.equal(result.status, 'stable');
+  assert.equal(result.second_sweep, null);
+  assert.deepEqual(result.fixed, ['f1', 'f2']);
+  assert.deepEqual(result.blocked, []);
+  assert.deepEqual(result.regressions, []);
+});
+
+test('STABILISE-24 every part-fix run checks each landed first-wave fix with its own regression agent, done ones included, reverted ones not', async () => {
+  const sel = [finding('f0', 'critical'), finding('f1', 'critical'), finding('f2', 'important'), finding('f3', 'important')];
+  const { calls } = await runWorkflow(WF, {
+    args: fixArgs({ selected: sel, done: ['fix:f0'] }),
+    respond: responder({ fixes: { f3: { status: 'reverted', note: 'broke test x; reverted' } } }),
+  });
+  const ls = labels(calls);
+  assert.deepEqual(regressLabels(calls).sort(), ['regress:fix:f0', 'regress:fix:f1', 'regress:fix:f2']);
+  assert.ok(!ls.includes('regress:fix:f3'));
+  const firstReview = ls.findIndex((l) => l.startsWith('second:review:'));
+  assert.ok(firstReview > -1, 'the second sweep ran');
+  for (const l of regressLabels(calls)) assert.ok(ls.indexOf(l) < firstReview, `${l} ran after the second sweep started`);
+  for (const id of ['f0', 'f1', 'f2']) {
+    const c = calls.find((x) => x.opts.label === `regress:fix:${id}`);
+    assert.ok(c.prompt.includes(`Temper-Task: e/fix:${id}`));
+    for (const other of ['f0', 'f1', 'f2', 'f3'].filter((o) => o !== id)) {
+      assert.ok(!c.prompt.includes(`Temper-Task: e/fix:${other}\``), `${id}'s check names ${other}`);
+    }
+    assert.match(c.prompt, /parent commit/);
+    assert.match(c.prompt, /Run attempt 0\.$/);
+  }
+});
+
+test('STABILISE-25 a proven regression hands over before blocked, and the check still runs when a fix is blocked', async () => {
+  const sel = [finding('f1', 'critical'), finding('f2', 'important')];
+  const fixes = { f1: { status: 'blocked', note: 'needs the owner' } };
+  const regressions = [{ fix: 'f2', evidence: 'test y fails; passed on the parent commit' }];
+
+  const proven = await runWorkflow(WF, {
+    args: fixArgs({ selected: sel }),
+    respond: responder({ fixes, regress: (id) => (id === 'f2' ? { regressions } : { regressions: [] }) }),
+  });
+  assert.ok(labels(proven.calls).includes('regress:fix:f2'));
+  assert.ok(!labels(proven.calls).includes('regress:fix:f1'), 'a blocked fix left no commit to check');
+  assert.equal(proven.result.status, 'handover');
+  assert.deepEqual(proven.result.regressions, regressions);
+  assert.ok(!labels(proven.calls).some((l) => l.startsWith('second:')));
+
+  const clean = await runWorkflow(WF, { args: fixArgs({ selected: sel }), respond: responder({ fixes }) });
+  assert.ok(labels(clean.calls).includes('regress:fix:f2'));
+  assert.equal(clean.result.status, 'blocked');
+  assert.deepEqual(clean.result.regressions, []);
+
+  const silent = await runWorkflow(WF, { args: fixArgs({ selected: sel }), respond: responder({ fixes, regress: () => null }) });
+  assert.equal(silent.result.status, 'blocked');
+  assert.ok(silent.result.blocked.some((b) => b.id === 'regress:fix:f2' && b.reason === 'agent returned nothing'), JSON.stringify(silent.result.blocked));
+  assert.ok(silent.result.blocked.some((b) => b.id === 'f1'));
+});
+
+test('STABILISE-26 attempt changes the regression prompts and nothing before them', async () => {
+  const sel = [finding('f1', 'critical'), finding('f2', 'important')];
+  const run = (attempt) => runWorkflow(WF, { args: fixArgs({ selected: sel, done: ['fix:f2'], attempt, sweeps: 1 }), respond: responder() });
+  const a = await run(0);
+  const b = await run(1);
+  const byLabel = (r) => Object.fromEntries(r.calls.map((c) => [c.opts.label, c.prompt]));
+  const pa = byLabel(a);
+  const pb = byLabel(b);
+  assert.deepEqual(Object.keys(pa), Object.keys(pb));
+  const fixes = Object.keys(pa).filter((l) => l.startsWith('fix:'));
+  const regs = Object.keys(pa).filter((l) => l.startsWith('regress:'));
+  assert.ok(fixes.length > 0 && regs.length === 2);
+  for (const l of fixes) assert.equal(pa[l], pb[l], `${l} changed with attempt`);
+  for (const l of regs) {
+    assert.notEqual(pa[l], pb[l], `${l} did not change with attempt`);
+    assert.match(pa[l], /Run attempt 0\.$/);
+    assert.match(pb[l], /Run attempt 1\.$/);
+  }
+  // Every call before the first regression agent is unchanged, so the resume cache keeps it.
+  const firstRegress = a.calls.findIndex((c) => c.opts.label.startsWith('regress:'));
+  for (let i = 0; i < firstRegress; i++) assert.equal(a.calls[i].prompt, b.calls[i].prompt);
+});
+
+test('STABILISE-27 second_sweep_findings [] with no sweeps behaves as one sweep, with the regression check', async () => {
+  const { calls, result } = await runWorkflow(WF, {
+    args: fixArgs({ selected: [finding('f1', 'critical'), finding('f2', 'important')], second_sweep_findings: [] }),
+    respond: responder(),
+  });
+  assert.equal(result.status, 'stable');
+  assert.deepEqual(regressLabels(calls), ['regress:fix:f1', 'regress:fix:f2']);
+  assert.ok(!labels(calls).some((l) => l.startsWith('second:')), labels(calls).join(', '));
+  assert.equal(result.second_sweep, null);
 });
