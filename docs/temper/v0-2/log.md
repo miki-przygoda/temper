@@ -29,3 +29,8 @@
 - **The host.** This Mac has 16 CPUs and plenty of free disk. A quick gate is `npm test`, about 1 minute. Waves hold at most 2 tasks to launch (wave 0: `args-fields` and `docs-v02`), so no re-cut is needed.
 - **The runner.** v0.1.0's `workflows/build.js` (26714a9), from a scratch copy.
 - **Task texts.** `args.json` task texts point at their plan sections, so the launch args stay small enough to pass inline. The implementer reads the plan and the spec anyway. The launch passes the absolute `repo`.
+
+## 28 Oct 2026: build blocked at wave 0 (head)
+
+- **Wave 0.** `args-fields` merged (0d77370). `docs-v02` blocked: bumping `plugin.json` to 0.2.0 means changing `test/manifest.test.mjs`, which pins 0.1.0 and isn't in its owns.
+- **The head's call.** This was a plan error, so the plan is fixed, not the check: `test/manifest.test.mjs` is added to `docs-v02`'s owns (no other task owns it). The answer goes in `answers["docs-v02"]`, `done` is refreshed, and the run resumes.

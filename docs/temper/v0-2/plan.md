@@ -431,7 +431,7 @@ Follows **Skill edits**. Run by the head's skill-edit workflow (see "How the run
 
 ### Task 11 `docs-v02`: README, design-spec amendments, behaviour lines and the version (spec §3.4 rubric, §3.7a, §3.8, §3.10)
 
-Owns: README.md, docs/specs/2026-10-24-temper-design.md, docs/v1-log.md, docs/v1-behaviour.md, .claude-plugin/plugin.json, test/readme-v02.test.mjs
+Owns: README.md, docs/specs/2026-10-24-temper-design.md, docs/v1-log.md, docs/v1-behaviour.md, .claude-plugin/plugin.json, test/readme-v02.test.mjs, test/manifest.test.mjs
 Uses: none
 Provides: none
 Wave: 0

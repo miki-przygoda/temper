@@ -230,7 +230,8 @@
         "docs/v1-log.md",
         "docs/v1-behaviour.md",
         ".claude-plugin/plugin.json",
-        "test/readme-v02.test.mjs"
+        "test/readme-v02.test.mjs",
+        "test/manifest.test.mjs"
       ],
       "uses": [],
       "provides": [],
@@ -256,8 +257,11 @@
     }
   ],
   "done": [
+    "args-fields",
     "project-skills",
     "run-skill"
   ],
-  "answers": {}
+  "answers": {
+    "docs-v02": "test/manifest.test.mjs is now in your owns (a plan error: the head fixed the plan). Change its version assertion to '0.2.0' and rename that test to say 0.2.0; keep the version bump in this task."
+  }
 }
