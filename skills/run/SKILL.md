@@ -70,6 +70,8 @@ The return value's `status`:
 - `blocked`: `blocked` is a list of `{id, reason}`, and `done_now` the tasks merged in this run. A blocked wave still merges its tasks that passed their checks before returning, so they are in `done_now` and their trailers are on the epic branch; only the blocked tasks run again on resume. Go to "Blocked items".
 - `mvp`: record the build report in `log.md` (the checkpoint flows and gaps, the acceptance pass and fail counts, the green rounds, the questions). Treat each entry in `questions` as a blocked question (below). Then go to stage 4.
 
+When the result has `commits`, whatever its status, check each sha after the fetch-back (step 3 of "Before every launch or resume"): `git -C <repo> merge-base --is-ancestor <sha> <branch>`. A sha that isn't on the branch (exit non-zero): tell the user its id and sha, and never cherry-pick it, merge it or add its trailer yourself. Its trailer isn't in `done`, so its phase or task runs again: refresh `args.done` and resume.
+
 ## Blocked items
 
 ### Task ids: the answer loop (spec 3.6)
@@ -122,13 +124,14 @@ The `fix` return value:
 - `blocked`: handle each as a blocked task question above, but write its answer to `args.answers[<finding id>]`, so it reaches only that fix's prompt; then resume with the same `selected` and the saved `second_sweep_findings`. The id `second-sweep` with `done but args.second_sweep_findings missing` means the second sweep ran but no saved findings came back from it: never sweep again; stop, record it in `log.md`, and hand over to the user. An id `second:review:<lens>` is not a fix and gets no answer: see `handover` below.
 - `open_items`: append them to the open items in `log.md`.
 - `flaky_reruns`: record and report them as in stage 3.
+- `commits`: check them as in stage 3.
 - `status: "blocked"`: a selected fix is blocked (or `regress:fix` with `agent returned nothing`: the regression check over the fixes made on a resume never ran), so the second sweep has not run on a branch missing a selected fix and there are no `second_sweep_findings` to save. Handle the blocked fixes as above, refresh `args.done` and resume; the resume checks the fixes it makes for regressions and then runs the second sweep (SECOND-CONTROL-FLOW-4).
 - `status: "stable"`: go to stage 5, after you record in `log.md` that stage 4 is stable. With `second_sweep: null`, record that it ran one sweep, as `sweeps: 1` asks, so no second sweep is expected.
 - `status: "handover"`: the second sweep found something severe, and its fixes and the regression check ran; or the regression check over the fixes made on a resume found `regressions`, before any second sweep; or a `blocked` entry with id `second:review:<lens>` says that lens's second-sweep reviewer returned nothing, or a finding with an id that doesn't match ID_RE, so the stage is not done. Never resume to review it. Stop, record it in `log.md`, and hand over to the user (per `severe_contact` overnight). There is never a third sweep.
 
 ## Stage 5, `temper:publish`
 
-Args: `epic`, `repo`, `branch`, `base`, `default_branch` (when `args.json` has it), `log`, `spec`, `host`, `gates`, `build_rule`, `flaky` (both as in stage 4) and `done`.
+Args: `epic`, `repo`, `branch`, `base`, `default_branch` (when `args.json` has it), `log`, `spec`, `host`, `gates`, `build_rule`, `flaky` (both as in stage 4) and `done`. When the result has `commits`, check them as in stage 3.
 
 - `gate_failed`: don't push. Record the gate's exit status and log path in `log.md` and tell the user. Once the cause is fixed and committed on the epic branch, refresh `args.done` and launch publish again. `done_tasks.py` counts `docs` and `evidence` only while no other commit comes after theirs, so a relaunch after a gate fix writes the docs, the PR body and the evidence again, against the code that passes (SECOND-CONTROL-FLOW-9). Never add their trailers by hand.
 - `blocked`: resume once, as above.
