@@ -264,7 +264,7 @@ temper's "real program" is its workflows and skills. The checkpoint runs each fl
   - `const SECOND_PREFIX = 'second:'` and `isSecondId(id) -> boolean`.
 - **`withRules` order:** parts, host text, build rule, `GATE_WAIT`, `RULES_COMMON`.
 - **Results:**
-  - **`commits`:** `{[id]: sha}`, with only non-empty shas. It is on every build result after validation; on stabilise `part: "fix"` (keys `fix:<id>`); and on publish (`docs`, `evidence`).
+  - **`commits`:** `{[id]: sha}`. Only a value matching `/^[0-9a-f]{7,40}$/` goes in. Any other value reported by an agent is left out, and that id is added to `blocked` with the reason `commit is not a sha`. (Owner's decision, 29 Oct, security-01: the head runs git on these values.) It is on every build result after validation; on stabilise `part: "fix"` (keys `fix:<id>`); and on publish (`docs`, `evidence`).
   - **`flaky_reruns`:** `[{id, test, gate}]` on build and stabilise results. In agent schemas, an optional `flaky_reruns: [{test, gate}]`.
   - **Sweep:** `part: "sweep"` adds `unverified: finding[]`, each with `unverified: true`.
   - **Fix:** `part: "fix"` gives `second_sweep: null` when no second sweep ran because of one-sweep mode.
