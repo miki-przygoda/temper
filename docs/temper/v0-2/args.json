@@ -1,0 +1,279 @@
+{
+  "epic": "v0-2",
+  "repo": ".",
+  "branch": "epic/v0-2",
+  "base": "v0.2",
+  "default_branch": "main",
+  "spec": "docs/temper/v0-2/spec.md",
+  "plan": "docs/temper/v0-2/plan.md",
+  "log": "docs/temper/v0-2/log.md",
+  "host": {
+    "kind": "local"
+  },
+  "gates": {
+    "quick": "npm test",
+    "full": "npm test && node scripts/bundle.mjs --check && CLAUDE_CONFIG_DIR=\"$(mktemp -d)\" claude plugin validate . --strict"
+  },
+  "tasks": [
+    {
+      "id": "args-fields",
+      "title": "New args fields, validated",
+      "wave": 0,
+      "owns": [
+        "src/lib.js",
+        "schemas/args.schema.json",
+        "test/lib-core.test.mjs",
+        "test/schema-cases.mjs",
+        "workflows/build.js",
+        "workflows/stabilise.js",
+        "workflows/publish.js"
+      ],
+      "uses": [],
+      "provides": [
+        "args-v02"
+      ],
+      "text": "Your task is the plan section '### Task 1 `args-fields`' in docs/temper/v0-2/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-2/spec.md section 8."
+    },
+    {
+      "id": "prompts-rule-wait",
+      "title": "The build rule and the gate wait reach every agent (spec \u00a73.2, \u00a73.5 prompts)",
+      "wave": 1,
+      "owns": [
+        "src/lib.js",
+        "test/lib-prompts.test.mjs",
+        "test/acceptance/build.test.mjs",
+        "workflows/build.js",
+        "workflows/stabilise.js",
+        "workflows/publish.js"
+      ],
+      "uses": [
+        "args-v02"
+      ],
+      "provides": [
+        "with-rules-v02"
+      ],
+      "text": "Your task is the plan section '### Task 2 `prompts-rule-wait`' in docs/temper/v0-2/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-2/spec.md section 8."
+    },
+    {
+      "id": "commits",
+      "title": "Commits that reach their branch (spec \u00a73.1, workflow side)",
+      "wave": 2,
+      "owns": [
+        "src/lib.js",
+        "src/build.js",
+        "src/stabilise.js",
+        "src/publish.js",
+        "test/lib-prompts.test.mjs",
+        "test/acceptance/build.test.mjs",
+        "test/acceptance/stabilise.test.mjs",
+        "test/acceptance/publish.test.mjs",
+        "workflows/build.js",
+        "workflows/stabilise.js",
+        "workflows/publish.js"
+      ],
+      "uses": [
+        "with-rules-v02"
+      ],
+      "provides": [
+        "commits-result"
+      ],
+      "text": "Your task is the plan section '### Task 3 `commits`' in docs/temper/v0-2/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-2/spec.md section 8."
+    },
+    {
+      "id": "regress-sweeps",
+      "title": "One-sweep mode, and a regression check after every fix wave (spec \u00a73.3)",
+      "wave": 3,
+      "owns": [
+        "src/lib.js",
+        "src/stabilise.js",
+        "test/stabilise-fix.test.mjs",
+        "test/acceptance/stabilise.test.mjs",
+        "workflows/build.js",
+        "workflows/stabilise.js",
+        "workflows/publish.js",
+        "test/acceptance/git-safety.test.mjs",
+        "test/stabilise-sweep.test.mjs"
+      ],
+      "uses": [
+        "args-v02",
+        "commits-result"
+      ],
+      "provides": [
+        "regress-per-fix"
+      ],
+      "text": "Your task is the plan section '### Task 4 `regress-sweeps`' in docs/temper/v0-2/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-2/spec.md section 8."
+    },
+    {
+      "id": "fix-minors",
+      "title": "Selected minor findings are fixed (spec \u00a73.4, workflow and docs)",
+      "wave": 4,
+      "owns": [
+        "src/stabilise.js",
+        "test/stabilise-fix.test.mjs",
+        "test/acceptance/stabilise.test.mjs",
+        "workflows/build.js",
+        "workflows/stabilise.js",
+        "workflows/publish.js",
+        "test/acceptance/git-safety.test.mjs",
+        "test/stabilise-sweep.test.mjs"
+      ],
+      "uses": [
+        "regress-per-fix"
+      ],
+      "provides": [],
+      "text": "Your task is the plan section '### Task 5 `fix-minors`' in docs/temper/v0-2/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-2/spec.md section 8."
+    },
+    {
+      "id": "flaky-quick-gates",
+      "title": "Known flaky tests in quick gates (spec \u00a73.6, workflow side)",
+      "wave": 5,
+      "owns": [
+        "src/lib.js",
+        "src/build.js",
+        "src/stabilise.js",
+        "test/lib-prompts.test.mjs",
+        "test/acceptance/build.test.mjs",
+        "test/acceptance/stabilise.test.mjs",
+        "workflows/build.js",
+        "workflows/stabilise.js",
+        "workflows/publish.js",
+        "test/acceptance/git-safety.test.mjs",
+        "test/stabilise-sweep.test.mjs",
+        "test/stabilise-fix.test.mjs"
+      ],
+      "uses": [
+        "args-v02",
+        "with-rules-v02"
+      ],
+      "provides": [
+        "flaky-reruns-result"
+      ],
+      "text": "Your task is the plan section '### Task 6 `flaky-quick-gates`' in docs/temper/v0-2/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-2/spec.md section 8."
+    },
+    {
+      "id": "unverified-findings",
+      "title": "Redo SECOND-CONTROL-FLOW-5, a verifier that returns nothing (spec \u00a73.9)",
+      "wave": 6,
+      "owns": [
+        "src/lib.js",
+        "src/stabilise.js",
+        "test/stabilise-sweep.test.mjs",
+        "test/stabilise-fix.test.mjs",
+        "test/acceptance/stabilise.test.mjs",
+        "workflows/build.js",
+        "workflows/stabilise.js",
+        "workflows/publish.js",
+        "test/acceptance/git-safety.test.mjs"
+      ],
+      "uses": [
+        "regress-per-fix"
+      ],
+      "provides": [
+        "unverified-result"
+      ],
+      "text": "Your task is the plan section '### Task 7 `unverified-findings`' in docs/temper/v0-2/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-2/spec.md section 8."
+    },
+    {
+      "id": "second-namespace",
+      "title": "Redo SECOND-TESTS-DOCS-2 and SECOND-CONTROL-FLOW-7, the second sweep's ids (spec \u00a73.9)",
+      "wave": 7,
+      "owns": [
+        "src/lib.js",
+        "src/stabilise.js",
+        "test/stabilise-fix.test.mjs",
+        "test/acceptance/stabilise.test.mjs",
+        "test/acceptance/git-safety.test.mjs",
+        "workflows/build.js",
+        "workflows/stabilise.js",
+        "workflows/publish.js",
+        "test/stabilise-sweep.test.mjs"
+      ],
+      "uses": [
+        "unverified-result"
+      ],
+      "provides": [
+        "second-namespace"
+      ],
+      "text": "Your task is the plan section '### Task 8 `second-namespace`' in docs/temper/v0-2/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-2/spec.md section 8."
+    },
+    {
+      "id": "run-skill",
+      "title": "The run skill (spec \u00a73.1, \u00a73.3, \u00a73.4, \u00a73.5, \u00a73.6, \u00a73.9, the head's side)",
+      "wave": 0,
+      "owns": [
+        "skills/run/SKILL.md",
+        "test/run-skill-v02.test.mjs",
+        "test/skills.test.mjs",
+        "test/acceptance/skills-packaging.test.mjs"
+      ],
+      "uses": [],
+      "provides": [],
+      "text": "Your task is the plan section '### Task 9 `run-skill`' in docs/temper/v0-2/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-2/spec.md section 8."
+    },
+    {
+      "id": "project-skills",
+      "title": "Project settings, the plan and setup skills, and the gate-slots guidance (spec \u00a73.2, \u00a73.5, \u00a73.6)",
+      "wave": 1,
+      "owns": [
+        "skills/plan/SKILL.md",
+        "skills/setup/SKILL.md",
+        "templates/project.md",
+        "templates/gate-slots.md",
+        "templates/plan-additions.md",
+        "test/templates.test.mjs",
+        "test/project-skills-v02.test.mjs",
+        "test/skills.test.mjs",
+        "test/acceptance/skills-packaging.test.mjs"
+      ],
+      "uses": [],
+      "provides": [],
+      "text": "Your task is the plan section '### Task 10 `project-skills`' in docs/temper/v0-2/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-2/spec.md section 8."
+    },
+    {
+      "id": "docs-v02",
+      "title": "README, design-spec amendments, behaviour lines and the version (spec \u00a73.4 rubric, \u00a73.7a, \u00a73.8, \u00a73.10)",
+      "wave": 0,
+      "owns": [
+        "README.md",
+        "docs/specs/2026-10-24-temper-design.md",
+        "docs/v1-log.md",
+        "docs/v1-behaviour.md",
+        ".claude-plugin/plugin.json",
+        "test/readme-v02.test.mjs",
+        "test/manifest.test.mjs"
+      ],
+      "uses": [],
+      "provides": [],
+      "text": "Your task is the plan section '### Task 11 `docs-v02`' in docs/temper/v0-2/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-2/spec.md section 8."
+    }
+  ],
+  "behaviour_groups": [
+    {
+      "key": "commits",
+      "title": "commits reach their branch, and every stage reports its commits (spec \u00a73.1)"
+    },
+    {
+      "key": "prompts",
+      "title": "the build rule, the gate wait and the flaky list reach the right agents (spec \u00a73.2, \u00a73.5, \u00a73.6)"
+    },
+    {
+      "key": "stabilise",
+      "title": "one-sweep mode, the per-fix regression check, selected minors, unverified findings and second-sweep ids (spec \u00a73.3, \u00a73.4, \u00a73.9)"
+    },
+    {
+      "key": "head",
+      "title": "the run, plan and setup skills and the project template carry the head's side (spec \u00a73.1\u2013\u00a73.6, head side)"
+    }
+  ],
+  "done": [
+    "args-fields",
+    "commits",
+    "docs-v02",
+    "project-skills",
+    "prompts-rule-wait",
+    "run-skill"
+  ],
+  "answers": {
+    "regress-sweeps": "Yes: test/acceptance/git-safety.test.mjs (and the other shared stabilise test files) are now in your owns; the head fixed the plan. Make exactly the two-line edit you described: stabiliseRespond answers labels starting 'regress:fix:', and prompts() expects 'regress:'. Keep every other assertion as it is."
+  }
+}

@@ -37,7 +37,15 @@ function badValues(node) {
   return out;
 }
 
-const setAt = (obj, path, v) => {
+// A valid sample for a plain string or array-of-strings node with no other constraints; else undefined.
+function sampleFor(node) {
+  const plain = (n) => n && n.type === 'string' && n.pattern === undefined && n.const === undefined;
+  if (plain(node)) return 'x';
+  if (node.type === 'array' && plain(node.items)) return ['x'];
+  return undefined;
+}
+
+const setAt =(obj, path, v) => {
   const last = path[path.length - 1];
   const parent = path.slice(0, -1).reduce((o, k) => o[k], obj);
   parent[last] = v;
@@ -50,6 +58,16 @@ const deleteAt = (obj, path) => {
 
 // Each case: {name, args, field}, where field is the name the refusal must mention.
 export function schemaCases(base, { schema = ARGS_SCHEMA, only } = {}) {
+  base = clone(base);
+  // Optional top-level fields the base leaves out (build_rule, flaky) still get their wrong-type
+  // cases: the walk runs over a copy of the base that holds a valid sample of each.
+  const top = resolve(schema, schema);
+  for (const [key, sub] of Object.entries(top.properties ?? {})) {
+    if (base[key] !== undefined || (top.required ?? []).includes(key)) continue;
+    if (only && !only.includes(key)) continue;
+    const sample = sampleFor(resolve(sub, schema));
+    if (sample !== undefined) base[key] = sample;
+  }
   const cases = [];
   const walk = (rawNode, value, path, field) => {
     let node = resolve(rawNode, schema);

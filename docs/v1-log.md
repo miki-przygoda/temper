@@ -135,12 +135,13 @@ Five regressions were proven. Each was reproduced a second time with an independ
 - `node scripts/bundle.mjs`, then `--check`: rc 0, and the working tree was clean afterwards.
 - `claude plugin validate --strict .` with a fresh CLAUDE_CONFIG_DIR: passed, rc 0. The LICENSE_MISSING and ICON_MISSING directory notes were already there and don't change the result.
 - `sh scripts/install_smoke.sh`: rc 0 (the marketplace was added, and superpowers and temper@temper were installed and enabled).
-- `sh scripts/ssh_host_smoke.sh beast`: PASS, 11 of 11 checks, mode ssh, rc 0, with no temper-smoke directories left on beast. The smoke doesn't cover the stale-private-ref cases above.
+- `sh scripts/ssh_host_smoke.sh <host>` against the build host: PASS, 11 of 11 checks, mode ssh, rc 0, with no temper-smoke directories left on the build host. The smoke doesn't cover the stale-private-ref cases above.
 
 ### Reopened by the reverts, left for the owner
 
 - SECOND-CONTROL-FLOW-5, SECOND-CONTROL-FLOW-6, SECOND-TESTS-DOCS-2, SECOND-CONTROL-FLOW-7 and SECOND-TESTS-DOCS-5 are open again, in their 24 Oct form.
 - SECOND-CONTROL-FLOW-1 is fixed but carries the open stale-private-ref regression.
+- SECOND-CONTROL-FLOW-5, SECOND-TESTS-DOCS-2 and SECOND-CONTROL-FLOW-7 are redone in v0.2 (docs/temper/v0-2/spec.md §3.9).
 
 ### Second-sweep findings this run did not touch (minors, left for the owner)
 

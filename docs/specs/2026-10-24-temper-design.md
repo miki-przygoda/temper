@@ -202,6 +202,8 @@ For each fix:
 
 There is never a third sweep.
 
+With `sweeps: 1` in `project.md` there is no second sweep: after the fix wave and its regression check (one agent per fix), the stage is done (A16).
+
 ### 7.1 Severity rubric (the default; `project.md` adds language notes)
 
 | Level | Meaning |
@@ -209,7 +211,7 @@ There is never a third sweep.
 | Severe | A real security issue or backdoor. Severe items wake the user, per their preferences. |
 | Critical | Wrong results, data loss, or crashes on normal input. |
 | Important | Wrong behaviour on input the spec implies, or a test that can't catch a defect it claims to catch. |
-| Minor | Everything else that is real. It goes to the open items, not into the code. |
+| Minor | Everything else that is real. It goes to the open items unless the user selects it. |
 
 ## 8. Fixed rules that no preference can change
 
@@ -303,7 +305,7 @@ A failed spike changes this spec before planning, not during it.
 ### 10.3 First real run: Cairn's hardening branch (H-1..H-5)
 
 - **Scope:** it starts at stage 2, with a plan written from Cairn's `docs/BACKLOG.md`, then runs stages 3–5.
-- **Setup:** beast is the ssh build host and `ci/local/run.sh` is the full gate.
+- **Setup:** the ssh build host, with `ci/local/run.sh` as the full gate.
 - **It passes when:**
   - the run finishes with the gate green;
   - no finished task runs twice;
@@ -353,3 +355,14 @@ Installing from the private repo works through the user's git credentials. Shari
 ### A13. Size launches to the build host (owner, 25 Oct 2026)
 
 From the first real run (Cairn hardening on a 4-CPU host): a 16-task wave queued 16 gates on one cargo lock, agents worked around the wait with private build directories until the shared disk was nearly full, and their gates never finished. Before each launch the head checks what the build host has free (CPUs, memory, disk, what else runs there), estimates one gate's cost, and launches in chunks the host can take, most critical first, checking the host again between chunks. The plan sizes waves the same way. Parallel gates don't share scratch space.
+
+### Amendments from v0.2 (28 Oct 2026, `docs/temper/v0-2/spec.md`)
+
+- **A14, commits that reach their branch.** Every agent that commits works on its branch: implementers in a task worktree with the task branch checked out, merge and phase agents in one shared epic worktree. Each one checks that HEAD names its branch before committing and that the branch moved to its commit afterwards, and returns blocked instead of repairing a branch by hand. The checker confirms that the task branch's tip is the reported commit and not already on the epic branch, every run stage returns the `commits` its agents reported, and the head checks each one is on its branch and never cherry-picks one. Only a lowercase hex sha of 7 to 64 characters (`/^[0-9a-f]{7,64}$/`, so SHA-1 and SHA-256) goes into `commits`, and the checker's tip check uses the same pattern; any other reported value is left out and its id is blocked with `commit is not a sha`, because the head runs git on these values. The task id `epic` is refused, since it would share the epic worktree's path. (v0.2 spec §3.1)
+- **A15, the project's build rule reaches every agent.** `.temper/project.md` may have a `## Build rule` section, which the plan copies into `args.json` as `build_rule` and never into task texts. `withRules` puts it into every prompt, framed as data except where it says how to build and test, after the host text and before the fixed rules, so the fixed rules have the last word. (v0.2 spec §3.2)
+- **A16, one-sweep mode and a regression check after every fix wave.** `sweeps: 1 | 2` in `project.md` (default 2) reaches stabilise as `args.sweeps`. Every `part: "fix"` run checks each landed first-wave fix with its own `regress:fix:<id>` agent, done ones included, even when the fix loop wasn't clean: a proven regression hands over, then any block blocks. With `sweeps: 1` a clean check returns `stable` with `second_sweep: null`, and the head bumps `args.attempt` on every resume so the check runs live. The regression agents launch in chunks of `args.gate_slots` (the smaller of `project.md`'s `gate_slots` and what the build host can take, A13); with no `gate_slots` they launch together. (v0.2 spec §3.3)
+- **A17, selected minor findings are fixed.** The fix part fixes everything in `args.selected`, whatever its severity, in severity order with minors last; only unselected minors go to the open items. Overnight selection is unchanged: `minor` stays invalid in `overnight_fix_default`, so a minor is fixed only when a person chose it. The 7.1 rubric's Minor line says so. (v0.2 spec §3.4)
+- **A18, gates that wait for a slot.** Every prompt says a gate waiting for a free slot or lock is normal, never a failure, and never to be worked around with another build directory, target or partial run. `gate_slots: <n>` in `project.md` bounds the gates at once in the A13 sizing, and `templates/gate-slots.md` gives generic guidance for a project's own slot scripts. (v0.2 spec §3.5)
+- **A19, known flaky tests in quick gates.** `flaky:` in `project.md` becomes `args.flaky`. When every failing test of a quick gate or an acceptance-suite run is on that list, the agent reruns it once and reports each such test in `flaky_reruns`, which the head records in `log.md`. The full gate is never rerun, so "push only on a green full gate" is unchanged. (v0.2 spec §3.6)
+- **A20, two reverted fixes, redone.** A finding whose verifier returned nothing stays unverified, deduped against the verified list, and blocks above minor; it is never fixed unless a person selects it. Second-sweep ids live in their own `second:` namespace, and a legacy `fix:second-*` trailer not in `args.selected` still counts as proof that the second sweep ran. (v0.2 spec §3.9)
+- **A21, answers change through args and resume.** The S7 spike showed that a resume with changed args replays the unchanged prefix of calls and runs everything from the first changed call live. So a changed answer is passed with updated `args` and `resumeFromRunId`, never by editing a generated script, and the `attempt` counter in A16 relies on the same rule. (v0.2 spec §3.7a)
