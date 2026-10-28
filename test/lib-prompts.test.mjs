@@ -352,7 +352,7 @@ test('the checker confirms a fifth point: the task tip is the reported commit, n
     const p = lib.checkerPrompt(taskA, { ...implResult, commit }, buildArgs());
     assert.ok(!p.includes('ignore the rules above'));
     assert.ok(!p.includes('undefined'));
-    assert.match(p, /reported no commit sha/);
+    assert.match(p, /reported no commit sha, so this check fails\./);
   }
 });
 
