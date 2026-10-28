@@ -61,3 +61,15 @@
 
   `templates/project.md` has `sweeps:` (line 22), `gate_slots:` (24), `flaky:` (26) and `## Build rule` (37).
 - **Gaps.** None found. Nothing was fixed, and no product code or tests changed.
+
+## 28–29 Oct 2026: build report (head)
+
+- **Result.** Run wf_c6f6f1af-e23 (v0.1.0's `build.js`) returned `mvp`. All 11 tasks are merged: waves 3–7 merged `regress-sweeps`, `fix-minors`, `flaky-quick-gates`, `unverified-findings` and `second-namespace` in this resume.
+- **Checkpoint.** The full gate passed, and all six user flows (spec §7) were ok with no gaps.
+- **Acceptance.** 72 passing, 1 failing (HEAD-09), none untestable. To-green round 1 fixed HEAD-09 as a product fix, with no questions.
+- **The head's check at 4aa467d.**
+  - `npm test`: 428/428 Node and 107/107 Python.
+  - The bundle check exits 0, and `claude plugin validate --strict` passes.
+  - Every task and phase trailer is in `done_tasks.py`'s output, and the checkpoint commit 1f6c8fd is on the branch.
+- **For stage 4.** New test lines reuse `beast`, the old fixtures' example host name, in about 7 places. The handover asked for no new mentions, so the head raises it as a finding for the owner's selection.
+- **Stage 4's runner.** It is this branch's own v0.2 `stabilise.js` (a snapshot at 4aa467d), with `sweeps: 1`: one sweep, the selected fixes, then the per-fix regression check. That is the owner's method from the first run, now built in.
