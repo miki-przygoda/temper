@@ -118,3 +118,14 @@
 - **Stage 4 stops here** (hard stop). The owner is present, and the handover is this log and the report to the owner.
 - **New open item: the per-fix regression check.** Each agent checks its fix's diff against that fix's parent, not against the branch HEAD. So a regression that was later fixed forward is reported again on every rerun of the check. A redo would tell each agent the branch HEAD as well, and count only a regression that still reproduces there.
 - **New open item: plan ownership.** The plan skill doesn't make a task own the existing tests its change will break. This build blocked twice on it (`docs-v02` and `test/manifest.test.mjs`; `regress-sweeps` and the shared stabilise tests).
+
+## 29 Oct 2026: run skill check after the fix wave (head)
+
+- **The check.** writing-skills RED/GREEN (wf_9d7dfc06-461), 3 subagents per scenario plus a judge.
+  - **RED** was run on the skill at `13fe946^`: J (blocked `regress:fix:<id>`) failed 0/3, K (`second:verify:<id>`) 0/3, L (publish's `commit is not a sha`) 3/3.
+  - **GREEN** at HEAD: J, K and L each failed 0/3.
+- **Reading.** test-strength-and-docs-04's rewording wasn't needed for J and K: the older text already led there. L is a real fix, from security-01's run skill line.
+
+## 29 Oct 2026: stage 5 (head)
+
+- **The runner.** v0.2's `publish.js` at 132b895 (after the sha fix).
