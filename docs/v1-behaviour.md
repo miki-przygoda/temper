@@ -44,6 +44,8 @@ Stage 3, `/temper:build` (`workflows/build.js`), fed with `args.json`.
 - **BUILD-32** Given any agent prompt, when it is read, then it says a gate waiting for a free slot or lock is normal and is not a failure, to wait for it, and never to work around it with another build directory, a different target or a partial run. (A18, v0.2 spec §3.5)
 - **BUILD-33** Given `args.flaky` lists tests, when the implementer, checker, merge, green and fix prompts are read, then they carry the list and the rule to rerun a quick gate once when every failing test is on it; the checkpoint and publish full-gate prompts say the full gate is never rerun; with no list, no prompt carries a flaky list or the rerun-once rule, and the full-gate prompts still say the full gate is never rerun. (A19, v0.2 spec §3.6)
 - **BUILD-34** Given agents report `flaky_reruns`, when build returns, then its result's `flaky_reruns` holds each entry with the reporting agent's label as `id`. (A19, v0.2 spec §3.6)
+- **BUILD-35** Given an agent reports a commit value that is not a lowercase hex sha of 7 to 64 characters, when build, stabilise or publish returns, then that value is left out of `commits` and its id is in `blocked` with the reason `commit is not a sha`; the checker's tip check uses the same pattern, so a SHA-256 sha passes. (A14, v0.2 spec §3.1, §8)
+- **BUILD-36** Given `args.tasks` has a task with the id `epic`, when the args are validated, then they are refused before any agent runs, because that task's worktree would share the epic worktree's path. (A14, v0.2 spec §3.1)
 
 ## stabilise
 
@@ -79,6 +81,7 @@ Stage 4, `/temper:stabilise` (`workflows/stabilise.js`), on the epic branch.
 - **STABILISE-28** Given fix agents report `flaky_reruns`, when stabilise returns, then its result's `flaky_reruns` holds each entry with the fix agent's label as `id`. (A19, v0.2 spec §3.6)
 - **STABILISE-29** Given a verifier returns nothing, when the findings are collected, then the finding is kept as unverified, never counted as refuted or fixed, listed once (as verified) when another lens's verifier confirmed the same bug, blocks above minor, and stays unverified when saved for a resume. (A20, v0.2 spec §3.9)
 - **STABILISE-30** Given second-sweep findings, when they are collected, then their ids are put into the `second:` namespace by the script; a first-sweep lens whose slug starts with `second` never counts as a second-sweep fix, and a legacy `fix:second-*` trailer not in `args.selected` counts as proof that the second sweep ran, so there is no third sweep and its regression check runs. (A20, v0.2 spec §3.9)
+- **STABILISE-31** Given `args.gate_slots` is n, when `part: "fix"` runs its regression check, then the `regress:fix:<id>` agents launch in chunks of at most n; a `gate_slots` that is not an integer of at least 1 is refused, and a missing one launches them together. (A13, A16, v0.2 spec §3.3)
 
 ## publish
 

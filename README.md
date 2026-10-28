@@ -105,6 +105,9 @@ Still open after v0.2 (`docs/v1-log.md` has the detail and the redo notes):
 - A run stops when the head's Claude Code session closes (see [Overnight runs](#overnight-runs)).
 - Two reverted v1 review fixes are not redone yet: CONTROL-FLOW-6 (a failed checkpoint can come back from the resume cache) and TESTS-DOCS-5 (the overnight mode check). Some minors are open as well.
 - The private fetch refs under `refs/temper/host/` are never pruned, so a host branch that was rewritten needs a manual `git update-ref -d` (stale-private-ref in `docs/v1-log.md`).
+- Phase, docs and evidence agents have no `blocked` status in their result schemas, so when one of them fails its branch check the workflow doesn't see it; the head's check that each reported sha is on the branch is what catches it (`docs/temper/v0-2/log.md`).
+- Each per-fix regression agent checks its fix against that fix's parent, not the branch HEAD, so a regression that was already fixed forward is reported again on every rerun of the check.
+- The plan skill doesn't make a task own the existing tests its change will break, so such a task blocks at its quick gate until the plan is fixed.
 
 To change an answer or the done list, launch the same workflow with updated `args` and `resumeFromRunId`, never by editing a generated script.
 
