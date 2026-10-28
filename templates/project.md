@@ -18,6 +18,12 @@ disposable:
 board: off
 # Extra review lenses for stage 4, comma-separated. They run as well as the defaults.
 lenses:
+# Review sweeps in stage 4: 2 (a second sweep after the fixes) or 1 (one sweep, then a regression check).
+sweeps: 2
+# How many gates the project's scripts run at once (see templates/gate-slots.md); empty means 1.
+gate_slots:
+# Known flaky tests, comma-separated, named as the test runner prints them; a quick gate that fails only on these is rerun once.
+flaky:
 ---
 
 # Project settings for temper
@@ -27,3 +33,7 @@ The front block above is read by the head session when it plans and runs an epic
 ## Severity notes
 
 <!-- Language or project notes added to the default severity rubric (severe, critical, important, minor), e.g. "a panic on user input is critical". -->
+
+## Build rule
+
+<!-- How agents build and test in this project, as free text, e.g. "build only through the gate scripts; never set a private target dir". The plan copies it into args.json as build_rule, and every agent's prompt carries it, so task texts never repeat it. Leave it empty when there is no rule. -->
