@@ -123,10 +123,48 @@ test('a finding the verifier refutes is dropped and counted', async () => {
   assert.ok(result.refuted >= 1);
 });
 
-test('a verify that returns nothing counts as refuted', async () => {
+test('a verify that returns nothing keeps its finding unverified, never refuted', async () => {
   const { result } = await runWorkflow(WF, { args: sweepArgs(), respond: responder({ f2: null }) });
-  assert.ok(!result.findings.some((f) => f.id === 'f2'));
-  assert.equal(result.refuted, 1);
+  assert.equal(result.status, 'list');
+  assert.ok(!result.findings.some((f) => f.id === 'f2'), 'an unverified finding is not a verified one');
+  assert.equal(result.refuted, 0);
+  assert.deepEqual(result.unverified.map((f) => [f.id, f.severity, f.unverified]), [['f2', 'important', true]]);
+  // An unverified finding above minor leaves the list unclean, like a review that returns nothing.
+  assert.deepEqual(result.blocked, [{ id: 'verify:f2', reason: 'agent returned nothing' }]);
+});
+
+test('a sweep where every verify ran has no unverified findings', async () => {
+  const { result } = await runWorkflow(WF, { args: sweepArgs(), respond: responder() });
+  assert.deepEqual(result.unverified, []);
+});
+
+test('one bug from two lenses, verified by one and unverified by the other, is listed once as verified', async () => {
+  // F1 (security) and F3 (failure paths) share the dedupe key; each order is checked.
+  for (const silent of ['f1', 'f3']) {
+    const { result } = await runWorkflow(WF, { args: sweepArgs(), respond: responder({ [silent]: null }) });
+    const kept = silent === 'f1' ? 'f3' : 'f1';
+    assert.deepEqual(result.findings.map((f) => f.id), ['f2', kept], silent);
+    assert.deepEqual(result.unverified, [], silent);
+    assert.deepEqual(result.blocked, [], silent);
+  }
+  // Both unverified: listed once, unverified.
+  const both = await runWorkflow(WF, { args: sweepArgs(), respond: responder({ f1: null, f3: null }) });
+  assert.deepEqual(both.result.findings.map((f) => f.id), ['f2']);
+  assert.deepEqual(both.result.unverified.map((f) => f.id), ['f1']);
+  // An unverified minor finding is listed but blocks nothing.
+  assert.deepEqual(both.result.blocked, []);
+});
+
+test('dedupeAgainst drops each entry whose dedupe key matches a kept one, on file, line and summary together', () => {
+  const kept = [finding('k1', 'minor', { summary: 'Same Bug ' })];
+  const list = [
+    finding('u1', 'important', { summary: ' same bug' }),
+    finding('u2', 'important', { summary: 'same bug', line: 11 }),
+    finding('u3', 'important', { summary: 'same bug', file: 'src/b.rs' }),
+    finding('u4', 'important', { summary: 'other bug' }),
+  ];
+  assert.deepEqual(lib.dedupeAgainst(list, kept).map((f) => f.id), ['u2', 'u3', 'u4']);
+  assert.deepEqual(lib.dedupeAgainst(list, []).map((f) => f.id), ['u1', 'u2', 'u3', 'u4']);
 });
 
 test('a review that returns nothing contributes no findings', async () => {

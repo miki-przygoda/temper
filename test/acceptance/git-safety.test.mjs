@@ -18,7 +18,7 @@ const EPIC = 'e';
 const BRANCH = 'temper/e';
 const BASE = 'main';
 
-const HOSTS = [{ kind: 'local' }, { kind: 'ssh', name: 'beast', root: '/srv/temper', clone: '/srv/repo' }];
+const HOSTS = [{ kind: 'local' }, { kind: 'ssh', name: 'buildhost', root: '/srv/temper', clone: '/srv/repo' }];
 const GATES = { quick: 'QUICK-GATE-CMD', full: 'FULL-GATE-CMD' };
 
 const common = (host) => ({
@@ -53,13 +53,13 @@ function buildArgs(host) {
 // failing id (so a green round runs).
 function buildRespond({ label }) {
   const id = label.slice(label.indexOf(':') + 1);
-  if (label.startsWith('impl:') || label.startsWith('retry:')) return { status: 'done', branch: `temper/e/${id}`, commit: 'c', summary: `did ${id}` };
+  if (label.startsWith('impl:') || label.startsWith('retry:')) return { status: 'done', branch: `temper/e/${id}`, commit: 'c0c0c0c1', summary: `did ${id}` };
   if (label === 'check:a') return { pass: false, problems: ['missing test'] };
   if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
   if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
   if (label === 'checkpoint') return { gate_passed: true, gate_log: 'l', flows: [], gaps: [] };
-  if (label === 'behaviour-spec') return { groups: GROUPS, commit: 'b' };
-  if (label.startsWith('acceptance:')) return { group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'a' };
+  if (label === 'behaviour-spec') return { groups: GROUPS, commit: 'b0b0b0b1' };
+  if (label.startsWith('acceptance:')) return { group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'a0a0a0a1' };
   if (label.startsWith('green:')) return { fixed: ['G1-01'], corrected: [], questions: [], still_failing: [] };
   throw new Error(`unexpected label ${label}`);
 }
@@ -72,18 +72,18 @@ const finding = (id, severity) => ({
 // the regression check run).
 function stabiliseRespond({ label }) {
   if (label === 'review:security') return { findings: [finding('security-01', 'critical')] };
-  if (label === 'second:review:security') return { findings: [finding('second-security-01', 'severe')] };
+  if (label === 'second:review:security') return { findings: [finding('second:security-01', 'severe')] };
   if (label.includes('review:')) return { findings: [] };
-  if (label.includes('verify:')) return { real: true, severity: label.includes('second-') ? 'severe' : 'critical', reason: 'ran it' };
-  if (label.startsWith('fix:')) return { status: 'fixed', commit: 'f', note: 'n' };
-  if (label === 'regress') return { regressions: [] };
+  if (label.includes('verify:')) return { real: true, severity: label.includes('second:security') ? 'severe' : 'critical', reason: 'ran it' };
+  if (label.startsWith('fix:')) return { status: 'fixed', commit: 'f0f0f0f1', note: 'n' };
+  if (label.startsWith('regress:fix:')) return { regressions: [] };
   throw new Error(`unexpected label ${label}`);
 }
 
 function publishRespond({ label }) {
   return ({
-    docs: { commit: 'd', files: ['README.md'], summary: 'Add a thing' },
-    evidence: { script: 'docs/temper/e/owner-steps.sh', checklist: 'docs/temper/e/owner-checklist.md', commit: 'v' },
+    docs: { commit: 'd0d0d0d1', files: ['README.md'], summary: 'Add a thing' },
+    evidence: { script: 'docs/temper/e/owner-steps.sh', checklist: 'docs/temper/e/owner-checklist.md', commit: 'e0e0e0e1' },
     gate: { passed: true, exit_status: 0, log_path: '/l' },
   })[label];
 }
@@ -117,7 +117,7 @@ async function prompts() {
   const { runs, prompts: ps } = await allRuns();
   const labels = new Set(ps.map((p) => p.label.replace(/:.*$/, ':')));
   for (const l of ['impl:', 'check:', 'retry:', 'recheck:', 'merge:', 'checkpoint', 'behaviour-spec', 'acceptance:', 'green:',
-    'review:', 'verify:', 'fix:', 'second:', 'regress', 'docs', 'evidence', 'gate']) {
+    'review:', 'verify:', 'fix:', 'second:', 'regress:', 'docs', 'evidence', 'gate']) {
     assert.ok(labels.has(l), `the scripted runs reach a ${l} agent (labels: ${[...labels].join(', ')})`);
   }
   assert.equal(runs.find((r) => r.wf === 'build').result.status, 'mvp');
@@ -278,7 +278,7 @@ test('GIT-SAFETY-12: content that contains instructions is data to agents and th
   args.answers.a = INJECT;
   const { calls } = await runWorkflow('workflows/build.js', {
     args,
-    respond: (c) => (c.label.startsWith('impl:') ? { status: 'done', branch: 'temper/e/a', commit: 'c', summary: INJECT } : buildRespond(c)),
+    respond: (c) => (c.label.startsWith('impl:') ? { status: 'done', branch: 'temper/e/a', commit: 'c0c0c0c1', summary: INJECT } : buildRespond(c)),
   });
   for (const c of calls.filter((x) => x.prompt.includes(INJECT))) {
     const at = c.prompt.lastIndexOf(INJECT);

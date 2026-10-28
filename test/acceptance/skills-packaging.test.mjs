@@ -90,12 +90,12 @@ function responder(overrides = {}) {
     const label = q.opts.label;
     if (overrides[label] !== undefined) return overrides[label];
     const id = label.slice(label.indexOf(':') + 1);
-    if (label.startsWith('impl:') || label.startsWith('retry:')) return { status: 'done', branch: `temper/e/${id}`, commit: 'abc', summary: `did ${id}` };
+    if (label.startsWith('impl:') || label.startsWith('retry:')) return { status: 'done', branch: `temper/e/${id}`, commit: 'abcabc01', summary: `did ${id}` };
     if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
     if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
     if (label === 'checkpoint') return { gate_passed: true, gate_log: 'full.log', flows: [{ flow: 'greet', result: 'ok', evidence: 'ran' }], gaps: [] };
-    if (label === 'behaviour-spec') return { groups: [{ key: 'g1', behaviours: [{ id: 'G1-01', text: 'given a name then a greeting' }] }], commit: 'bbb' };
-    if (label.startsWith('acceptance:')) return { group: id, passing: ['G1-01'], failing: [], untestable: [], commit: 'ccc' };
+    if (label === 'behaviour-spec') return { groups: [{ key: 'g1', behaviours: [{ id: 'G1-01', text: 'given a name then a greeting' }] }], commit: 'bbbbbb02' };
+    if (label.startsWith('acceptance:')) return { group: id, passing: ['G1-01'], failing: [], untestable: [], commit: 'cccccc03' };
     if (label.startsWith('green:')) return { fixed: [], corrected: [], questions: [], still_failing: [] };
     return null;
   };
@@ -506,10 +506,10 @@ test('SKILLS-PACKAGING-15 plan writes an args.json that follows the schema, and 
   // An args.json filled the way the skill maps it follows the schema, and the build accepts it.
   const args = planArgs();
   assert.deepEqual(schemaErrors(schema, args), []);
-  const ssh = planArgs({ host: { kind: 'ssh', name: 'beast', root: '/srv/build', clone: '/srv/repo' } });
+  const ssh = planArgs({ host: { kind: 'ssh', name: 'buildhost', root: '/srv/build', clone: '/srv/repo' } });
   assert.deepEqual(schemaErrors(schema, ssh), []);
   // A7: an ssh host carries its clone, from project.md's host_clone, and the schema needs it.
-  assert.ok(schemaErrors(schema, planArgs({ host: { kind: 'ssh', name: 'beast', root: '/srv/build' } })).length > 0, 'an ssh host without its clone');
+  assert.ok(schemaErrors(schema, planArgs({ host: { kind: 'ssh', name: 'buildhost', root: '/srv/build' } })).length > 0, 'an ssh host without its clone');
   assert.match(flat(gen), /`\{"kind":"ssh","name":"<host>","root":"<root>","clone":"<host_clone>"\}`/);
   assert.ok('host_clone' in frontBlock(read('templates/project.md')), 'project.md has host_clone');
   const { result } = await runWorkflow('workflows/build.js', { args, respond: responder() });
@@ -677,4 +677,32 @@ test('SKILLS-PACKAGING-27 every stage change updates the epic\'s status in epics
   // epic's PR is merged and it moves on to cleanup.
   const all = Object.values(SKILL).map(flat).join('\n');
   assert.match(all, /(set|update|record)[^.]*status[^.]*(to|as) `merged`|`merged`[^.]*in `epics\.md`/i, 'no skill records the merged status');
+});
+
+test('SKILLS-PACKAGING-29 the run skill checks every returned commit is on the branch and never cherry-picks one', () => {
+  const run = flat(SKILL.run);
+  const s3 = flat(section(SKILL.run, '## Stage 3', '## Blocked items'));
+  assert.match(s3, /When the result has `commits`, whatever its status, check each sha after the fetch-back[^.]*: `git -C <repo> merge-base --is-ancestor <sha> <branch>`/);
+  assert.match(s3, /A sha that isn't on the branch \(exit non-zero\): tell the user its id and sha, and never cherry-pick it, merge it or add its trailer yourself/);
+  assert.match(s3, /refresh `args\.done` and resume/);
+  assert.match(flat(section(SKILL.run, '## Stage 4', '## Stage 5')), /`commits`: check them as in stage 3/);
+  assert.match(flat(section(SKILL.run, '## Stage 5', '## Status and the board')), /When the result has `commits`, check them as in stage 3/);
+  assert.match(run, /never cherry-pick/);
+});
+
+test('SKILLS-PACKAGING-30 the plan skill copies build_rule and flaky into args.json and never into task texts', () => {
+  const gen = flat(section(SKILL.plan, '## 2. Generate args.json', '## 3.'));
+  assert.match(gen, /`build_rule`: the text of `project\.md`'s `## Build rule` section[^;]*, or `""`/);
+  assert.match(gen, /`flaky`: the `flaky:` line of `project\.md`, split on commas[^;]*, or `\[\]`/);
+  assert.match(gen, /Write both fields every time, without asking the user/);
+  const plan = flat(section(SKILL.plan, '## 1.', '## 2.'));
+  assert.match(plan, /Never copy the build rule or the flaky list into a task's text: every agent's prompt already carries both from `args\.json`/);
+  assert.match(flat(section(SKILL.plan, '## 0.', '## 1.')), /`gate_slots`, `flaky` and the `## Build rule` section/);
+  assert.match(flat(section(SKILL.plan, '## 3.', '## 4.')), /`build_rule` is a string and `flaky` an array of strings/);
+});
+
+test('SKILLS-PACKAGING-31 the A13 step bounds gates at once by gate_slots', () => {
+  const step = flat(section(SKILL.run, '5. **What the build host can take', '6. **Status.**'));
+  assert.match(step, /The number of tasks per launch is the smaller of `gate_slots` from `project\.md` \(empty or missing means 1\) and what the host can take/);
+  assert.match(step, /When a wave in `args\.json` has more tasks than that, re-cut it/);
 });

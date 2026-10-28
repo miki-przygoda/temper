@@ -124,7 +124,7 @@ async function allPublishPrompts() {
   const prompts = [];
   const scenarios = [
     { host: { kind: 'local' }, done: [] },
-    { host: { kind: 'ssh', name: 'beast', root: '/srv/temper', clone: '/srv/repo' }, done: [] },
+    { host: { kind: 'ssh', name: 'buildhost', root: '/srv/temper', clone: '/srv/repo' }, done: [] },
     { host: { kind: 'local' }, done: ['docs'] },
     { host: { kind: 'local' }, done: ['docs', 'evidence'] },
   ];
@@ -133,8 +133,8 @@ async function allPublishPrompts() {
       const { calls } = await runWorkflow(WF, {
         args: args('/r', { host: s.host, done: s.done }),
         respond: ({ label }) => ({
-          docs: { commit: 'd', files: ['README.md'], summary: 'x' },
-          evidence: { script: 's.sh', checklist: 'c.md', commit: 'v' },
+          docs: { commit: 'd0d0d0d1', files: ['README.md'], summary: 'x' },
+          evidence: { script: 's.sh', checklist: 'c.md', commit: 'e0e0e0e1' },
           gate: { passed: gatePassed, exit_status: gatePassed ? 0 : 1, log_path: '/l' },
         })[label],
       });
@@ -146,7 +146,7 @@ async function allPublishPrompts() {
 
 test('PUBLISH args: every common field the args schema names, and spec, are refused missing or of the wrong type, before any agent (SECOND-TESTS-DOCS-4)', async () => {
   const full = args('/r', { default_branch: 'main', done: ['x1'] });
-  const ssh = { ...full, host: { kind: 'ssh', name: 'beast', root: '/srv/temper', clone: '/srv/repo' } };
+  const ssh = { ...full, host: { kind: 'ssh', name: 'buildhost', root: '/srv/temper', clone: '/srv/repo' } };
   const only = [...['epic', 'repo', 'branch', 'base', 'default_branch', 'log', 'host', 'gates', 'done'], 'spec'];
   const cases = [...schemaCases(full, { only }), ...schemaCases(ssh, { only }).filter((c) => c.name.startsWith('host'))];
   for (const f of only.filter((x) => x !== 'default_branch')) assert.ok(cases.some((c) => c.name === `${f} missing`), `no case for ${f} missing`);
@@ -348,4 +348,35 @@ test('PUBLISH-08 an open PR is never merged by temper', async () => {
   for (const { label, prompt } of await allPublishPrompts()) assert.match(prompt, /never push, merge/, label);
   assert.match(read('README.md'), /^- temper never merges\.$/m);
   assert.match(read('templates/preferences.md'), /It never merges\./);
+});
+
+// ---- v0.2: commits that reach their branch (spec §3.1) ----
+
+test('PUBLISH-09 publish returns commits for docs and evidence', async () => {
+  const respond = (over = {}) => ({ label }) => {
+    if (Object.prototype.hasOwnProperty.call(over, label)) return over[label];
+    if (label === 'docs') return { commit: 'd0c5d0c5', files: ['README.md'], summary: 'docs' };
+    if (label === 'evidence') return { script: 's.sh', checklist: 'c.md', commit: 'e7e7e7e7' };
+    if (label === 'gate') return { passed: true, exit_status: 0, log_path: 'full.log' };
+    throw new Error(`unexpected label ${label}`);
+  };
+  const ready = await runWorkflow(WF, { args: args('/r'), respond: respond() });
+  assert.equal(ready.result.status, 'ready');
+  assert.deepEqual(ready.result.commits, { docs: 'd0c5d0c5', evidence: 'e7e7e7e7' });
+
+  // Every result after validation carries it, the failing ones too; an empty sha never goes in.
+  const failed = await runWorkflow(WF, {
+    args: args('/r'),
+    respond: respond({ evidence: { script: 's.sh', checklist: 'c.md', commit: '' }, gate: { passed: false, exit_status: 1, log_path: 'l' } }),
+  });
+  assert.equal(failed.result.status, 'gate_failed');
+  assert.deepEqual(failed.result.commits, { docs: 'd0c5d0c5' });
+  const blocked = await runWorkflow(WF, { args: args('/r'), respond: respond({ evidence: null }) });
+  assert.equal(blocked.result.status, 'blocked');
+  assert.deepEqual(blocked.result.commits, { docs: 'd0c5d0c5' });
+  const resumed = await runWorkflow(WF, { args: args('/r', { done: ['docs'] }), respond: respond() });
+  assert.deepEqual(resumed.result.commits, { evidence: 'e7e7e7e7' });
+  const invalid = await runWorkflow(WF, { args: args('/r', { spec: '' }), respond: respond() });
+  assert.equal(invalid.result.status, 'invalid');
+  assert.ok(!('commits' in invalid.result));
 });

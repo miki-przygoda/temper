@@ -53,12 +53,12 @@ function responder() {
   return ({ opts }) => {
     const label = opts.label;
     const id = label.slice(label.indexOf(':') + 1);
-    if (label.startsWith('impl:') || label.startsWith('retry:')) return { status: 'done', branch: `temper/e/${id}`, commit: 'abc', summary: `did ${id}` };
+    if (label.startsWith('impl:') || label.startsWith('retry:')) return { status: 'done', branch: `temper/e/${id}`, commit: 'abcabc01', summary: `did ${id}` };
     if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
     if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
     if (label === 'checkpoint') return { gate_passed: true, gate_log: 'full.log', flows: [{ flow: 'greet', result: 'ok', evidence: 'ran' }], gaps: [] };
-    if (label === 'behaviour-spec') return { groups: [{ key: 'g1', behaviours: [{ id: 'G1-01', text: 'given a name then a greeting' }] }], commit: 'bbb' };
-    if (label.startsWith('acceptance:')) return { group: id, passing: ['G1-01'], failing: [], untestable: [], commit: 'ccc' };
+    if (label === 'behaviour-spec') return { groups: [{ key: 'g1', behaviours: [{ id: 'G1-01', text: 'given a name then a greeting' }] }], commit: 'bbbbbb02' };
+    if (label.startsWith('acceptance:')) return { group: id, passing: ['G1-01'], failing: [], untestable: [], commit: 'cccccc03' };
     if (label.startsWith('green:')) return { fixed: [], corrected: [], questions: [], still_failing: [] };
     return null;
   };
@@ -131,14 +131,14 @@ test('STATE-17 setup writes .temper/project.md with the gates, host, specs dir, 
   const filled = readFileSync(path, 'utf8')
     .replace(/^gate_quick:.*$/m, 'gate_quick: cargo test -q')
     .replace(/^gate_full:.*$/m, 'gate_full: ci/local/run.sh')
-    .replace(/^host:.*$/m, 'host: ssh beast /srv/build');
+    .replace(/^host:.*$/m, 'host: ssh buildhost /srv/build');
   writeFileSync(path, filled);
 
   const text = readFileSync(path, 'utf8');
   const fm = frontBlock(text);
   assert.equal(fm.gate_quick, 'cargo test -q');
   assert.equal(fm.gate_full, 'ci/local/run.sh');
-  assert.equal(fm.host, 'ssh beast /srv/build');
+  assert.equal(fm.host, 'ssh buildhost /srv/build');
   assert.equal(fm.specs_dir, 'docs/temper');
   assert.ok('lenses' in fm, 'extra review lenses');
   assert.equal(fm.board, 'off');

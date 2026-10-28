@@ -1,6 +1,6 @@
 ---
 name: setup
-description: First-use setup for temper. Use when preferences.md is missing from the temper state directory, when the user runs /temper:setup, or when they want to redo their temper preferences, the statusline or a project's .temper/project.md.
+description: Use when temper is used for the first time, when preferences.md is missing from the temper state directory, when the user runs /temper:setup, or when they want to redo their temper preferences, the statusline or a project's .temper/project.md.
 ---
 
 # temper setup
@@ -91,8 +91,18 @@ It prints `{"installed": true, "wrapped": <bool>, "version": ...}` and exits 0. 
 
 When the session is in a git repository:
 
-1. If `.temper/project.md` is missing, copy `${CLAUDE_PLUGIN_ROOT}/templates/project.md` to `.temper/project.md`. Ask the user for `gate_quick` (a fast check after every task and merge) and `gate_full` (everything CI runs), suggesting commands from the repo's own build files and CI config, never one that needs root (spec 8: the workflows refuse a gate that names a privileged command), and for `host` (`local`, or `ssh <host> <root>` for a build host). For an ssh host, also ask for `host_clone`: the repo's clone on the host, an absolute or `~/` path, written the same way as `<root>` (both absolute or both `~/`), outside `<root>/<epic>/` for every epic (amendment A7). The head fetches the epic and task branches back from it. For `disposable:` (the ignored files cleanup may delete with a worktree, amendment A10), suggest the repo's ignored build output, such as `target/`, `node_modules/` or `__pycache__/`, and write only the patterns the user confirms; any other ignored file blocks cleanup. Leave `specs_dir: docs/temper`, `board: off` and `lenses:` empty unless the user says otherwise. Never write a credential into it.
-2. If `.gitignore` doesn't already ignore `.temper/worktrees/`, add the line `.temper/worktrees/`.
-3. Show the user both changes. Commit them only if the user asks.
+1. If `.temper/project.md` is missing, copy `${CLAUDE_PLUGIN_ROOT}/templates/project.md` to `.temper/project.md`.
+2. Ask the user for each item below, in this order, and write each answer into `.temper/project.md`, showing the current value as the default when the file already had one. Ask every item, even when the answer is the default or empty:
+   - `gate_quick` (a fast check after every task and merge) and `gate_full` (everything CI runs): suggest commands from the repo's own build files and CI config, never one that needs root (spec 8: the workflows refuse a gate that names a privileged command);
+   - `host`: `local`, or `ssh <host> <root>` for a build host. For an ssh host, also `host_clone`: the repo's clone on the host, an absolute or `~/` path, written the same way as `<root>` (both absolute or both `~/`), outside `<root>/<epic>/` for every epic (amendment A7). The head fetches the epic and task branches back from it;
+   - `disposable:` (the ignored files cleanup may delete with a worktree, amendment A10): suggest the repo's ignored build output, such as `target/`, `node_modules/` or `__pycache__/`, and write only the patterns the user confirms; any other ignored file blocks cleanup;
+   - the `## Build rule` section: how agents build and test in this project; suggest one from the repo's build files and CI config (for example "build only through the gate scripts; never set a private target dir"); it may be empty;
+   - `flaky`: the tests known to flake, comma-separated, named as the test runner prints them; empty when there are none;
+   - `sweeps`: `2` (default: a second review sweep after the fixes) or `1` (one sweep, then a regression check);
+   - `gate_slots`: how many gates the project's scripts run at once; empty means 1.
+
+   When a gate takes more than a few minutes, or its build tool holds one lock for the whole build (cargo's, for one), point the user to `${CLAUDE_PLUGIN_ROOT}/templates/gate-slots.md`, which shows how to run several gates at once, and ask for `gate_slots` again once their scripts have slots. Leave `specs_dir: docs/temper`, `board: off` and `lenses:` empty unless the user says otherwise. Never write a credential into it.
+3. If `.gitignore` doesn't already ignore `.temper/worktrees/`, add the line `.temper/worktrees/`.
+4. Show the user both changes. Commit them only if the user asks.
 
 When the session is not in a git repository, skip this part and say that `/temper:setup` sets up a project when run inside one.
