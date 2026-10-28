@@ -122,7 +122,7 @@ test('BUILD-01 invalid args.json is refused naming the problem, before any agent
     answers: { a: 'an answer' },
     behaviour: [{ key: 'g1', behaviours: [{ id: 'G1-01', text: 'given x then y' }] }],
   });
-  const ssh = { ...full, host: { kind: 'ssh', name: 'beast', root: '/srv/temper', clone: '/srv/repo' } };
+  const ssh = { ...full, host: { kind: 'ssh', name: 'buildhost', root: '/srv/temper', clone: '/srv/repo' } };
   for (const valid of [full, ssh]) {
     const { result } = await run(valid);
     assert.notEqual(result.status, 'invalid', `the base is valid: ${result.errors}`);
@@ -647,11 +647,11 @@ test('BUILD-27 local tasks use git worktrees under a temper-owned directory; ssh
     assert.match(p, /run commands locally/i, l);
   }
 
-  const ssh = await run(buildArgs({ epic: 'hard-1', branch: 'temper/hard-1', host: { kind: 'ssh', name: 'beast', root: '/srv/temper', clone: '/srv/repo' } }));
+  const ssh = await run(buildArgs({ epic: 'hard-1', branch: 'temper/hard-1', host: { kind: 'ssh', name: 'buildhost', root: '/srv/temper', clone: '/srv/repo' } }));
   for (const l of ['impl:a', 'check:a', 'merge:wave0', 'checkpoint']) {
     const p = promptOf(ssh.calls, l);
-    assert.ok(p.includes('build host beast'), `${l}: on the host`);
-    assert.ok(p.includes("ssh beast '"), `${l}: commands over ssh`);
+    assert.ok(p.includes('build host buildhost'), `${l}: on the host`);
+    assert.ok(p.includes("ssh buildhost '"), `${l}: commands over ssh`);
     assert.doesNotMatch(p, /run commands locally/i, l);
     // A per-epic build directory: named outright, or as <epic> in a prompt that names the epic.
     const perEpic = p.includes('/srv/temper/hard-1') || (p.includes('/srv/temper/<epic>/') && p.includes('epic hard-1'));

@@ -135,7 +135,7 @@ Five regressions were proven. Each was reproduced a second time with an independ
 - `node scripts/bundle.mjs`, then `--check`: rc 0, and the working tree was clean afterwards.
 - `claude plugin validate --strict .` with a fresh CLAUDE_CONFIG_DIR: passed, rc 0. The LICENSE_MISSING and ICON_MISSING directory notes were already there and don't change the result.
 - `sh scripts/install_smoke.sh`: rc 0 (the marketplace was added, and superpowers and temper@temper were installed and enabled).
-- `sh scripts/ssh_host_smoke.sh beast`: PASS, 11 of 11 checks, mode ssh, rc 0, with no temper-smoke directories left on beast. The smoke doesn't cover the stale-private-ref cases above.
+- `sh scripts/ssh_host_smoke.sh <host>` against the build host: PASS, 11 of 11 checks, mode ssh, rc 0, with no temper-smoke directories left on the build host. The smoke doesn't cover the stale-private-ref cases above.
 
 ### Reopened by the reverts, left for the owner
 

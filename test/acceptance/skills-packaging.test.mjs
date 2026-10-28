@@ -506,10 +506,10 @@ test('SKILLS-PACKAGING-15 plan writes an args.json that follows the schema, and 
   // An args.json filled the way the skill maps it follows the schema, and the build accepts it.
   const args = planArgs();
   assert.deepEqual(schemaErrors(schema, args), []);
-  const ssh = planArgs({ host: { kind: 'ssh', name: 'beast', root: '/srv/build', clone: '/srv/repo' } });
+  const ssh = planArgs({ host: { kind: 'ssh', name: 'buildhost', root: '/srv/build', clone: '/srv/repo' } });
   assert.deepEqual(schemaErrors(schema, ssh), []);
   // A7: an ssh host carries its clone, from project.md's host_clone, and the schema needs it.
-  assert.ok(schemaErrors(schema, planArgs({ host: { kind: 'ssh', name: 'beast', root: '/srv/build' } })).length > 0, 'an ssh host without its clone');
+  assert.ok(schemaErrors(schema, planArgs({ host: { kind: 'ssh', name: 'buildhost', root: '/srv/build' } })).length > 0, 'an ssh host without its clone');
   assert.match(flat(gen), /`\{"kind":"ssh","name":"<host>","root":"<root>","clone":"<host_clone>"\}`/);
   assert.ok('host_clone' in frontBlock(read('templates/project.md')), 'project.md has host_clone');
   const { result } = await runWorkflow('workflows/build.js', { args, respond: responder() });

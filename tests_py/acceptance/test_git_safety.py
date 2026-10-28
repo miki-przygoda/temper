@@ -477,7 +477,7 @@ class TestGitSafety(GitSandbox):
         run = lambda: self._run_skill_cmd(cmd, env, repo, host_clone)
         proc = run()
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertEqual(log.read_text(encoding='utf-8').split(), ['beast'])
+        self.assertEqual(log.read_text(encoding='utf-8').split(), ['buildhost'])
         self.assertEqual(self._done(repo, 'epic/e'), ['a'])
         for ref in ('epic/e', 'temper/e/a', 'temper/e/b'):
             self.assertEqual(self.git(repo, 'rev-parse', ref), self.git(host_clone, 'rev-parse', ref), ref)
@@ -507,7 +507,7 @@ class TestGitSafety(GitSandbox):
         return cmds[0]
 
     def _run_skill_cmd(self, cmd, env, repo, host_clone):
-        line = (cmd.replace('<repo>', str(repo)).replace('<host>', 'beast')
+        line = (cmd.replace('<repo>', str(repo)).replace('<host>', 'buildhost')
                 .replace('<host_clone>', str(host_clone)).replace('<branch>', 'epic/e')
                 .replace('<epic>', 'e'))
         return subprocess.run(['sh', '-c', line], cwd=str(self.tmp),
@@ -763,7 +763,7 @@ class TestGitSafety(GitSandbox):
         stub.chmod(0o755)
         env = dict(self.env, PATH=f'{bin_dir}:{self.env["PATH"]}', CLAUDE_PLUGIN_ROOT=str(ROOT))
         line = (cmd.replace('<host repo>', str(repo)).replace('<branch>', 'temper/e/a')
-                .replace('<path>', str(wt)).replace('<host>', 'beast'))
+                .replace('<path>', str(wt)).replace('<host>', 'buildhost'))
         proc = subprocess.run(['sh', '-c', line], cwd=str(self.tmp), env=env, capture_output=True,
                               text=True, check=False, timeout=60)
         self.assertFalse(marker.exists(), 'a json.py in the login directory replaced the stdlib module')

@@ -124,7 +124,7 @@ async function allPublishPrompts() {
   const prompts = [];
   const scenarios = [
     { host: { kind: 'local' }, done: [] },
-    { host: { kind: 'ssh', name: 'beast', root: '/srv/temper', clone: '/srv/repo' }, done: [] },
+    { host: { kind: 'ssh', name: 'buildhost', root: '/srv/temper', clone: '/srv/repo' }, done: [] },
     { host: { kind: 'local' }, done: ['docs'] },
     { host: { kind: 'local' }, done: ['docs', 'evidence'] },
   ];
@@ -146,7 +146,7 @@ async function allPublishPrompts() {
 
 test('PUBLISH args: every common field the args schema names, and spec, are refused missing or of the wrong type, before any agent (SECOND-TESTS-DOCS-4)', async () => {
   const full = args('/r', { default_branch: 'main', done: ['x1'] });
-  const ssh = { ...full, host: { kind: 'ssh', name: 'beast', root: '/srv/temper', clone: '/srv/repo' } };
+  const ssh = { ...full, host: { kind: 'ssh', name: 'buildhost', root: '/srv/temper', clone: '/srv/repo' } };
   const only = [...['epic', 'repo', 'branch', 'base', 'default_branch', 'log', 'host', 'gates', 'done'], 'spec'];
   const cases = [...schemaCases(full, { only }), ...schemaCases(ssh, { only }).filter((c) => c.name.startsWith('host'))];
   for (const f of only.filter((x) => x !== 'default_branch')) assert.ok(cases.some((c) => c.name === `${f} missing`), `no case for ${f} missing`);

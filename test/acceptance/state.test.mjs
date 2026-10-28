@@ -131,14 +131,14 @@ test('STATE-17 setup writes .temper/project.md with the gates, host, specs dir, 
   const filled = readFileSync(path, 'utf8')
     .replace(/^gate_quick:.*$/m, 'gate_quick: cargo test -q')
     .replace(/^gate_full:.*$/m, 'gate_full: ci/local/run.sh')
-    .replace(/^host:.*$/m, 'host: ssh beast /srv/build');
+    .replace(/^host:.*$/m, 'host: ssh buildhost /srv/build');
   writeFileSync(path, filled);
 
   const text = readFileSync(path, 'utf8');
   const fm = frontBlock(text);
   assert.equal(fm.gate_quick, 'cargo test -q');
   assert.equal(fm.gate_full, 'ci/local/run.sh');
-  assert.equal(fm.host, 'ssh beast /srv/build');
+  assert.equal(fm.host, 'ssh buildhost /srv/build');
   assert.equal(fm.specs_dir, 'docs/temper');
   assert.ok('lenses' in fm, 'extra review lenses');
   assert.equal(fm.board, 'off');

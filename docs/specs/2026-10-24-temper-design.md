@@ -305,7 +305,7 @@ A failed spike changes this spec before planning, not during it.
 ### 10.3 First real run: Cairn's hardening branch (H-1..H-5)
 
 - **Scope:** it starts at stage 2, with a plan written from Cairn's `docs/BACKLOG.md`, then runs stages 3–5.
-- **Setup:** beast is the ssh build host and `ci/local/run.sh` is the full gate.
+- **Setup:** the ssh build host, with `ci/local/run.sh` as the full gate.
 - **It passes when:**
   - the run finishes with the gate green;
   - no finished task runs twice;

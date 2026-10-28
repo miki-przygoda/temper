@@ -85,7 +85,7 @@ function allPrompts(host) {
 }
 
 const local = allPrompts({ kind: 'local' });
-const ssh = allPrompts({ kind: 'ssh', name: 'beast', root: '~/o', clone: '~/repo' });
+const ssh = allPrompts({ kind: 'ssh', name: 'buildhost', root: '~/o', clone: '~/repo' });
 
 test('every builder returns a string with the fixed rules and the host text', () => {
   for (const [name, text] of Object.entries(local)) {
@@ -96,7 +96,7 @@ test('every builder returns a string with the fixed rules and the host text', ()
   }
   for (const [name, text] of Object.entries(ssh)) {
     assert.ok(text.includes('Fixed rules (no exception):'), name);
-    assert.ok(text.includes(lib.hostText({ kind: 'ssh', name: 'beast', root: '~/o', clone: '~/repo' }, '/r')), name);
+    assert.ok(text.includes(lib.hostText({ kind: 'ssh', name: 'buildhost', root: '~/o', clone: '~/repo' }, '/r')), name);
   }
 });
 
@@ -202,8 +202,8 @@ test('the publish prompts', () => {
 });
 
 test('the ssh host text names the host', () => {
-  assert.ok(lib.hostText({ kind: 'ssh', name: 'beast', root: '~/o', clone: '~/repo' }, '/r').includes('ssh beast'));
-  assert.ok(ssh.implementer.includes('ssh beast'));
+  assert.ok(lib.hostText({ kind: 'ssh', name: 'buildhost', root: '~/o', clone: '~/repo' }, '/r').includes('ssh buildhost'));
+  assert.ok(ssh.implementer.includes('ssh buildhost'));
   assert.ok(ssh.implementer.includes("the repo's clone there is ~/repo"), 'agents are told where the host clone is (A7)');
   // SECOND-CONTROL-FLOW-2: the head brings its own commits to the host's epic branch, which git
   // refuses while that branch is checked out in a worktree there.

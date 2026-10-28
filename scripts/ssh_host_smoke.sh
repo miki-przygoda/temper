@@ -2,7 +2,7 @@
 # ssh host smoke test: a real end-to-end check of the git side of temper's ssh build-host
 # mode (spec amendment A12), against a host given as the argument.
 #
-#   sh scripts/ssh_host_smoke.sh <host>    # e.g. beast; needs ssh <host> without a password
+#   sh scripts/ssh_host_smoke.sh <host>    # e.g. buildhost; needs ssh <host> without a password
 #   sh scripts/ssh_host_smoke.sh --local   # test-only: the "host" is a local directory,
 #                                          # reached through a fake ssh on PATH
 #

@@ -153,7 +153,7 @@ function tracking(base, prefix) {
 
 test('STABILISE args: every common field the args schema names, and part, lenses and severity_notes, are refused missing or of the wrong type, before any agent (SECOND-TESTS-DOCS-4)', async () => {
   const full = args({ default_branch: 'main', done: ['x1'], lenses: ['security'] });
-  const ssh = { ...full, host: { kind: 'ssh', name: 'beast', root: '/srv/temper', clone: '/srv/repo' } };
+  const ssh = { ...full, host: { kind: 'ssh', name: 'buildhost', root: '/srv/temper', clone: '/srv/repo' } };
   const only = ['epic', 'repo', 'branch', 'base', 'default_branch', 'log', 'host', 'gates', 'done'];
   const without = (f) => { const a = { ...full }; delete a[f]; return a; };
   const cases = [
