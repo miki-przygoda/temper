@@ -827,6 +827,11 @@ test('BUILD-30 build returns commits: the sha each phase reported, never an empt
   assert.equal(blocked.result.status, 'blocked');
   assert.deepEqual(blocked.result.commits, { checkpoint: 'c1', 'behaviour-spec': 'b1' });
 
+  // A checkpoint whose full gate failed still committed its log section: its sha is returned.
+  const red = await run(buildArgs(), { ...over, checkpoint: { ...over.checkpoint, gate_passed: false, commit: 'c0' } });
+  assert.equal(red.result.status, 'blocked');
+  assert.deepEqual(red.result.commits, { checkpoint: 'c0' });
+
   // A run blocked in the waves carries an empty map; a refused args.json carries none.
   const waves = await run(buildArgs(), { 'impl:a': null });
   assert.equal(waves.result.status, 'blocked');
