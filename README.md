@@ -8,7 +8,7 @@ It exists because repeated review-and-fix sweeps don't converge: fixes create ne
 
 Every hand-off is a file, so any stage can start from a file a person wrote. Finished work is read from `Temper-Task` commit trailers, so a run survives blocked questions and usage-limit resets without redoing anything.
 
-Status: v0.1.0, early. It has done one real job: a 29-task epic in a Rust project, built on an ssh build host from plan to a merged PR. What that run turned up and what is still open is under [Known issues](#known-issues). The design is `docs/specs/2026-10-24-temper-design.md` and the build plan is `docs/plans/2026-10-24-temper-v1.md`.
+Status: v0.2.0, early. It has done one real job: a 29-task epic in a Rust project, built on an ssh build host from plan to a merged PR. v0.2 removes the hand work that run's head had to do (`docs/temper/v0-2/spec.md`); what is still open is under [Known issues](#known-issues). The design is `docs/specs/2026-10-24-temper-design.md` and the build plan is `docs/plans/2026-10-24-temper-v1.md`.
 
 ## Requirements
 
@@ -45,6 +45,8 @@ Each stage is a skill or a saved workflow, namespaced under the plugin. You can 
 | 5 publish | `/temper:publish` (workflow) | the branch | docs, an owner evidence script and checklist, a PR title and body |
 | cleanup | `/temper:cleanup` | merged branches | worktrees, branches and build dirs removed, only where the coded check allows |
 
+Stage 4 runs two sweeps by default. `sweeps: 1` in `.temper/project.md` gives one sweep; either way every fix wave gets a regression check, one agent per fix.
+
 `/temper:run` is the usual way into stages 3 to 5: it fills `args.done` from the commit trailers, launches each workflow, answers blocked questions from the spec (or asks you), and pushes only when the rules below allow. The workflows can also be run directly with their args.
 
 Project files live in the specs directory (default `docs/temper/`): `epics.md` is the source of truth for the epics and their status, and each epic has its own folder with `spec.md`, `research.md`, `plan.md`, `args.json` and `log.md`.
@@ -69,7 +71,7 @@ An overnight run goes on while you sleep, through usage-limit resets. Before it 
 - **the statusline** is installed and `limits.json` is fresh. temper's statusline writes the reset times to `limits.json` and wraps any statusline you already had, so yours still shows. Setup asks before installing it;
 - **wakeups** are approved in your preferences. The head schedules a check-in 2 minutes after each five-hour reset, resumes the run and answers what it can.
 
-The session must stay open all night: the check-ins live only in that session and stop when it exits. The run stops cleanly at your weekly usage limit (`weekly_stop_percent`, default 90) or at the morning report time (default 07:00), and writes a morning report to the epic's `log.md`.
+The session must stay open all night: the check-ins live only in that session and stop when it exits. Every agent belongs to the head's session, so closing that session ends the run, whatever stage it is in. Running the head on the build host instead would need Claude Code installed and logged in there, which temper doesn't set up. The run stops cleanly at your weekly usage limit (`weekly_stop_percent`, default 90) or at the morning report time (default 07:00), and writes a morning report to the epic's `log.md`.
 
 ## The fixed rules
 
@@ -99,16 +101,12 @@ Run them with `CLAUDE_CONFIG_DIR` set to a temporary directory, so nothing touch
 
 ## Known issues
 
-From the first real run (`docs/v1-log.md` has the detail and the redo notes):
-- Agents can leave a commit on a detached HEAD without moving their branch; the head has to rescue it.
-- Acceptance and checkpoint agents don't get the project's build rule, so they may build into their own `./target`.
-- One-sweep mode skips the regression check of the fix wave.
-- Minor findings you select are never fixed by the fix part; they go to the open items.
-- Gates run one at a time behind one lock, and a checker that can't get it in time stops with "not finished". A project can run several gates at once in its own gate scripts.
-- The merge agent blocks on any red gate, including tests known to flake.
-- Changing an answer or the done list means regenerating the launched script and starting a new run.
-- A run stops when the head's Claude Code session closes.
-- Four review fixes were reverted after their regression checks (CONTROL-FLOW-5 and 6, TESTS-DOCS-2 and 5), and some minors are open; each has a redo note in `docs/v1-log.md`.
+Still open after v0.2 (`docs/v1-log.md` has the detail and the redo notes):
+- A run stops when the head's Claude Code session closes (see [Overnight runs](#overnight-runs)).
+- Two reverted v1 review fixes are not redone yet: CONTROL-FLOW-6 (a failed checkpoint can come back from the resume cache) and TESTS-DOCS-5 (the overnight mode check). Some minors are open as well.
+- The private fetch refs under `refs/temper/host/` are never pruned, so a host branch that was rewritten needs a manual `git update-ref -d` (stale-private-ref in `docs/v1-log.md`).
+
+To change an answer or the done list, launch the same workflow with updated `args` and `resumeFromRunId`, never by editing a generated script.
 
 ## Licence
 
