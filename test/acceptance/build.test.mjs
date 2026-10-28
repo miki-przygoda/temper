@@ -871,7 +871,14 @@ test('BUILD-33 quick-gate prompts carry the flaky list and the rerun-once rule; 
   }
 
   const none = await allStageCalls({});
-  for (const { stage, label, prompt } of none) assert.ok(!prompt.includes('rerun it once'), `${stage} ${label}`);
+  for (const { stage, label, prompt } of none) {
+    assert.ok(!prompt.includes('rerun it once'), `${stage} ${label}: carries the rerun-once rule with no list`);
+    assert.ok(!prompt.includes('Known flaky tests'), `${stage} ${label}: carries a flaky list with no list`);
+  }
+  // With no list the full-gate prompts still say the full gate is never rerun.
+  const fullNone = none.filter(({ stage, label }) => (stage === 'build' && label === 'checkpoint') || (stage === 'publish' && label === 'gate'));
+  assert.equal(fullNone.length, 2, 'the checkpoint and publish gate ran with no list');
+  for (const { stage, label, prompt } of fullNone) assert.ok(prompt.includes('it is never rerun'), `${stage} ${label}: no NO_RERUN with no list`);
 });
 
 test('BUILD-34 build collects flaky_reruns from every agent that reports them', async () => {

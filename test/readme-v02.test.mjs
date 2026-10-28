@@ -68,6 +68,11 @@ test('docs/v1-behaviour.md has the v0.2 ids', () => {
     assert.ok(line, `behaviour line ${id}`);
     assert.match(line[0], /v0\.2 spec §3\./, `${id} cites the v0.2 spec`);
   }
+  // BUILD-33: the full-gate prompts carry NO_RERUN with or without a list, so the no-list case
+  // drops only the flaky list and the rerun-once rule, not every mention of a rerun.
+  const b33 = BEHAVIOUR.match(/^- \*\*BUILD-33\*\*[^\n]*$/m)[0];
+  assert.ok(!b33.includes('no prompt mentions a rerun'), 'BUILD-33 says no prompt mentions a rerun');
+  assert.match(b33, /with no list, no prompt carries a flaky list or the rerun-once rule, and the full-gate prompts still say the full gate is never rerun/);
   const s09 = BEHAVIOUR.match(/^- \*\*STABILISE-09\*\*[^\n]*$/m);
   assert.ok(s09, 'STABILISE-09');
   assert.match(s09[0], /\(changed in v0\.2, spec §3\.4\)/);
