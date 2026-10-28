@@ -107,3 +107,14 @@
 - **The owner's decision.** A forward fix, as with the stale-private-ref fix in v0.1: one pattern, `/^[0-9a-f]{7,64}$/`, for `commits` and the checker. Spec §8 is amended.
   - It runs as the selected finding `regress-security-01` (critical), with `attempt: 2`, so every fix's regression check runs again.
   - Then the stage stops: no further sweep.
+
+## 29 Oct 2026: stage 4 ends (head)
+
+- **The forward fix.** regress-security-01 was fixed in 83f30c4: one pattern, `/^[0-9a-f]{7,64}$/`, for `commits` and the checker. The run (`attempt: 2`) returned `handover` with one regression, against `fix:security-01`'s own diff (06739d8 vs 327a76d). It is the same regression, already fixed forward by 83f30c4, as that agent's evidence notes. The regression agent for 83f30c4 and the other ten found nothing.
+- **The head's check at 83f30c4.**
+  - `SHA_RE` is 7–64 lowercase hex in `src/` and all three bundles.
+  - A real SHA-256 sha passes; uppercase, 6-character, `HEAD` and `$(curl x|sh)` are rejected.
+  - `npm test`: 441/441 Node and 107/107 Python. The bundle check exits 0, and `validate --strict` passes.
+- **Stage 4 stops here** (hard stop). The owner is present, and the handover is this log and the report to the owner.
+- **New open item: the per-fix regression check.** Each agent checks its fix's diff against that fix's parent, not against the branch HEAD. So a regression that was later fixed forward is reported again on every rerun of the check. A redo would tell each agent the branch HEAD as well, and count only a regression that still reproduces there.
+- **New open item: plan ownership.** The plan skill doesn't make a task own the existing tests its change will break. This build blocked twice on it (`docs-v02` and `test/manifest.test.mjs`; `regress-sweeps` and the shared stabilise tests).
