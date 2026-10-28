@@ -2,7 +2,7 @@
 
 Written from `docs/specs/2026-10-24-temper-design.md` (sections 1–12, including the A1–A6 amendments) and `notes/spikes.md` only, never from the code. The plan was used only for file, command and field names. This is the oracle the v1 code is checked against: each line is something a user or the head session relies on.
 
-Each behaviour is one line of the form **Given** a state, **when** something happens, **then** the expected result. Ids are `<GROUP>-NN`. Section references (§) are to the design spec; A1–A6 are its section 12 amendments; S1–S6 are the spikes.
+Each behaviour is one line of the form **Given** a state, **when** something happens, **then** the expected result. Ids are `<GROUP>-NN`. Section references (§) are to the design spec; A1–A6 are its section 12 amendments; S1–S6 are the spikes. The v0.2 lines (BUILD-28 onwards, STABILISE-22 onwards, PUBLISH-09, STATE-22, SKILLS-PACKAGING-29 onwards, and the changed STABILISE-09) were added from `docs/temper/v0-2/spec.md` and cite it as "v0.2 spec §3.x".
 
 Terms: *the head* is the session the user talks to; *state dir* is `$CLAUDE_CONFIG_DIR/temper/` when `CLAUDE_CONFIG_DIR` is set, else `~/.claude/temper/` (A1); *trailer* is the commit trailer `Temper-Task: <epic>/<id>`.
 
@@ -37,6 +37,13 @@ Stage 3, `/temper:build` (`workflows/build.js`), fed with `args.json`.
 - **BUILD-25** Given an implementer would need to change a contract, add a dependency, touch a file outside `owns[]`, edit the tests it is judged by, or do anything privileged or outside the project, when it reaches that point, then it stops and returns blocked instead. (§6)
 - **BUILD-26** Given something the task text, the contracts and the tests settle, when the implementer meets it, then it decides itself and does not return blocked. (§6)
 - **BUILD-27** Given `host` is `local`, when a task runs, then its worktree is a git worktree under a temper-owned directory; given `host` is `ssh <host>`, then the worktree is on that host and commands run over ssh with a per-epic build directory. (§3.4)
+- **BUILD-28** Given an agent that commits (implementer, merge, checkpoint, behaviour spec, acceptance, green, fix, docs, evidence), when its prompt is read, then it says to work with its branch checked out (the implementer with `git worktree add -b <task branch>`, merge and phase agents in the shared epic worktree `.temper/worktrees/<epic>/epic`), to check `git symbolic-ref --short HEAD` before committing and `git rev-parse <branch>` against `git rev-parse HEAD` after, and to return blocked rather than repair a branch by hand. (A14, v0.2 spec §3.1)
+- **BUILD-29** Given an implementer reported a commit, when the checker runs, then it fails the task if the task branch's tip is not that commit, or if `git merge-base --is-ancestor <commit> <epic branch>` shows it is already on the epic branch. (A14, v0.2 spec §3.1)
+- **BUILD-30** Given the checkpoint, behaviour-spec, acceptance and green agents report commit shas, when build returns, blocked or not, then its result's `commits` maps each phase id to its sha and leaves out every empty sha. (A14, v0.2 spec §3.1)
+- **BUILD-31** Given `args.build_rule` is set, when any agent of build, stabilise or publish is started, then its prompt carries the rule, framed as data except where it says how to build and test, after the host text and before the fixed rules. (A15, v0.2 spec §3.2)
+- **BUILD-32** Given any agent prompt, when it is read, then it says a gate waiting for a free slot or lock is normal and is not a failure, to wait for it, and never to work around it with another build directory, a different target or a partial run. (A18, v0.2 spec §3.5)
+- **BUILD-33** Given `args.flaky` lists tests, when the implementer, checker, merge, green and fix prompts are read, then they carry the list and the rule to rerun a quick gate once when every failing test is on it; the checkpoint and publish full-gate prompts say the full gate is never rerun; with no list, no prompt mentions a rerun. (A19, v0.2 spec §3.6)
+- **BUILD-34** Given agents report `flaky_reruns`, when build returns, then its result's `flaky_reruns` holds each entry with the reporting agent's label as `id`. (A19, v0.2 spec §3.6)
 
 ## stabilise
 
@@ -50,7 +57,7 @@ Stage 4, `/temper:stabilise` (`workflows/stabilise.js`), on the epic branch.
 - **STABILISE-06** Given the verified findings, when 4a ends, then the list is ordered by severity (Severe first, Minor last) and the run ends without fixing anything. (§7 4a.3)
 - **STABILISE-07** Given the list and the user present, when the head continues, then it shows a multi-select question box of the findings. (§7 4a.3)
 - **STABILISE-08** Given the list and an overnight run, when the head continues, then it picks the findings to fix by the preferences (default: Critical and Important) and logs its choice in `log.md`; Minor findings go to the open items. (§7 4a.3, §9)
-- **STABILISE-09** Given a Minor finding, when 4b runs, then it is never fixed in the code; it goes to the open items. (§7.1)
+- **STABILISE-09** Given a Minor finding, when 4b runs, then it is fixed if the user selected it, after every more severe selected finding, and a Minor finding the user didn't select is never fixed and goes to the open items. (§7.1, A17) (changed in v0.2, spec §3.4)
 - **STABILISE-10** Given the chosen findings, when 4b runs, then they are fixed one at a time, in severity order. (§7 4b)
 - **STABILISE-11** Given a finding to fix, when its fix starts, then its origin is traced: `git blame` leads to the `Temper-Task` trailer, which leads to the task and its contract. (§7 4b.1)
 - **STABILISE-12** Given the traced contract is itself wrong, when that is found, then the item goes to the user or the spec, never into a quiet code fix. (§7 4b.1)
@@ -63,6 +70,15 @@ Stage 4, `/temper:stabilise` (`workflows/stabilise.js`), on the epic branch.
 - **STABILISE-19** Given any outcome of the second sweep, when the stage continues or is resumed, then there is never a third sweep. (§7, §1, §10.2)
 - **STABILISE-20** Given a Severe finding, when it is found, then the user is contacted per the `severe_contact` preference (a push notification, the morning report only, or a push for anything blocking). (§7.1, §9)
 - **STABILISE-21** Given fixes committed with their trailers, when the stage is resumed with those ids in `args.done`, then those fixes are not redone. (A6, §3.5)
+- **STABILISE-22** Given fix agents report commit shas, when `part: "fix"` returns, then its result's `commits` maps each `fix:<id>` to its sha. (A14, v0.2 spec §3.1)
+- **STABILISE-23** Given `sweeps: 1`, when `part: "fix"` finishes with a clean regression check, then it returns `stable` with `second_sweep: null`, and no second-sweep agent runs. (A16, v0.2 spec §3.3)
+- **STABILISE-24** Given first-wave fixes that landed, in this run or earlier with their trailers in `args.done`, when `part: "fix"` runs, then each gets its own `regress:fix:<id>` agent before any second sweep, and a reverted fix gets none. (A16, v0.2 spec §3.3)
+- **STABILISE-25** Given the regression check, when the status is decided, then a proven regression gives `handover` before a blocked fix gives `blocked`, the check runs even when a fix was blocked, and a regression agent that returns nothing blocks as `regress:fix:<id>`. (A16, v0.2 spec §3.3)
+- **STABILISE-26** Given `part: "fix"` is resumed with `args.attempt` raised, when its prompts are compared with the earlier run's, then every fix prompt is unchanged and every regression prompt differs, so the regression check runs live and is never replayed from the resume cache. (A16, A21, v0.2 spec §3.3)
+- **STABILISE-27** Given `second_sweep_findings: []` with no `sweeps`, when `part: "fix"` runs, then it behaves as one sweep: the regression check runs, no second sweep runs, and the status is `stable`. (A16, v0.2 spec §3.3)
+- **STABILISE-28** Given fix agents report `flaky_reruns`, when stabilise returns, then its result's `flaky_reruns` holds each entry with the fix agent's label as `id`. (A19, v0.2 spec §3.6)
+- **STABILISE-29** Given a verifier returns nothing, when the findings are collected, then the finding is kept as unverified, never counted as refuted or fixed, listed once (as verified) when another lens's verifier confirmed the same bug, blocks above minor, and stays unverified when saved for a resume. (A20, v0.2 spec §3.9)
+- **STABILISE-30** Given second-sweep findings, when they are collected, then their ids are put into the `second:` namespace by the script; a first-sweep lens whose slug starts with `second` never counts as a second-sweep fix, and a legacy `fix:second-*` trailer not in `args.selected` counts as proof that the second sweep ran, so there is no third sweep and its regression check runs. (A20, v0.2 spec §3.9)
 
 ## publish
 
@@ -76,6 +92,7 @@ Stage 5, `/temper:publish` (`workflows/publish.js`), on the epic branch.
 - **PUBLISH-06** Given the full gate is not green, when publish ends, then nothing is pushed and no PR is opened, whatever the preferences say. (A5, §8)
 - **PUBLISH-07** Given steps that need root, when the evidence is written, then they go into a script and a checklist for the user, and no agent runs them. (§8)
 - **PUBLISH-08** Given a PR is open, when the run ends, then temper does not merge it. (§8)
+- **PUBLISH-09** Given the docs and evidence agents report commit shas, when publish returns, then its result's `commits` holds `docs` and `evidence` with those shas, leaving out empty ones. (A14, v0.2 spec §3.1)
 
 ## state
 
@@ -102,6 +119,7 @@ The state directory, preferences, project files and the statusline.
 - **STATE-19** Given decisions, blocked questions and answers, morning reports and open items, when they happen, then they are recorded in the epic's `log.md`. (§3.3)
 - **STATE-20** Given an epic's status changes, when board mirroring is on, then the head updates the board after the change to `epics.md`; a board that fails to update never blocks the run, and the failure is noted in `log.md`. (§3.3)
 - **STATE-21** Given a hand-written `spec.md`, `plan.md` or `args.json`, when the matching stage is started on it, then it runs from that file as if an earlier stage had written it. (§1, §3.2)
+- **STATE-22** Given a project, when setup writes `.temper/project.md`, then it may hold `sweeps: 1|2` (default 2), `gate_slots: <n>` (empty means one), `flaky:` (a comma-separated list of test names) and a free-text `## Build rule` section. (A15, A16, A18, A19, v0.2 spec §3.2, §3.3, §3.5, §3.6)
 
 ## hook
 
@@ -168,3 +186,6 @@ The plugin, its install, the skills and the head's run loop.
 - **SKILLS-PACKAGING-26** Given the overnight run ends, when the morning report is written, then it is a summary in `log.md`, plus a push notification if the preferences ask for one. (§9)
 - **SKILLS-PACKAGING-27** Given an epic moves to a new stage, when the head records it, then the epic's status in `epics.md` is updated. (§3.3)
 - **SKILLS-PACKAGING-28** Given `/temper:cleanup`, when it runs, then it removes worktrees, branches and build directories only for items the cleanup check (`scripts/cleanup_check.py`) passes, keeps the others and reports why. (§3.2, §8)
+- **SKILLS-PACKAGING-29** Given a run stage returns `commits`, or `done_now` after a merge, when the head reads the result, then it checks each sha with `git merge-base --is-ancestor <sha> <branch>`, reports any sha not on the branch to the user, never cherry-picks it, and lets that task or phase run again on resume. (A14, v0.2 spec §3.1)
+- **SKILLS-PACKAGING-30** Given `project.md` has a `## Build rule` section and a `flaky:` line, when the plan skill writes `args.json`, then it copies them into `build_rule` and `flaky`, and never copies the build rule into task texts. (A15, A19, v0.2 spec §3.2, §3.6)
+- **SKILLS-PACKAGING-31** Given `project.md` has `gate_slots: <n>`, when the head sizes a launch (A13), then at most n gates run at once. (A18, v0.2 spec §3.5)

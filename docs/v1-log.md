@@ -141,6 +141,7 @@ Five regressions were proven. Each was reproduced a second time with an independ
 
 - SECOND-CONTROL-FLOW-5, SECOND-CONTROL-FLOW-6, SECOND-TESTS-DOCS-2, SECOND-CONTROL-FLOW-7 and SECOND-TESTS-DOCS-5 are open again, in their 24 Oct form.
 - SECOND-CONTROL-FLOW-1 is fixed but carries the open stale-private-ref regression.
+- SECOND-CONTROL-FLOW-5, SECOND-TESTS-DOCS-2 and SECOND-CONTROL-FLOW-7 are redone in v0.2 (docs/temper/v0-2/spec.md §3.9).
 
 ### Second-sweep findings this run did not touch (minors, left for the owner)
 
