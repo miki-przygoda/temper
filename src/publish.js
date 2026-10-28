@@ -8,10 +8,9 @@ if (publishErrors.length > 0) return { status: 'invalid', errors: publishErrors 
 const publishDone = args.done;
 
 // spec 3.1: {docs?, evidence?}, the sha each agent reported, never an empty one; on every result from here.
+// Only a hex sha goes in (spec 8); any other reported value blocks its id.
 const commits = {};
-const recordCommit = (id, result) => {
-  if (result && isNonEmptyString(result.commit)) commits[id] = result.commit;
-};
+const notASha = (id) => ({ status: 'blocked', blocked: [{ id, reason: NOT_A_SHA }], commits });
 
 function firstLine(text) {
   return typeof text === 'string' ? text.split('\n')[0].trim() : '';
@@ -28,14 +27,14 @@ let docs = null;
 if (!publishDone.includes('docs')) {
   docs = await agent(docsPrompt(args), { schema: DOCS_SCHEMA, label: 'docs', phase: 'Docs' });
   if (docs === null) return { status: 'blocked', blocked: [{ id: 'docs', reason: 'agent returned nothing' }], commits };
-  recordCommit('docs', docs);
+  if (recordSha(commits, 'docs', docs)) return notASha('docs');
 }
 
 let evidence = null;
 if (!publishDone.includes('evidence')) {
   evidence = await agent(evidencePrompt(args), { schema: EVIDENCE_SCHEMA, label: 'evidence', phase: 'Docs' });
   if (evidence === null) return { status: 'blocked', blocked: [{ id: 'evidence', reason: 'agent returned nothing' }], commits };
-  recordCommit('evidence', evidence);
+  if (recordSha(commits, 'evidence', evidence)) return notASha('evidence');
 }
 
 phase('Gate');

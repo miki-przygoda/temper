@@ -52,7 +52,7 @@ const finding = {
   kind: 'fix',
 };
 
-const implResult = { status: 'done', branch: 'temper/e/a', commit: 'abc123', summary: 'did a' };
+const implResult = { status: 'done', branch: 'temper/e/a', commit: 'abc1234', summary: 'did a' };
 const group = { key: 'g1', title: 'Group 1' };
 const behaviours = [{ id: 'G1-01', text: 'given x when y then z' }];
 const failing = [{ id: 'G1-01', observed: 'z was w' }];
@@ -342,8 +342,8 @@ test('the implementer creates its worktree with the task branch checked out', ()
 test('the checker confirms a fifth point: the task tip is the reported commit, not already on the epic branch', () => {
   const t = local.checker;
   assert.ok(t.includes('git rev-parse temper/e/a'));
-  assert.ok(t.includes('`abc123`'));
-  assert.ok(t.includes('git merge-base --is-ancestor abc123 temper/e'));
+  assert.ok(t.includes('`abc1234`'));
+  assert.ok(t.includes('git merge-base --is-ancestor abc1234 temper/e'));
   assert.ok(t.includes('exits non-zero'));
   assert.ok(t.includes("A tip that didn't move fails the check."));
   assert.match(t, /when all five hold/);

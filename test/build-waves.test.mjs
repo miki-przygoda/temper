@@ -38,14 +38,14 @@ function responder(over = {}) {
     }
     const id = label.slice(label.indexOf(':') + 1);
     if (label.startsWith('impl:') || label.startsWith('retry:')) {
-      return { status: 'done', branch: `temper/e/${id}`, commit: 'abc', summary: `did ${id}` };
+      return { status: 'done', branch: `temper/e/${id}`, commit: 'abcabc01', summary: `did ${id}` };
     }
     if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
     if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
     // The phases after the waves (Task 6) succeed with nothing failing.
     if (label === 'checkpoint') return { gate_passed: true, gate_log: 'logs/full.log', flows: [], gaps: [] };
-    if (label === 'behaviour-spec') return { groups: [{ key: 'g1', behaviours: [{ id: 'G1-01', text: 't' }] }], commit: 'bbb' };
-    if (label.startsWith('acceptance:')) return { group: id, passing: ['G1-01'], failing: [], untestable: [], commit: 'ccc' };
+    if (label === 'behaviour-spec') return { groups: [{ key: 'g1', behaviours: [{ id: 'G1-01', text: 't' }] }], commit: 'bbbbbb02' };
+    if (label.startsWith('acceptance:')) return { group: id, passing: ['G1-01'], failing: [], untestable: [], commit: 'cccccc03' };
     if (label.startsWith('green:')) return { fixed: [], corrected: [], questions: [], still_failing: [] };
     return null;
   };

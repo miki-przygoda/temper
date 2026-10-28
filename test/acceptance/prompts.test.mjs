@@ -414,7 +414,7 @@ test('PROMPTS-12 checker, merge, implementer, green and fix schemas accept an op
     'check:a': { pass: true, problems: [] },
     'merge:wave0': { status: 'merged', merged: ['a'], gate_passed: true },
     'green:1': { fixed: ['G1-01'], corrected: [], questions: [], still_failing: [], commit: '' },
-    'fix:f1': { status: 'fixed', commit: 'f1f1', note: 'n' },
+    'fix:f1': { status: 'fixed', commit: 'f1f1f1f1', note: 'n' },
   };
   const reruns = [{ test: 't::a', gate: 'quick' }, { test: 't::a', gate: 'acceptance' }];
   for (const [label, sample] of Object.entries(samples)) {

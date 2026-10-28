@@ -118,11 +118,11 @@ async function fixLoop(findings, out) {
   for (const f of sortFindings(findings)) {
     if (args.done.includes(`fix:${f.id}`)) continue;
     const r = await agent(fixPrompt(f, args), { label: `fix:${f.id}`, phase: 'Fix', schema: FIX_SCHEMA });
-    // spec 3.1: the sha each fix agent reported, never an empty one.
-    if (r && isNonEmptyString(r.commit)) out.commits[`fix:${f.id}`] = r.commit;
     // spec 3.6: the listed flaky tests it reran once and saw pass.
     out.flaky_reruns.push(...flakyRerunsOf(`fix:${f.id}`, r));
-    if (!r) out.blocked.push({ id: f.id, reason: 'agent returned nothing' });
+    // spec 3.1, 8: the sha each fix agent reported, only a hex sha; any other value blocks the fix.
+    if (recordSha(out.commits, `fix:${f.id}`, r)) out.blocked.push({ id: f.id, reason: NOT_A_SHA });
+    else if (!r) out.blocked.push({ id: f.id, reason: 'agent returned nothing' });
     else if (r.status === 'fixed') { out.fixed.push(f.id); handled.push(f.id); }
     else if (r.status === 'reverted') out.reverted.push(f.id);
     else if (r.status === 'contract') out.contract_items.push(f.id);

@@ -11,6 +11,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runWorkflow } from '../harness.mjs';
 
+// A hex sha for a fix id, as a fix agent reports one (spec 8: only hex shas reach commits).
+const shaFor = (id) => Buffer.from(id).toString('hex').padEnd(8, '0').slice(0, 40);
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const WF = 'workflows/stabilise.js';
 const EPIC = 'e';
@@ -79,7 +82,7 @@ function responder({ reviews = {}, second = {}, verdicts = {}, fixes = {}, regre
     if (label.startsWith('fix:')) {
       const id = label.slice('fix:'.length);
       if (has(fixes, id)) return fixes[id];
-      return { status: 'fixed', commit: `sha-${id}`, note: 'done' };
+      return { status: 'fixed', commit: shaFor(id), note: 'done' };
     }
     throw new Error(`unexpected label ${label}`);
   };

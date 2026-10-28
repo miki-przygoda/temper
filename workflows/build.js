@@ -621,9 +621,28 @@ function epicWorktreeText(args) {
   return lines.join(' ');
 }
 
+// spec 8 (owner, security-01): the head runs git on every sha an agent reports, so only a hex sha
+// counts as one; any other text is agent data and never reaches a command.
+const SHA_RE = /^[0-9a-f]{7,40}$/;
+const isSha = (v) => typeof v === 'string' && SHA_RE.test(v);
+const NOT_A_SHA = 'commit is not a sha';
+
 // A commit sha an agent reported, or '' when it is missing or not a hex sha (agent text is data).
 function shaOf(v) {
-  return typeof v === 'string' && /^[0-9a-f]{4,64}$/i.test(v) ? v : '';
+  return isSha(v) ? v : '';
+}
+
+// spec 3.1, 8: puts result.commit into commits[id] when it is a hex sha. Returns true when the agent
+// reported some other non-empty value, which is left out: the caller blocks id with NOT_A_SHA.
+// A missing or empty commit (nothing committed) is left out and is not an error.
+function recordSha(commits, id, result) {
+  const v = result ? result.commit : undefined;
+  if (!isNonEmptyString(v)) return false;
+  if (isSha(v)) {
+    commits[id] = v;
+    return false;
+  }
+  return true;
 }
 
 // The epic's folder in the specs directory: the folder that holds its log (spec 3.3, specs_dir).
@@ -932,10 +951,11 @@ function gatePrompt(args) {
 const NOTHING = 'agent returned nothing';
 
 // spec 3.1: {[phaseId]: sha} for every phase agent that reported a commit; never an empty sha.
-// It goes on every result after validation, the blocked ones included.
+// It goes on every result after validation, the blocked ones included. Only a hex sha goes in
+// (spec 8): recordCommit returns true for any other reported value, and the phase blocks.
 const commits = {};
 function recordCommit(id, result) {
-  if (result && isNonEmptyString(result.commit)) commits[id] = result.commit;
+  return recordSha(commits, id, result);
 }
 
 // spec 3.6: [{id, test, gate}], every listed flaky test an agent reran once and saw pass. Like
@@ -1068,7 +1088,7 @@ async function runCheckpoint(doneNow) {
   phase('Checkpoint');
   const cp = await agent(checkpointPrompt(args), { schema: CHECKPOINT_SCHEMA, label: 'checkpoint', phase: 'Checkpoint' });
   if (cp === null || cp === undefined) return { blocked: phaseBlocked('checkpoint', NOTHING, doneNow) };
-  recordCommit('checkpoint', cp);
+  if (recordCommit('checkpoint', cp)) return { blocked: phaseBlocked('checkpoint', NOT_A_SHA, doneNow) };
   if (cp.gate_passed !== true) return { blocked: phaseBlocked('checkpoint', 'full gate failed: ' + cp.gate_log, doneNow) };
   return { checkpoint: cp };
 }
@@ -1085,7 +1105,7 @@ async function runBehaviourSpec(doneNow) {
   phase('Behaviour');
   const b = await agent(behaviourSpecPrompt(args), { schema: BEHAVIOUR_SCHEMA, label: 'behaviour-spec', phase: 'Behaviour' });
   if (b === null || b === undefined) return { blocked: phaseBlocked('behaviour-spec', NOTHING, doneNow) };
-  recordCommit('behaviour-spec', b);
+  if (recordCommit('behaviour-spec', b)) return { blocked: phaseBlocked('behaviour-spec', NOT_A_SHA, doneNow) };
   return { groups: arr(b.groups) };
 }
 
@@ -1104,7 +1124,7 @@ async function runAcceptance(groups, doneNow) {
     const behaviours = spec ? arr(spec.behaviours) : [];
     const r = await agent(acceptancePrompt(group, behaviours, args), { schema: ACCEPTANCE_SCHEMA, label: id, phase: 'Behaviour' });
     if (r === null || r === undefined) return { blocked: phaseBlocked(id, NOTHING, doneNow) };
-    recordCommit(id, r);
+    if (recordCommit(id, r)) return { blocked: phaseBlocked(id, NOT_A_SHA, doneNow) };
     out.passing += arr(r.passing).length;
     out.failing.push(...arr(r.failing));
     out.untestable.push(...arr(r.untestable));
@@ -1128,8 +1148,8 @@ async function runGreen(failing, markedToo, doneNow) {
     }
     const g = await agent(greenPrompt(left, r, args, markedToo), { schema: GREEN_SCHEMA, label: id, phase: 'Green' });
     if (g === null || g === undefined) return { blocked: phaseBlocked(id, NOTHING, doneNow) };
-    recordCommit(id, g);
     recordReruns(id, g);
+    if (recordCommit(id, g)) return { blocked: phaseBlocked(id, NOT_A_SHA, doneNow) };
     markedToo = false;
     out.rounds = r;
     out.fixed.push(...arr(g.fixed));

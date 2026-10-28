@@ -2,6 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadLib, runWorkflow } from './harness.mjs';
 
+// A hex sha for a fix id, as a fix agent reports one (spec 8: only hex shas reach commits).
+const shaFor = (id) => Buffer.from(id).toString('hex').padEnd(8, '0').slice(0, 40);
+
 const lib = loadLib();
 const WF = 'workflows/stabilise.js';
 
@@ -52,7 +55,7 @@ function responder({ fixes = {}, second = [], regress = { regressions: [] } } = 
     if (label.startsWith('fix:')) {
       const id = label.slice('fix:'.length);
       if (id in fixes) return fixes[id];
-      return { status: 'fixed', commit: `sha-${id}`, note: 'done' };
+      return { status: 'fixed', commit: shaFor(id), note: 'done' };
     }
     if (label === 'second:review:security') return { findings: second };
     if (label.startsWith('second:review:')) return { findings: [] };

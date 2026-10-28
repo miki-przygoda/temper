@@ -133,8 +133,8 @@ async function allPublishPrompts() {
       const { calls } = await runWorkflow(WF, {
         args: args('/r', { host: s.host, done: s.done }),
         respond: ({ label }) => ({
-          docs: { commit: 'd', files: ['README.md'], summary: 'x' },
-          evidence: { script: 's.sh', checklist: 'c.md', commit: 'v' },
+          docs: { commit: 'd0d0d0d1', files: ['README.md'], summary: 'x' },
+          evidence: { script: 's.sh', checklist: 'c.md', commit: 'e0e0e0e1' },
           gate: { passed: gatePassed, exit_status: gatePassed ? 0 : 1, log_path: '/l' },
         })[label],
       });
@@ -355,14 +355,14 @@ test('PUBLISH-08 an open PR is never merged by temper', async () => {
 test('PUBLISH-09 publish returns commits for docs and evidence', async () => {
   const respond = (over = {}) => ({ label }) => {
     if (Object.prototype.hasOwnProperty.call(over, label)) return over[label];
-    if (label === 'docs') return { commit: 'sha-docs', files: ['README.md'], summary: 'docs' };
-    if (label === 'evidence') return { script: 's.sh', checklist: 'c.md', commit: 'sha-ev' };
+    if (label === 'docs') return { commit: 'd0c5d0c5', files: ['README.md'], summary: 'docs' };
+    if (label === 'evidence') return { script: 's.sh', checklist: 'c.md', commit: 'e7e7e7e7' };
     if (label === 'gate') return { passed: true, exit_status: 0, log_path: 'full.log' };
     throw new Error(`unexpected label ${label}`);
   };
   const ready = await runWorkflow(WF, { args: args('/r'), respond: respond() });
   assert.equal(ready.result.status, 'ready');
-  assert.deepEqual(ready.result.commits, { docs: 'sha-docs', evidence: 'sha-ev' });
+  assert.deepEqual(ready.result.commits, { docs: 'd0c5d0c5', evidence: 'e7e7e7e7' });
 
   // Every result after validation carries it, the failing ones too; an empty sha never goes in.
   const failed = await runWorkflow(WF, {
@@ -370,12 +370,12 @@ test('PUBLISH-09 publish returns commits for docs and evidence', async () => {
     respond: respond({ evidence: { script: 's.sh', checklist: 'c.md', commit: '' }, gate: { passed: false, exit_status: 1, log_path: 'l' } }),
   });
   assert.equal(failed.result.status, 'gate_failed');
-  assert.deepEqual(failed.result.commits, { docs: 'sha-docs' });
+  assert.deepEqual(failed.result.commits, { docs: 'd0c5d0c5' });
   const blocked = await runWorkflow(WF, { args: args('/r'), respond: respond({ evidence: null }) });
   assert.equal(blocked.result.status, 'blocked');
-  assert.deepEqual(blocked.result.commits, { docs: 'sha-docs' });
+  assert.deepEqual(blocked.result.commits, { docs: 'd0c5d0c5' });
   const resumed = await runWorkflow(WF, { args: args('/r', { done: ['docs'] }), respond: respond() });
-  assert.deepEqual(resumed.result.commits, { evidence: 'sha-ev' });
+  assert.deepEqual(resumed.result.commits, { evidence: 'e7e7e7e7' });
   const invalid = await runWorkflow(WF, { args: args('/r', { spec: '' }), respond: respond() });
   assert.equal(invalid.result.status, 'invalid');
   assert.ok(!('commits' in invalid.result));

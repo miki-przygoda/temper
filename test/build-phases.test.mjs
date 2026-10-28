@@ -43,16 +43,16 @@ function responder(over = {}) {
     }
     const id = label.slice(label.indexOf(':') + 1);
     if (label.startsWith('impl:') || label.startsWith('retry:')) {
-      return { status: 'done', branch: `temper/e/${id}`, commit: 'abc', summary: `did ${id}` };
+      return { status: 'done', branch: `temper/e/${id}`, commit: 'abcabc01', summary: `did ${id}` };
     }
     if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
     if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
     if (label === 'checkpoint') {
       return { gate_passed: true, gate_log: 'logs/full.log', flows: [{ flow: 'f1', result: 'ok', evidence: 'ran' }], gaps: [] };
     }
-    if (label === 'behaviour-spec') return { groups: GROUPS, commit: 'bbb' };
+    if (label === 'behaviour-spec') return { groups: GROUPS, commit: 'bbbbbb02' };
     if (label.startsWith('acceptance:')) {
-      return { group: id, passing: passingOf(id), failing: [], untestable: [], commit: 'ccc' };
+      return { group: id, passing: passingOf(id), failing: [], untestable: [], commit: 'cccccc03' };
     }
     if (label.startsWith('green:')) return { fixed: [], corrected: [], questions: [], still_failing: [] };
     return null;
@@ -67,7 +67,7 @@ const afterMerges = (calls) => {
 
 // g1 fails G1-01 in acceptance; G1-02 passes.
 const g1Fails = {
-  'acceptance:g1': { group: 'g1', passing: ['G1-02'], failing: [{ id: 'G1-01', observed: 'exit 2' }], untestable: [], commit: 'ccc' },
+  'acceptance:g1': { group: 'g1', passing: ['G1-02'], failing: [{ id: 'G1-01', observed: 'exit 2' }], untestable: [], commit: 'cccccc03' },
 };
 
 test('everything passes: checkpoint, behaviour spec, one acceptance agent per group, no green round', async () => {
@@ -132,7 +132,7 @@ test('a green round that leaves nothing failing ends the rounds', async () => {
 test('green questions are collected, and a questioned id is not retried', async () => {
   const twoFail = {
     'acceptance:g1': {
-      group: 'g1', passing: [], untestable: [{ id: 'G1-02', reason: 'needs a GPU' }], commit: 'c',
+      group: 'g1', passing: [], untestable: [{ id: 'G1-02', reason: 'needs a GPU' }], commit: 'c0c0c0c1',
       failing: [{ id: 'G1-01', observed: 'o1' }, { id: 'G1-02', observed: 'o2' }],
     },
     'green:1': {
@@ -222,7 +222,7 @@ test('a resume with one acceptance group done sends the live failures and the ma
   const { result, calls } = await runWorkflow(WF, {
     args: buildArgs({ done: ['a', 'b', 'checkpoint', 'behaviour-spec', 'acceptance:g1'], behaviour: GROUPS }),
     respond: responder({
-      'acceptance:g2': { group: 'g2', passing: [], failing: [{ id: 'G2-01', observed: 'exit 1' }], untestable: [], commit: 'c' },
+      'acceptance:g2': { group: 'g2', passing: [], failing: [{ id: 'G2-01', observed: 'exit 1' }], untestable: [], commit: 'c0c0c0c1' },
       'green:1': stuck,
       'green:2': stuck,
     }),

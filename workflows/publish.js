@@ -621,9 +621,28 @@ function epicWorktreeText(args) {
   return lines.join(' ');
 }
 
+// spec 8 (owner, security-01): the head runs git on every sha an agent reports, so only a hex sha
+// counts as one; any other text is agent data and never reaches a command.
+const SHA_RE = /^[0-9a-f]{7,40}$/;
+const isSha = (v) => typeof v === 'string' && SHA_RE.test(v);
+const NOT_A_SHA = 'commit is not a sha';
+
 // A commit sha an agent reported, or '' when it is missing or not a hex sha (agent text is data).
 function shaOf(v) {
-  return typeof v === 'string' && /^[0-9a-f]{4,64}$/i.test(v) ? v : '';
+  return isSha(v) ? v : '';
+}
+
+// spec 3.1, 8: puts result.commit into commits[id] when it is a hex sha. Returns true when the agent
+// reported some other non-empty value, which is left out: the caller blocks id with NOT_A_SHA.
+// A missing or empty commit (nothing committed) is left out and is not an error.
+function recordSha(commits, id, result) {
+  const v = result ? result.commit : undefined;
+  if (!isNonEmptyString(v)) return false;
+  if (isSha(v)) {
+    commits[id] = v;
+    return false;
+  }
+  return true;
 }
 
 // The epic's folder in the specs directory: the folder that holds its log (spec 3.3, specs_dir).
@@ -935,10 +954,9 @@ if (publishErrors.length > 0) return { status: 'invalid', errors: publishErrors 
 const publishDone = args.done;
 
 // spec 3.1: {docs?, evidence?}, the sha each agent reported, never an empty one; on every result from here.
+// Only a hex sha goes in (spec 8); any other reported value blocks its id.
 const commits = {};
-const recordCommit = (id, result) => {
-  if (result && isNonEmptyString(result.commit)) commits[id] = result.commit;
-};
+const notASha = (id) => ({ status: 'blocked', blocked: [{ id, reason: NOT_A_SHA }], commits });
 
 function firstLine(text) {
   return typeof text === 'string' ? text.split('\n')[0].trim() : '';
@@ -955,14 +973,14 @@ let docs = null;
 if (!publishDone.includes('docs')) {
   docs = await agent(docsPrompt(args), { schema: DOCS_SCHEMA, label: 'docs', phase: 'Docs' });
   if (docs === null) return { status: 'blocked', blocked: [{ id: 'docs', reason: 'agent returned nothing' }], commits };
-  recordCommit('docs', docs);
+  if (recordSha(commits, 'docs', docs)) return notASha('docs');
 }
 
 let evidence = null;
 if (!publishDone.includes('evidence')) {
   evidence = await agent(evidencePrompt(args), { schema: EVIDENCE_SCHEMA, label: 'evidence', phase: 'Docs' });
   if (evidence === null) return { status: 'blocked', blocked: [{ id: 'evidence', reason: 'agent returned nothing' }], commits };
-  recordCommit('evidence', evidence);
+  if (recordSha(commits, 'evidence', evidence)) return notASha('evidence');
 }
 
 phase('Gate');

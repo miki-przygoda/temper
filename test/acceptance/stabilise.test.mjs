@@ -13,6 +13,9 @@ import { fileURLToPath } from 'node:url';
 import { runWorkflow } from '../harness.mjs';
 import { namesField, schemaCases } from '../schema-cases.mjs';
 
+// A hex sha for a fix id, as a fix agent reports one (spec 8: only hex shas reach commits).
+const shaFor = (id) => Buffer.from(id).toString('hex').padEnd(8, '0').slice(0, 40);
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const WF = 'workflows/stabilise.js';
 const EPIC = 'e';
@@ -79,7 +82,7 @@ function responder({ reviews = {}, second = {}, verdicts = {}, fixes = {}, regre
     if (label.startsWith('fix:')) {
       const id = label.slice('fix:'.length);
       if (Object.prototype.hasOwnProperty.call(fixes, id)) return fixes[id];
-      return { status: 'fixed', commit: `sha-${id}`, note: 'done' };
+      return { status: 'fixed', commit: shaFor(id), note: 'done' };
     }
     if (label.startsWith('regress:fix:')) {
       const id = label.slice('regress:fix:'.length);
@@ -713,7 +716,7 @@ test('STABILISE-22 part fix returns commits for each fix', async () => {
     }),
   });
   // f3 blocked with no commit: the run stops before the second sweep.
-  assert.deepEqual(result.commits, { 'fix:f1': 'sha-f1', 'fix:f2': 'sha-f2' });
+  assert.deepEqual(result.commits, { 'fix:f1': shaFor('f1'), 'fix:f2': shaFor('f2') });
 
   const second = await runWorkflow(WF, {
     args: fixArgs({ selected: [f1, f2], lenses: ['security'] }),
@@ -721,9 +724,9 @@ test('STABILISE-22 part fix returns commits for each fix', async () => {
   });
   assert.equal(second.result.status, 'handover');
   assert.deepEqual(second.result.commits, {
-    'fix:f1': 'sha-f1',
-    'fix:f2': 'sha-f2',
-    'fix:second:security-01': 'sha-second:security-01',
+    'fix:f1': shaFor('f1'),
+    'fix:f2': shaFor('f2'),
+    'fix:second:security-01': shaFor('second:security-01'),
   });
 
   // The sweep part returns no commits; a refused args.json returns none either.
@@ -844,7 +847,7 @@ test('STABILISE-28 stabilise collects flaky_reruns from fix agents', async () =>
     args: fixArgs({ selected: [f1, f2], sweeps: 1, flaky: ['t::a', 't::b'] }),
     respond: responder({
       fixes: {
-        f1: { status: 'fixed', commit: 'sha-f1', note: 'done', flaky_reruns: [{ test: 't::a', gate: 'quick' }] },
+        f1: { status: 'fixed', commit: '5aaf1001', note: 'done', flaky_reruns: [{ test: 't::a', gate: 'quick' }] },
         f2: { status: 'blocked', note: 'needs the owner', flaky_reruns: [{ test: 't::b', gate: 'acceptance' }] },
       },
     }),
