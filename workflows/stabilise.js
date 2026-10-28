@@ -936,9 +936,9 @@ const doneIds = (findings) => findings.filter((f) => args.done.includes(`fix:${f
 
 const out = { fixed: [], reverted: [], contract_items: [], blocked: [], commits: {} };
 
-// A Minor finding is never fixed in the code; it goes to the open items (spec 7.1).
-const selectedMinor = args.selected.filter((f) => f.severity === 'minor');
-const toFix = args.selected.filter((f) => f.severity !== 'minor');
+// spec 3.4: every selected finding is fixed, whatever its severity; fixLoop's severity order puts
+// minors last. Only the second sweep's non-severe findings, which nobody selected, go to the open items.
+const toFix = args.selected;
 
 // spec 3.3: one regression agent per fix, in parallel, labelled regress:fix:<id>. The prompt carries
 // args.attempt, so a resume that bumps it reruns these live. An agent that returns nothing blocks its fix.
@@ -977,7 +977,7 @@ if (out.blocked.length > 0 || firstRegressions.length > 0) {
     reverted: out.reverted,
     contract_items: out.contract_items,
     blocked: out.blocked,
-    open_items: selectedMinor,
+    open_items: [],
     regressions: firstRegressions,
     commits: out.commits,
   };
@@ -994,7 +994,7 @@ if (lostSecondIds.length > 0) {
     reverted: out.reverted,
     contract_items: out.contract_items,
     blocked: out.blocked,
-    open_items: selectedMinor,
+    open_items: [],
     regressions: r.regressions,
     commits: out.commits,
   };
@@ -1009,7 +1009,7 @@ if (sweepsOf(args) === 1 || (savedSecond && savedSecond.length === 0 && args.swe
     reverted: out.reverted,
     contract_items: out.contract_items,
     blocked: out.blocked,
-    open_items: selectedMinor,
+    open_items: [],
     second_sweep: null,
     regressions: [],
     commits: out.commits,
@@ -1048,7 +1048,7 @@ return {
   reverted: out.reverted,
   contract_items: out.contract_items,
   blocked: out.blocked,
-  open_items: [...selectedMinor, ...others],
+  open_items: others,
   second_sweep: { severe: severe.length, others: others.length },
   second_sweep_findings: secondFindings,
   regressions,
