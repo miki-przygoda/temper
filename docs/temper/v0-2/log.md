@@ -132,3 +132,14 @@
 - **The publish result.** wf_fdfd62fa-d92 returned `ready`, with the full gate green (exit 0). docs is at 3aeb69e and evidence at 0394a31; both are on the branch.
 - **The head's edit.** The docs agent ended `pr-body.md` with a Claude Code attribution line, which the owner's rules forbid, so the head removed it. Nothing else in the branch has attribution. The head reran `npm test` after the edit before pushing.
 - **Pushed** with the owner's yes. The PR is https://github.com/miki-przygoda/temper/pull/4 (into `v0.2`), and CI is green on both jobs. PR #3 is closed as superseded. temper never merges: the owner does.
+
+## 29 Oct 2026: merged and cleaned up (head)
+
+- **Merged by the owner's say-so.** PR #4 went into `v0.2` (1eaa676), and PR #5 took `v0.2` into `main` (e3e849e). Both were merge commits, with CI green.
+- **Cleanup, by the coded check only.** `scripts/cleanup_check.py`, with the project's `disposable:` patterns.
+  - **Passed and deleted (14):** `epic/v0-2` and its 11 task branches, each with its worktree, and the merged `docs/v0.2-spec` and `ci/github-actions`. That was `git worktree remove` without `--force`, then `git branch -d`.
+  - **62 detached throwaway worktrees** (checker, verify and regression worktrees the agents left behind). The check accepts only branch names, so it refused them with "branch not found". With the owner's yes, each was pinned to a temporary local branch at its HEAD and checked the same way. All 62 passed and were removed, then each temporary branch was deleted with `-d`.
+  - Remote branches are untouched. Left in `.temper/worktrees/` is one ignored gate log from stage 5.
+- **Open items for v0.3, from cleanup.**
+  - Agents don't remove their throwaway worktrees.
+  - `cleanup_check.py` can't check a detached worktree.
