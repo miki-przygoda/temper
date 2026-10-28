@@ -73,3 +73,19 @@
   - Every task and phase trailer is in `done_tasks.py`'s output, and the checkpoint commit 1f6c8fd is on the branch.
 - **For stage 4.** New test lines reuse `beast`, the old fixtures' example host name, in about 7 places. The handover asked for no new mentions, so the head raises it as a finding for the owner's selection.
 - **Stage 4's runner.** It is this branch's own v0.2 `stabilise.js` (a snapshot at 4aa467d), with `sweeps: 1`: one sweep, the selected fixes, then the per-fix regression check. That is the owner's method from the first run, now built in.
+
+## 29 Oct 2026: stage 4a, the sweep (head)
+
+- **The sweep.** Run wf_4cdc3439-099 (v0.2's `stabilise.js`, `part: "sweep"`) found 14 verified findings: 1 severe, 9 important, 4 minor. None were refuted, none blocked, none unverified.
+- **security-01 (severe).** Agent-reported commit shas reach `commits` unchecked, and the run skill pastes them into a shell command. The owner was told when the list came back.
+- **The owner's selection.** The owner chose these to fix:
+  - security-01;
+  - failure-paths-and-lifecycle-03 and test-strength-and-docs-01 (the task id `epic`);
+  - test-strength-and-docs-02, -03, -06 and -07;
+  - test-strength-and-docs-04 and -05;
+  - failure-paths-and-lifecycle-05;
+  - the head's head-fixture-host-01 (new test lines reuse the example host name `beast`).
+- **Open items** (not selected):
+  - **security-02** (a ref name passes the reachability check). security-01's fix, which limits `commits` to hex shas, should close it too: the regression check is asked to confirm.
+  - **failure-paths-and-lifecycle-01, -02 and -04.** Phase, docs and evidence agents can't return `blocked`, because their schemas have no status, so a failed branch check is ignored. COMMITS-04 can't catch it.
+- **The run skill edit (test-strength-and-docs-04).** It gets a GREEN scenario check after the fix wave, since fix agents can't start subagents.
