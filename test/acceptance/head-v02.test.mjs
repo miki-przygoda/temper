@@ -111,7 +111,7 @@ test('HEAD-08 run bumps args.attempt on every resume of part fix', () => {
   assert.match(STAGE4, /Save `attempt` in `args\.json` at each launch/);
 });
 
-test('HEAD-09 run checks each done_now id has its trailer reachable from the epic branch', { skip: 'acceptance-failing: HEAD-09' }, () => {
+test('HEAD-09 run checks each done_now id has its trailer reachable from the epic branch', () => {
   const r = flat(RUN);
   // After every temper:build return (and the fetch-back on ssh), each done_now id's trailer is checked.
   assert.match(r, /`done_now`[^.]*(trailer|Temper-Task)[^.]*(reachable|on the epic branch|merge-base|--is-ancestor)/i);

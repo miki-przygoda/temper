@@ -72,6 +72,8 @@ The return value's `status`:
 
 When the result has `commits`, whatever its status, check each sha after the fetch-back (step 3 of "Before every launch or resume"): `git -C <repo> merge-base --is-ancestor <sha> <branch>`. A sha that isn't on the branch (exit non-zero): tell the user its id and sha, and never cherry-pick it, merge it or add its trailer yourself. Its trailer isn't in `done`, so its phase or task runs again: refresh `args.done` and resume.
 
+After every return of `temper:build`, whatever its status, check each id in `done_now` after the fetch-back (step 3 of "Before every launch or resume"): its `Temper-Task` trailer must be reachable from the epic branch, that is, in the `done` list `done_tasks.py` just printed (spec 3.1, merge reports). An id whose trailer isn't there: tell the user its id, and never add its trailer yourself; it isn't in `done`, so it runs again on resume.
+
 ## Blocked items
 
 ### Task ids: the answer loop (spec 3.6)
