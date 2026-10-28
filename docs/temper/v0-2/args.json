@@ -255,6 +255,9 @@
       "title": "the run, plan and setup skills and the project template carry the head's side (spec \u00a73.1\u2013\u00a73.6, head side)"
     }
   ],
-  "done": [],
+  "done": [
+    "project-skills",
+    "run-skill"
+  ],
   "answers": {}
 }

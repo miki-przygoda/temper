@@ -7,3 +7,24 @@
   - The two skill tasks run first, in a skill-edit workflow, because workflow agents have no Agent tool for writing-skills' RED and GREEN subagents.
   - `args.json`'s `repo` is `.`, so no absolute home path is committed. Agents start in the repo root.
 - **Preferences.** This account has no temper `preferences.md`. The owner is present, so pushes and PRs are asked for each time (`may_push: ask`, the default).
+
+## 28 Oct 2026: skill tasks (head)
+
+- **The run.** The skill-edit workflow (wf_1095f779-382) ran `run-skill`.
+  - **RED:** scenarios B, C, D, E and F failed 3/3 on the old skill; A passed 3/3.
+  - **First attempt (e20850c):** GREEN was clean, but the checker found the commit-check text (spec §3.1) missing. The implementer had skipped A because A passed RED.
+  - **Retry (8399422):** the recheck passed, but GREEN E was 1/3. The failing answer offered the unverified finding correctly, but didn't restate the overnight rule.
+  - **Result:** blocked, after two failed attempts.
+- **The head's answer** (the spec settles it, §3.9):
+  - state the unverified rule once, as a user-present / overnight pair;
+  - say `flaky` is an array of strings.
+
+  The run resumed with the answer in `answers["run-skill"]`.
+- **`run-skill` after the resume.** Merged at b2d6590 (4c35d5b). GREEN was 0/3 failures on B–F, and the checker passed.
+- **`project-skills`.** RED failed G 3/3, H 2/3 and I 3/3. GREEN failed 0/3 on each, the checker passed, and it merged at 216e0fd (a3fa8ba) with the quick gate green.
+
+## 28 Oct 2026: build launch (head)
+
+- **Done.** `done` is `["project-skills", "run-skill"]`, from `done_tasks.py`.
+- **The host.** This Mac has 16 CPUs and plenty of free disk. A quick gate is `npm test`, about 1 minute. Waves hold at most 2 tasks to launch (wave 0: `args-fields` and `docs-v02`), so no re-cut is needed.
+- **The runner.** v0.1.0's `workflows/build.js` (26714a9), from a scratch copy.
