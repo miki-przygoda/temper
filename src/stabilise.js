@@ -29,17 +29,26 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
     }),
     async (review) => {
       if (!review) return null;
-      const all = (Array.isArray(review.findings) ? review.findings : []).filter(hasInputAndWrongResult);
+      // A second-sweep id is put into the second: namespace, whatever the reviewer wrote, so its
+      // fix:<id> trailer always marks a second-sweep fix (spec 3.9, SECOND-CONTROL-FLOW-7).
+      const all = (Array.isArray(review.findings) ? review.findings : []).filter(hasInputAndWrongResult)
+        .map((f) => (second && typeof f.id === 'string' && !isSecondId(f.id) ? { ...f, id: `${SECOND_PREFIX}${f.id}` } : f));
       // An id that doesn't match ID_RE never reaches a prompt, a label or a fix:<id> trailer, and
       // done_tasks.py would never read its trailer back (SECOND-SAFETY-4): that finding goes
-      // unverified and its lens is blocked, so the list is not clean for it.
-      const found = all.filter((f) => isId(f.id));
+      // unverified and its lens is blocked, so the list is not clean for it. So does a first-sweep
+      // id in the second: namespace, whose trailer would read as a second-sweep fix.
+      const wellFormed = all.filter((f) => isId(f.id));
+      const found = second ? wellFormed : wellFormed.filter((f) => !isSecondId(f.id));
       const verdicts = await parallel(found.map((f) => () => agent(verifyPrompt(f, args), {
         label: `${labelPrefix}verify:${f.id}`,
         phase: verifyPhase,
         schema: VERDICT_SCHEMA,
       })));
-      return { pairs: found.map((finding, i) => ({ finding, verdict: verdicts[i] })), badIds: found.length < all.length };
+      return {
+        pairs: found.map((finding, i) => ({ finding, verdict: verdicts[i] })),
+        badIds: wellFormed.length < all.length,
+        secondIds: found.length < wellFormed.length,
+      };
     },
   );
   const kept = [];
@@ -53,6 +62,9 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
     }
     if (lensResult.badIds) {
       blocked.push({ id: `${labelPrefix}review:${lenses[i]}`, reason: 'a finding id did not match ID_RE; that finding was not verified' });
+    }
+    if (lensResult.secondIds) {
+      blocked.push({ id: `${labelPrefix}review:${lenses[i]}`, reason: `a first-sweep finding id started with ${SECOND_PREFIX}; that finding was not verified` });
     }
     for (const { finding, verdict } of lensResult.pairs) {
       if (!verdict) {
@@ -86,11 +98,18 @@ if (args.part === 'sweep') {
 // part 'fix' (4b): careful fixes one at a time in severity order, one more sweep, then the stop.
 
 // The second sweep's findings from an earlier fix run, saved by the head (args.second_sweep_findings).
-// When given, the second sweep already ran: never sweep again (spec 7, 1, 3.5). A fix:second-* trailer
-// without them means it ran but its findings are unknown: never guess or sweep again; the committed
-// second-sweep fixes still get the regression check, then hand over.
+// When given, the second sweep already ran: never sweep again (spec 7, 1, 3.5). A second-sweep fix
+// trailer without them means it ran but its findings are unknown: never guess or sweep again; the
+// committed second-sweep fixes still get the regression check, then hand over. A second-sweep fix
+// trailer is fix:second:* or, from a v1 branch, a legacy fix:second-* whose id is not selected: a
+// selected id is a first-sweep one, from a lens whose slug starts with "second" (spec 3.9).
 const savedSecond = Array.isArray(args.second_sweep_findings) ? args.second_sweep_findings : null;
-const lostSecondIds = savedSecond ? [] : args.done.filter((d) => d.startsWith('fix:second-')).map((d) => d.slice('fix:'.length));
+const selectedIds = new Set(args.selected.map((f) => f.id));
+const isSecondFix = (id) => isSecondId(id) || (id.startsWith('second-') && !selectedIds.has(id));
+const lostSecondIds = savedSecond ? [] : args.done
+  .filter((d) => d.startsWith('fix:'))
+  .map((d) => d.slice('fix:'.length))
+  .filter(isSecondFix);
 
 // One agent per finding, one after another, skipping fixes whose trailer is already in done.
 // A null result (the agent died or was skipped) counts as blocked. Returns the ids it handled.
