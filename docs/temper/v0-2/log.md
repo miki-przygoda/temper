@@ -28,3 +28,4 @@
 - **Done.** `done` is `["project-skills", "run-skill"]`, from `done_tasks.py`.
 - **The host.** This Mac has 16 CPUs and plenty of free disk. A quick gate is `npm test`, about 1 minute. Waves hold at most 2 tasks to launch (wave 0: `args-fields` and `docs-v02`), so no re-cut is needed.
 - **The runner.** v0.1.0's `workflows/build.js` (26714a9), from a scratch copy.
+- **Task texts.** `args.json` task texts point at their plan sections, so the launch args stay small enough to pass inline. The implementer reads the plan and the spec anyway. The launch passes the absolute `repo`.
