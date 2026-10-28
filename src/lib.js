@@ -6,6 +6,13 @@
 const ID_RE = /^[a-z0-9][a-z0-9:-]*$/;
 const isId = (v) => typeof v === 'string' && ID_RE.test(v);
 
+// Second-sweep finding ids live in their own namespace, `second:<lens slug>-NN`. A lens slug holds
+// only a-z, 0-9 and '-', so no first-sweep id can start with it, and a fix:second:* trailer always
+// means the second sweep ran (spec 3.9, SECOND-TESTS-DOCS-2, SECOND-CONTROL-FLOW-7).
+const SECOND_PREFIX = 'second:';
+const isSecondId = (id) => typeof id === 'string' && id.startsWith(SECOND_PREFIX);
+const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
+
 // Phase ids share the Temper-Task trailer namespace with task ids (A6), so no task may take one.
 const PHASE_IDS = ['checkpoint', 'behaviour-spec', 'docs', 'evidence'];
 const PHASE_PREFIXES = ['acceptance:', 'green:', 'fix:', 'merge:'];
@@ -277,6 +284,11 @@ function validateStabiliseArgs(args) {
   checkCommon(args, errors);
   if (args.part !== 'sweep' && args.part !== 'fix') errors.push("part must be 'sweep' or 'fix'");
   if (!isStringArray(args.lenses)) errors.push('lenses must be an array of strings');
+  else {
+    args.lenses.forEach((l, i) => {
+      if (!SLUG_RE.test(lensSlug(l))) errors.push(`lenses[${i}] must hold a letter or a digit`);
+    });
+  }
   if (typeof args.severity_notes !== 'string') errors.push('severity_notes must be a string');
   if (args.sweeps !== undefined && args.sweeps !== 1 && args.sweeps !== 2) errors.push('sweeps must be 1 or 2');
   if (args.attempt !== undefined && !(Number.isInteger(args.attempt) && args.attempt >= 0)) {
@@ -288,6 +300,7 @@ function validateStabiliseArgs(args) {
     } else {
       args.selected.forEach((f, i) => {
         if (!isObject(f) || !isId(f.id)) errors.push(`selected[${i}].id must match ${ID_RE}`);
+        else if (isSecondId(f.id)) errors.push(`selected[${i}].id must not start with ${SECOND_PREFIX}`);
         if (!isObject(f) || !SEVERITIES.includes(f.severity)) {
           errors.push(`selected[${i}].severity must be one of ${SEVERITIES.join(', ')}`);
         }
@@ -810,7 +823,7 @@ function lensSlug(lens) {
 }
 
 function reviewPrompt(lens, args, alreadyFixed) {
-  const prefix = args.part === 'fix' ? 'second-' : '';
+  const prefix = args.part === 'fix' ? SECOND_PREFIX : '';
   const fixed = Array.isArray(alreadyFixed) && alreadyFixed.length > 0
     ? `These are already fixed, don't report: ${alreadyFixed.join(', ')}.`
     : '';
