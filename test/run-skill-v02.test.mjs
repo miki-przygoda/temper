@@ -21,6 +21,7 @@ test('the run skill bumps attempt on every part-fix resume and passes sweeps, bu
   const s4 = STAGE4();
   assert.match(s4, /`sweeps` \(the `sweeps:` line of `project\.md`/);
   assert.match(s4, /`build_rule` and `flaky` \(from `args\.json`/);
+  assert.match(s4, /`flaky` is an array of strings/);
   assert.match(s4, /`attempt`[^.]*one more than the last launch's on every resume/);
   assert.match(STAGE5(), /`build_rule`, `flaky`/);
 });
@@ -36,8 +37,8 @@ test('the run skill records flaky_reruns in log.md and reports them', () => {
 test("the run skill's stage 4 handles unverified findings and sweeps 1", () => {
   const s4 = STAGE4();
   assert.match(s4, /\{status: "list", findings, unverified, refuted, blocked\}/);
-  assert.match(s4, /each `unverified` finding as an option of its own, its text starting `unverified`/);
-  assert.match(s4, /never select an `unverified` finding/);
+  assert.match(s4, /User present: offer each unverified finding as its own option, its label starting `unverified:`/);
+  assert.match(s4, /Overnight: never select an unverified finding; it goes to the open items/);
   assert.match(s4, /A `verify:<id>` entry in `blocked` doesn't stop 4b/);
   assert.match(s4, /every minor finding the user didn't select/);
   assert.match(s4, /`status: "stable"`: go to stage 5[^\n]*record in `log\.md` that stage 4 is stable/);
