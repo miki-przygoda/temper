@@ -26,6 +26,10 @@ test('the run skill bumps attempt on every part-fix resume and passes sweeps, bu
   assert.match(STAGE5(), /`build_rule`, `flaky`/);
 });
 
+test('the run skill passes gate_slots to stabilise, sized by A13, for its regression agents', () => {
+  assert.match(STAGE4(), /`gate_slots` \(the number of regression agents the stage may launch at once: the smaller of `gate_slots` from `project\.md`[^)]*and what the build host can take/);
+});
+
 test('the run skill records flaky_reruns in log.md and reports them', () => {
   const s3 = STAGE3();
   assert.match(s3, /When the result has `flaky_reruns`, whatever its status, append each entry to `log\.md`/);

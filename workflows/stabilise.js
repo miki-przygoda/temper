@@ -282,6 +282,11 @@ function validateBuildArgs(args) {
 // One-sweep or two-sweep mode for stabilise: missing (or anything but 1) means 2.
 const sweepsOf = (args) => (args.sweeps === 1 ? 1 : 2);
 
+// How many regression agents stabilise launches at once (spec 3.3, A13): args.gate_slots, the head's
+// launch size (gate_slots from project.md, lowered to what the build host can take). The run skill
+// always passes it; missing (an args object from before the field) means no limit, as before.
+const gateSlotsOf = (args) => (Number.isInteger(args.gate_slots) && args.gate_slots >= 1 ? args.gate_slots : Infinity);
+
 function validateStabiliseArgs(args) {
   const errors = [];
   if (!isObject(args)) return ['args must be an object'];
@@ -297,6 +302,9 @@ function validateStabiliseArgs(args) {
   if (args.sweeps !== undefined && args.sweeps !== 1 && args.sweeps !== 2) errors.push('sweeps must be 1 or 2');
   if (args.attempt !== undefined && !(Number.isInteger(args.attempt) && args.attempt >= 0)) {
     errors.push('attempt must be an integer >= 0');
+  }
+  if (args.gate_slots !== undefined && !(Number.isInteger(args.gate_slots) && args.gate_slots >= 1)) {
+    errors.push('gate_slots must be an integer >= 1');
   }
   if (args.part === 'fix') {
     if (!Array.isArray(args.selected) || args.selected.length === 0) {
@@ -1057,12 +1065,19 @@ const toFix = args.selected;
 
 // spec 3.3: one regression agent per fix, in parallel, labelled regress:fix:<id>. The prompt carries
 // args.attempt, so a resume that bumps it reruns these live. An agent that returns nothing blocks its fix.
+// They launch in chunks of gateSlotsOf(args), one parallel call per chunk, so no more agents run
+// their gates at once than A13 sized for the build host.
 async function regressEach(ids, phaseTitle = 'Fix') {
-  const results = await parallel(ids.map((id) => () => agent(regressPrompt(id, args), {
-    label: `regress:fix:${id}`,
-    phase: phaseTitle,
-    schema: REGRESS_SCHEMA,
-  })));
+  const size = gateSlotsOf(args);
+  const results = [];
+  for (let start = 0; start < ids.length; start += size) {
+    const chunk = ids.slice(start, start + size);
+    results.push(...await parallel(chunk.map((id) => () => agent(regressPrompt(id, args), {
+      label: `regress:fix:${id}`,
+      phase: phaseTitle,
+      schema: REGRESS_SCHEMA,
+    }))));
+  }
   const regressions = [];
   const blocked = [];
   for (const [i, r] of results.entries()) {

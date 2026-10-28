@@ -142,12 +142,19 @@ const toFix = args.selected;
 
 // spec 3.3: one regression agent per fix, in parallel, labelled regress:fix:<id>. The prompt carries
 // args.attempt, so a resume that bumps it reruns these live. An agent that returns nothing blocks its fix.
+// They launch in chunks of gateSlotsOf(args), one parallel call per chunk, so no more agents run
+// their gates at once than A13 sized for the build host.
 async function regressEach(ids, phaseTitle = 'Fix') {
-  const results = await parallel(ids.map((id) => () => agent(regressPrompt(id, args), {
-    label: `regress:fix:${id}`,
-    phase: phaseTitle,
-    schema: REGRESS_SCHEMA,
-  })));
+  const size = gateSlotsOf(args);
+  const results = [];
+  for (let start = 0; start < ids.length; start += size) {
+    const chunk = ids.slice(start, start + size);
+    results.push(...await parallel(chunk.map((id) => () => agent(regressPrompt(id, args), {
+      label: `regress:fix:${id}`,
+      phase: phaseTitle,
+      schema: REGRESS_SCHEMA,
+    }))));
+  }
   const regressions = [];
   const blocked = [];
   for (const [i, r] of results.entries()) {

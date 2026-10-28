@@ -504,3 +504,11 @@ test('attempt must be an integer >= 0', () => {
   assert.ok(!matches(lib.validateBuildArgs({ ...goodArgs(), attempt: -1 }), /attempt/));
   assert.ok(!matches(lib.validatePublishArgs({ ...publishArgs(), attempt: -1 }), /attempt/));
 });
+
+test('gate_slots must be an integer >= 1 when given', () => {
+  for (const bad of [0, -1, 1.5, '2']) {
+    const errors = lib.validateStabiliseArgs({ ...stabiliseArgs(), gate_slots: bad });
+    assert.ok(matches(errors, /gate_slots must be an integer >= 1/), `${JSON.stringify(bad)}: ${errors.join('\n')}`);
+  }
+  for (const ok of [1, 3]) assert.deepEqual(lib.validateStabiliseArgs({ ...stabiliseArgs(), gate_slots: ok }), []);
+});

@@ -280,6 +280,11 @@ function validateBuildArgs(args) {
 // One-sweep or two-sweep mode for stabilise: missing (or anything but 1) means 2.
 const sweepsOf = (args) => (args.sweeps === 1 ? 1 : 2);
 
+// How many regression agents stabilise launches at once (spec 3.3, A13): args.gate_slots, the head's
+// launch size (gate_slots from project.md, lowered to what the build host can take). The run skill
+// always passes it; missing (an args object from before the field) means no limit, as before.
+const gateSlotsOf = (args) => (Number.isInteger(args.gate_slots) && args.gate_slots >= 1 ? args.gate_slots : Infinity);
+
 function validateStabiliseArgs(args) {
   const errors = [];
   if (!isObject(args)) return ['args must be an object'];
@@ -295,6 +300,9 @@ function validateStabiliseArgs(args) {
   if (args.sweeps !== undefined && args.sweeps !== 1 && args.sweeps !== 2) errors.push('sweeps must be 1 or 2');
   if (args.attempt !== undefined && !(Number.isInteger(args.attempt) && args.attempt >= 0)) {
     errors.push('attempt must be an integer >= 0');
+  }
+  if (args.gate_slots !== undefined && !(Number.isInteger(args.gate_slots) && args.gate_slots >= 1)) {
+    errors.push('gate_slots must be an integer >= 1');
   }
   if (args.part === 'fix') {
     if (!Array.isArray(args.selected) || args.selected.length === 0) {

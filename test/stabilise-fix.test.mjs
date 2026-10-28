@@ -350,3 +350,34 @@ test('a lens with no slug, or a selected id in the second: namespace, is refused
     assert.equal(calls.length, 0);
   }
 });
+
+// spec 3.3: the number of regression agents launched at once is sized by A13; args.gate_slots is the
+// head's launch size (gate_slots from project.md, lowered to what the build host can take).
+test('regression agents launch in chunks of args.gate_slots, one parallel call per chunk', async () => {
+  const ids = Array.from({ length: 5 }, (_, i) => `g${i + 1}`);
+  const selected = ids.map((id, i) => finding(id, 'important', { line: 40 + i }));
+  const { result, batches } = await runWorkflow(WF, {
+    args: fixArgs({ selected, sweeps: 1, gate_slots: 2 }),
+    respond: responder(),
+  });
+  assert.equal(result.status, 'stable');
+  const regress = batches.filter((b) => b.some((l) => l.startsWith('regress:fix:')));
+  assert.deepEqual(regress.map((b) => b.length), [2, 2, 1]);
+  assert.deepEqual(regress.flat().sort(), ids.map((id) => `regress:fix:${id}`));
+});
+
+test('with no gate_slots (args from before the field), every regression agent launches in one call', async () => {
+  const { batches } = await runWorkflow(WF, { args: fixArgs({ sweeps: 1 }), respond: responder() });
+  const regress = batches.filter((b) => b.some((l) => l.startsWith('regress:fix:')));
+  assert.deepEqual(regress.map((b) => b.length), [2]);
+});
+
+test('a null regression agent in a later chunk still blocks its fix', async () => {
+  const selected = ['h1', 'h2', 'h3'].map((id, i) => finding(id, 'important', { line: 60 + i }));
+  const { result } = await runWorkflow(WF, {
+    args: fixArgs({ selected, sweeps: 1, gate_slots: 2 }),
+    respond: responder({ regress: (id) => (id === 'h3' ? null : { regressions: [] }) }),
+  });
+  assert.equal(result.status, 'blocked');
+  assert.deepEqual(result.blocked, [{ id: 'regress:fix:h3', reason: 'agent returned nothing' }]);
+});
