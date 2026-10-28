@@ -305,18 +305,18 @@ test('epicWorktreeText names the shared epic worktree, locally and on an ssh hos
   assert.ok(l.includes('git worktree add /r/.temper/worktrees/e/epic temper/e'));
   assert.match(l, /reuse it/i);
   assert.ok(!l.includes('git switch --detach'));
-  const s = lib.epicWorktreeText(buildArgs({ kind: 'ssh', name: 'beast', root: '~/o', clone: '~/repo' }));
+  const s = lib.epicWorktreeText(buildArgs({ kind: 'ssh', name: 'buildhost', root: '~/o', clone: '~/repo' }));
   assert.ok(s.includes('~/o/e/epic'));
   assert.ok(!s.includes('.temper/worktrees'));
   assert.ok(s.includes('git worktree add ~/o/e/epic temper/e'));
   assert.ok(s.includes('`git switch --detach`'));
   assert.match(s, /only after the commit check/);
-  const trailing = lib.epicWorktreeText(buildArgs({ kind: 'ssh', name: 'beast', root: '/srv/t/', clone: '/srv/repo' }));
+  const trailing = lib.epicWorktreeText(buildArgs({ kind: 'ssh', name: 'buildhost', root: '/srv/t/', clone: '/srv/repo' }));
   assert.ok(trailing.includes('/srv/t/e/epic') && !trailing.includes('/srv/t//e'));
 });
 
 test('every prompt whose agent commits carries the commit check for its branch', () => {
-  for (const host of [{ kind: 'local' }, { kind: 'ssh', name: 'beast', root: '~/o', clone: '~/repo' }]) {
+  for (const host of [{ kind: 'local' }, { kind: 'ssh', name: 'buildhost', root: '~/o', clone: '~/repo' }]) {
     const p = allPrompts(host);
     assert.ok(p.implementer.includes(lib.commitCheckText('temper/e/a')), 'implementer');
     for (const name of ['merge', 'checkpoint', 'behaviourSpec', 'acceptance', 'green', 'fix', 'docs', 'evidence']) {

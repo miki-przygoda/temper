@@ -13,7 +13,7 @@ import { runWorkflow } from '../harness.mjs';
 
 const EPIC = 'e';
 const BRANCH = 'temper/e';
-const SSH = { kind: 'ssh', name: 'beast', root: '/srv/temper/', clone: '/srv/repo' };
+const SSH = { kind: 'ssh', name: 'buildhost', root: '/srv/temper/', clone: '/srv/repo' };
 const LOCAL_DIR = '/r/.temper/worktrees/e';
 const SSH_DIR = '/srv/temper/e';
 

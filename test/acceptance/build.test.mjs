@@ -787,7 +787,7 @@ test('BUILD-28 every agent that commits is told to commit on its branch and chec
 
   // On an ssh host: the shared epic worktree is under <root>/<epic>/, and detaching comes after the check.
   const ssh = await run(
-    buildArgs({ epic: 'hard-1', branch: 'temper/hard-1', host: { kind: 'ssh', name: 'beast', root: '/srv/temper', clone: '/srv/repo' } }),
+    buildArgs({ epic: 'hard-1', branch: 'temper/hard-1', host: { kind: 'ssh', name: 'buildhost', root: '/srv/temper', clone: '/srv/repo' } }),
     failingG1,
   );
   for (const l of ['merge:wave0', 'checkpoint', 'behaviour-spec', 'acceptance:g1', 'green:1']) {
