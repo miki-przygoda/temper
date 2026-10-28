@@ -40,3 +40,24 @@
 - **Waves 0–2.** `docs-v02`, `prompts-rule-wait` and `commits` merged (HEAD 5d804e8).
 - **Wave 3.** `regress-sweeps` blocked: its quick gate needs a two-line change in `test/acceptance/git-safety.test.mjs`, whose scripted responder knows only the old `regress` label. That file isn't in its owns.
 - **The head's call.** This was a plan error again: the shared stabilise test files belong to every stabilise task. The tasks in waves 3–7 run one per wave, so each of them now owns `test/acceptance/git-safety.test.mjs`, `test/stabilise-sweep.test.mjs`, `test/stabilise-fix.test.mjs` and `test/acceptance/stabilise.test.mjs`. `validateBuildArgs` still reports no errors. The answer goes in `answers["regress-sweeps"]`, `done` is refreshed, and the run resumes.
+
+## 28 Oct 2026: MVP checkpoint (checkpoint agent)
+
+- **Full gate: passed** at 878b70a. `npm test && node scripts/bundle.mjs --check && CLAUDE_CONFIG_DIR="$(mktemp -d)" claude plugin validate . --strict` exited 0: node tests 355 pass, 0 fail; the Python suite ran 107 tests, OK; the bundle check passed; the plugin validator printed `✔ Validation passed`, with one directory warning that doesn't change the result (`ICON_MISSING`: no plugin icon). The log was written to the agent's scratchpad (`gate.log`) and isn't committed.
+- **How the flows ran.** A throwaway script outside the repo (`flows.mjs` in the agent's scratchpad) drove the committed `workflows/*.js` through `test/harness.mjs` (`runWorkflow`, `loadLib`) with a scripted responder, as spec §7 says.
+- **Flow 1, a v1 epic still runs: ok.** v1 build, stabilise (`part: "fix"`) and publish args, with no v0.2 fields: `validateBuildArgs`, `validateStabiliseArgs` and `validatePublishArgs` each printed `[]`. A build with every agent answering done or merged printed `build status: mvp`, with labels `impl:a, check:a, merge:wave0, impl:b, check:b, merge:wave1, checkpoint, behaviour-spec, acceptance:g1`.
+- **Flow 2, the build rule and the flaky list reach the agents: ok.** A two-task build with `build_rule: "Use make test only."` and `flaky: ["t::a"]` returned `mvp`.
+  - All 9 prompts carry the rule after the host text and before `Fixed rules (no exception):` (`order_ok=true` for each).
+  - The quick-gate prompts (`impl:*`, `check:*`, `merge:wave*`) carry `- t::a` and the rerun-once rule. The checkpoint prompt carries neither and says `This is the full gate: it is never rerun.`
+  - A `check:a` that reported `flaky_reruns: [{test: "t::a", gate: "quick"}]` shows up as `flaky_reruns: [{"id":"check:a","test":"t::a","gate":"quick"}]`.
+- **Flow 3, commits are reported: ok.** In the same build, the commits are `{"checkpoint":"c0ffee1","behaviour-spec":"beef002","acceptance:g1":"acce003"}`: each phase id maps to the sha its agent reported.
+- **Flow 4, one sweep: ok.** `part: "fix"`, `sweeps: 1`, `selected: [f2 (minor), f1 (critical)]`. The labels are `fix:f1, fix:f2, regress:fix:f1, regress:fix:f2`, so the critical runs first and there is one `regress:fix:<id>` agent per fix. No `second:` agent ran. The result is `status: "stable"` and `second_sweep: null`, with commits `{"fix:f1":"aa01","fix:f2":"aa02"}`.
+- **Flow 5, a resume re-checks: ok.** The same run with `done: ["fix:f1", "fix:f2"]` and `attempt: 1` ran only `regress:fix:f2, regress:fix:f1`. Both prompts end `Run attempt 1.` (they ended `Run attempt 0.` in flow 4). No fix agent ran, and the status is `stable`.
+- **Flow 6, the head's side: ok (read).** `skills/run/SKILL.md` names:
+  - `flaky_reruns` (line 66: append to `log.md`, tell the user);
+  - `commits` (line 73: `merge-base --is-ancestor` check, never cherry-pick; lines 128 and 135 for stages 4 and 5);
+  - `unverified` (lines 113 and 117: offered as `unverified:` options when the user is present, never selected overnight);
+  - `second_sweep: null` (line 130: record that one sweep ran).
+
+  `templates/project.md` has `sweeps:` (line 22), `gate_slots:` (24), `flaky:` (26) and `## Build rule` (37).
+- **Gaps.** None found. Nothing was fixed, and no product code or tests changed.
