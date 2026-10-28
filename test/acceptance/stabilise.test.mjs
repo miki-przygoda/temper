@@ -317,14 +317,24 @@ test('STABILISE-08 overnight the head picks by the preferences (default Critical
   assert.match(read('skills/setup/SKILL.md'), /`overnight_fix_default`[^\n]*`critical\+important`/);
 });
 
-test('STABILISE-09 a Minor finding is never fixed in the code in 4b; it goes to the open items', async () => {
-  const c = finding('security-01', 'critical');
-  const m = finding('security-02', 'minor');
-  const { calls, result } = await runWorkflow(WF, { args: fixArgs({ selected: [c, m] }), respond: responder() });
-  assert.ok(labels(calls).includes('fix:security-01'));
-  assert.ok(!labels(calls).includes('fix:security-02'), 'the minor finding was given to a fix agent');
-  assert.ok(!result.fixed.includes('security-02'));
-  assert.ok(result.open_items.some((f) => f.id === 'security-02'), 'the minor finding is not in the open items');
+test('STABILISE-09 a selected minor finding is fixed, after every more severe one; an unselected one is never fixed', async () => {
+  const m1 = finding('m1', 'minor');
+  const f1 = finding('f1', 'critical');
+  // The second sweep's minor finding is one nobody selected.
+  const unselected = finding('second-security-01', 'minor');
+  const { calls, result } = await runWorkflow(WF, {
+    args: fixArgs({ selected: [m1, f1] }),
+    respond: responder({ second: { security: [unselected] } }),
+  });
+  assert.deepEqual(labels(calls).filter((l) => l.startsWith('fix:')), ['fix:f1', 'fix:m1']);
+  assert.ok(result.fixed.includes('m1'), 'the selected minor finding was not fixed');
+  assert.ok(!result.open_items.some((f) => f.id === 'm1'), 'the selected minor finding went to the open items');
+  assert.ok(!labels(calls).includes(`fix:${unselected.id}`), 'an unselected finding was given to a fix agent');
+  assert.deepEqual(result.open_items.map((f) => f.id), [unselected.id]);
+});
+
+test('STABILISE-09 the setup skill still refuses minor in overnight_fix_default', () => {
+  assert.ok(read('skills/setup/SKILL.md').includes('`minor` is not a valid part of it'));
 });
 
 test('STABILISE-10 the chosen findings are fixed one at a time, in severity order', async () => {
