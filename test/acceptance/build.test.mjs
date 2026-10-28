@@ -872,13 +872,19 @@ test('BUILD-33 quick-gate prompts carry the flaky list and the rerun-once rule; 
 test('BUILD-34 build collects flaky_reruns from every agent that reports them', async () => {
   const reruns = [{ test: 't::a', gate: 'quick' }];
   const { result } = await run(buildArgs({ tasks: [task('t1', 0)], flaky: ['t::a'] }), {
+    'impl:t1': { status: 'done', branch: 'temper/e/t1', commit: 'abc', summary: 'did t1', flaky_reruns: reruns },
     'check:t1': { pass: true, problems: [], flaky_reruns: reruns },
     'merge:wave0': { status: 'merged', merged: ['t1'], gate_passed: true, flaky_reruns: reruns },
+    // One failing acceptance test sends the run to green, whose round reports a rerun too.
+    'acceptance:g1': { group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'c' },
+    'green:1': { fixed: ['G1-01'], corrected: [], questions: [], still_failing: [], flaky_reruns: reruns },
   });
   assert.equal(result.status, 'mvp');
   assert.deepEqual(result.flaky_reruns, [
+    { id: 'impl:t1', test: 't::a', gate: 'quick' },
     { id: 'check:t1', test: 't::a', gate: 'quick' },
     { id: 'merge:wave0', test: 't::a', gate: 'quick' },
+    { id: 'green:1', test: 't::a', gate: 'quick' },
   ]);
 
   // A blocked run still carries the reruns reported before it; a run with none carries [].
