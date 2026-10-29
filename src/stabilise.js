@@ -22,11 +22,10 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
   const verifyPhase = second ? 'Second sweep' : 'Verify';
   const perLens = await pipeline(
     lenses,
-    (lens) => agent(reviewPrompt(lens, args, alreadyFixed), {
-      label: `${labelPrefix}review:${lens}`,
-      phase: reviewPhase,
-      schema: FINDINGS_SCHEMA,
-    }),
+    (lens) => {
+      const label = `${labelPrefix}review:${lens}`;
+      return agent(reviewPrompt(lens, args, alreadyFixed, label), { label, phase: reviewPhase, schema: FINDINGS_SCHEMA });
+    },
     async (review) => {
       if (!review) return null;
       // A second-sweep id is put into the second: namespace, whatever the reviewer wrote, so its
@@ -39,11 +38,10 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
       // id in the second: namespace, whose trailer would read as a second-sweep fix.
       const wellFormed = all.filter((f) => isId(f.id));
       const found = second ? wellFormed : wellFormed.filter((f) => !isSecondId(f.id));
-      const verdicts = await parallel(found.map((f) => () => agent(verifyPrompt(f, args), {
-        label: `${labelPrefix}verify:${f.id}`,
-        phase: verifyPhase,
-        schema: VERDICT_SCHEMA,
-      })));
+      const verdicts = await parallel(found.map((f) => () => {
+        const label = `${labelPrefix}verify:${f.id}`;
+        return agent(verifyPrompt(f, args, label), { label, phase: verifyPhase, schema: VERDICT_SCHEMA });
+      }));
       return {
         pairs: found.map((finding, i) => ({ finding, verdict: verdicts[i] })),
         badIds: wellFormed.length < all.length,

@@ -40,7 +40,7 @@ async function implement(task, retryReport) {
 }
 
 async function check(task, impl, label) {
-  const r = await agent(checkerPrompt(task, impl, args), { schema: CHECK_SCHEMA, label, phase: 'Waves' });
+  const r = await agent(checkerPrompt(task, impl, args, label), { schema: CHECK_SCHEMA, label, phase: 'Waves' });
   recordReruns(label, r);
   return r;
 }

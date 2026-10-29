@@ -11,7 +11,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runWorkflow } from '../harness.mjs';
+import { loadLib, runWorkflow } from '../harness.mjs';
 import { namesField, schemaCases } from '../schema-cases.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -408,4 +408,21 @@ test('PUBLISH-10 publish returns blocked, never ready, when docs or evidence ret
   assert.deepEqual(evidence.result.blocked, [{ id: 'evidence', reason: 'HEAD detached' }]);
   assert.deepEqual(evidence.result.commits, { docs: 'd0c5d0c5' });
   assert.ok(!callLabels(evidence.calls).includes('gate'), 'the gate ran after a blocked evidence');
+});
+
+test('PUBLISH-11 the gate runs in a throwaway worktree under tmp/', async () => {
+  const lib = loadLib();
+  const a = args('/r');
+  const respond = ({ label }) => {
+    if (label === 'docs') return { status: 'done', commit: 'd0c5d0c5', files: ['README.md'], summary: 'docs' };
+    if (label === 'evidence') return { status: 'done', script: 's.sh', checklist: 'c.md', commit: 'e7e7e7e7' };
+    if (label === 'gate') return { passed: true, exit_status: 0, log_path: 'full.log' };
+    throw new Error(`unexpected label ${label}`);
+  };
+  const { calls } = await runWorkflow(WF, { args: a, respond });
+  const gate = calls.find((c) => c.opts.label === 'gate');
+  assert.ok(gate, 'no gate call');
+  const text = lib.throwawayText(a, 'gate');
+  assert.ok(text.includes('/r/.temper/worktrees/e/tmp/gate-1660eb12'), text);
+  assert.ok(gate.prompt.includes(text), gate.prompt);
 });
