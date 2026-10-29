@@ -6,7 +6,7 @@
 | Epic | Status | Needs (contracts from other epics) | Spec |
 |---|---|---|---|
 | v0-2 | merged | none | [spec](v0-2/spec.md) |
-| v0-3 | building | none | [spec](v0-3/spec.md) |
+| v0-3 | merged | none | [spec](v0-3/spec.md) |
 
 ## Contracts between epics
 

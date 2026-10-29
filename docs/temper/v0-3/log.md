@@ -153,3 +153,13 @@
   - `pr-body.md` and the diff from `v0.3` have no attribution lines, home paths, host names or private project names.
   - This log entry is the only commit after the gated tip.
 - **Push.** It waits for the owner's yes: push `epic/v0-3`, then open the PR into `v0.3`, never merging it.
+
+## 29 Oct 2026: merged and cleaned up (head)
+
+- **Merged, at the owner's request.** #7 (`epic/v0-3` into `v0.3`) went in as merge commit 62ecc7e, and #8 (`v0.3` into `main`, temper v0.3.0) as dfc5a51. CI passed on both: Node 20 with Python 3.10, and Node 24 with Python 3.13.
+- **Cleanup**, by v0.3's own cleanup skill and `cleanup_check.py` from `main`, with `--disposable` set to `node_modules/` and `__pycache__/`:
+  - 28 detached worktrees passed `--detached` and were removed: 7 `check-*` from v0.2.0's build runner and 21 under `tmp/` from v0.3's sweep, fix and publish runs.
+  - The epic branch and its worktree, the 11 task branches with their worktrees, and `docs/v0.3-spec` passed and were deleted.
+  - Nothing exited 1. There was no `--force` and no `-D`.
+  - `rmdir .temper/worktrees/v0-3/tmp` ran first, then `rmdir .temper/worktrees/v0-3`.
+- **Remote.** At the owner's request, the merged `epic/v0-3` and `docs/v0.3-spec` were deleted on the remote. The release branches `v0.2` and `v0.3` were kept.
