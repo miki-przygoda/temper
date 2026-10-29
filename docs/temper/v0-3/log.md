@@ -158,7 +158,7 @@
 
 - **Merged, at the owner's request.** #7 (`epic/v0-3` into `v0.3`) went in as merge commit 62ecc7e, and #8 (`v0.3` into `main`, temper v0.3.0) as dfc5a51. CI passed on both: Node 20 with Python 3.10, and Node 24 with Python 3.13.
 - **Cleanup**, by v0.3's own cleanup skill and `cleanup_check.py` from `main`, with `--disposable` set to `node_modules/` and `__pycache__/`:
-  - 28 detached worktrees passed `--detached` and were removed: 7 `check-*` from v0.2.0's build runner and 21 under `tmp/` from v0.3's sweep, fix and publish runs.
+  - 28 detached worktrees passed `--detached` and were removed: 7 `check-*` from v0.2.0's build runner and 21 under `tmp/`: two build checkers, then the sweep, fix and publish runs.
   - The epic branch and its worktree, the 11 task branches with their worktrees, and `docs/v0.3-spec` passed and were deleted.
   - Nothing exited 1. There was no `--force` and no `-D`.
   - `rmdir .temper/worktrees/v0-3/tmp` ran first, then `rmdir .temper/worktrees/v0-3`.
