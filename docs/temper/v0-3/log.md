@@ -90,3 +90,15 @@
   - The diff from `v0.3` has no attribution lines, home paths, host names or private project names. The one match was the rule against attribution lines itself.
   - The version is 0.3.0.
 - **Stage 4's runner.** It is this branch's own v0.3 `stabilise.js` (a snapshot at 9085d06), with `sweeps: 1` and `gate_slots: 1`. That gives one sweep, the owner's selected fixes, then the per-fix regression check. Its throwaway worktrees go under `.temper/worktrees/v0-3/tmp/`, and cleanup removes them.
+
+## 29 Oct 2026: stage 4a, the sweep (head)
+
+- **The sweep.** Run wf_da8cbea7-a45 (v0.3's `stabilise.js`, `part: "sweep"`) found 10 verified findings: none severe, 7 important and 3 minor. None were refuted, unverified or blocked.
+- **Throwaway reuse is unsafe** (failure-paths-and-lifecycle-01, test-strength-and-docs-02 and -03). `git -C <path> checkout --detach` keeps a dead agent's uncommitted edits instead of failing. On a local host, if a plain directory sits at the path, it acts on the main checkout instead.
+- **The throwaway agents can't say blocked** (test-strength-and-docs-01). The check, findings, verdict, regress and gate schemas have no status, so a failed reuse reads as a clean result.
+- **Publish has no `attempt`** (failure-paths-and-lifecycle-02 and test-strength-and-docs-04). A blocked docs or evidence phase replays its cached result on every resume.
+- **The task id `tmp`** (security-01) collides with the throwaway root, as `epic` did before BUILD-36.
+- **Minor.**
+  - failure-paths-and-lifecycle-03: agents may leave throwaways dirty, so cleanup refuses them.
+  - failure-paths-and-lifecycle-04: two findings with one id share a verify path.
+  - test-strength-and-docs-05 (kind `owner`): the spec's "whatever merge style" claim is false for squash merges whose head branch is deleted.
