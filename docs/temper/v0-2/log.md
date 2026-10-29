@@ -62,7 +62,7 @@
   `templates/project.md` has `sweeps:` (line 22), `gate_slots:` (24), `flaky:` (26) and `## Build rule` (37).
 - **Gaps.** None found. Nothing was fixed, and no product code or tests changed.
 
-## 28–29 Oct 2026: build report (head)
+## 28 Oct 2026: build report (head)
 
 - **Result.** Run wf_c6f6f1af-e23 (v0.1.0's `build.js`) returned `mvp`. All 11 tasks are merged: waves 3–7 merged `regress-sweeps`, `fix-minors`, `flaky-quick-gates`, `unverified-findings` and `second-namespace` in this resume.
 - **Checkpoint.** The full gate passed, and all six user flows (spec §7) were ok with no gaps.
@@ -74,7 +74,7 @@
 - **For stage 4.** New test lines reuse the old fixtures' example host name in about 7 places. The handover asked for no new mentions, so the head raises it as a finding for the owner's selection.
 - **Stage 4's runner.** It is this branch's own v0.2 `stabilise.js` (a snapshot at 4aa467d), with `sweeps: 1`: one sweep, the selected fixes, then the per-fix regression check. That is the owner's method from the first run, now built in.
 
-## 29 Oct 2026: stage 4a, the sweep (head)
+## 28 Oct 2026: stage 4a, the sweep (head)
 
 - **The sweep.** Run wf_4cdc3439-099 (v0.2's `stabilise.js`, `part: "sweep"`) found 14 verified findings: 1 severe, 9 important, 4 minor. None were refuted, none blocked, none unverified.
 - **security-01 (severe).** Agent-reported commit shas reach `commits` unchecked, and the run skill pastes them into a shell command. The owner was told when the list came back.
@@ -90,7 +90,7 @@
   - **failure-paths-and-lifecycle-01, -02 and -04.** Phase, docs and evidence agents can't return `blocked`, because their schemas have no status, so a failed branch check is ignored. COMMITS-04 can't catch it.
 - **The run skill edit (test-strength-and-docs-04).** It gets a GREEN scenario check after the fix wave, since fix agents can't start subagents.
 
-## 29 Oct 2026: stage 4b, the fix wave (head)
+## 28 Oct 2026: stage 4b, the fix wave (head)
 
 - **The run.** wf_1dd578d4-e7b (`part: "fix"`, `sweeps: 1`, attempt 0) returned `stable`.
   - **Fixed (10):** failure-paths-and-lifecycle-03 and test-strength-and-docs-01 (one commit, 542e6f7), test-strength-and-docs-02, -03, -06, -04, -05 and -07, failure-paths-and-lifecycle-05 and head-fixture-host-01.
@@ -100,7 +100,7 @@
 - **The head's check at 3e30e75.** `npm test`: 436/436 Node and 107/107 Python; the bundle check exits 0. Every fix commit is on the branch, and no added line names the old example host.
 - **The resume.** It continues with the same `selected`, `done` refreshed, `attempt: 1` (so the regression check runs again over every fix) and `answers["security-01"]`.
 
-## 29 Oct 2026: the fix wave's regression check (head)
+## 28 Oct 2026: the fix wave's regression check (head)
 
 - **The resume.** It returned `handover`. security-01 was fixed in 06739d8 and test-strength-and-docs-01 in 1da789a.
 - **The proven regression.** The per-fix regression agent reproduced it with a real SHA-256 repo. 06739d8 also tightened `shaOf()`, which builds the checker's tip check, from `/^[0-9a-f]{4,64}$/i` to `SHA_RE = /^[0-9a-f]{7,40}$/`, so 64-character and uppercase shas read as "no sha reported" and every task fails its check. The cause is the head's `{7,40}` recommendation, which left out SHA-256. The other 10 regression agents found nothing.
@@ -108,7 +108,7 @@
   - It runs as the selected finding `regress-security-01` (critical), with `attempt: 2`, so every fix's regression check runs again.
   - Then the stage stops: no further sweep.
 
-## 29 Oct 2026: stage 4 ends (head)
+## 28 Oct 2026: stage 4 ends (head)
 
 - **The forward fix.** regress-security-01 was fixed in 83f30c4: one pattern, `/^[0-9a-f]{7,64}$/`, for `commits` and the checker. The run (`attempt: 2`) returned `handover` with one regression, against `fix:security-01`'s own diff (06739d8 vs 327a76d). It is the same regression, already fixed forward by 83f30c4, as that agent's evidence notes. The regression agent for 83f30c4 and the other ten found nothing.
 - **The head's check at 83f30c4.**
@@ -119,21 +119,21 @@
 - **New open item: the per-fix regression check.** Each agent checks its fix's diff against that fix's parent, not against the branch HEAD. So a regression that was later fixed forward is reported again on every rerun of the check. A redo would tell each agent the branch HEAD as well, and count only a regression that still reproduces there.
 - **New open item: plan ownership.** The plan skill doesn't make a task own the existing tests its change will break. This build blocked twice on it (`docs-v02` and `test/manifest.test.mjs`; `regress-sweeps` and the shared stabilise tests).
 
-## 29 Oct 2026: run skill check after the fix wave (head)
+## 28 Oct 2026: run skill check after the fix wave (head)
 
 - **The check.** writing-skills RED/GREEN (wf_9d7dfc06-461), 3 subagents per scenario plus a judge.
   - **RED** was run on the skill at `13fe946^`: J (blocked `regress:fix:<id>`) failed 0/3, K (`second:verify:<id>`) 0/3, L (publish's `commit is not a sha`) 3/3.
   - **GREEN** at HEAD: J, K and L each failed 0/3.
 - **Reading.** test-strength-and-docs-04's rewording wasn't needed for J and K: the older text already led there. L is a real fix, from security-01's run skill line.
 
-## 29 Oct 2026: stage 5 (head)
+## 28 Oct 2026: stage 5 (head)
 
 - **The runner.** v0.2's `publish.js` at 132b895 (after the sha fix).
 - **The publish result.** wf_fdfd62fa-d92 returned `ready`, with the full gate green (exit 0). docs is at 3aeb69e and evidence at 0394a31; both are on the branch.
 - **The head's edit.** The docs agent ended `pr-body.md` with a Claude Code attribution line, which the owner's rules forbid, so the head removed it. Nothing else in the branch has attribution. The head reran `npm test` after the edit before pushing.
 - **Pushed** with the owner's yes. The PR is https://github.com/miki-przygoda/temper/pull/4 (into `v0.2`), and CI is green on both jobs. PR #3 is closed as superseded. temper never merges: the owner does.
 
-## 29 Oct 2026: merged and cleaned up (head)
+## 28 Oct 2026: merged and cleaned up (head)
 
 - **Merged by the owner's say-so.** PR #4 went into `v0.2` (1eaa676), and PR #5 took `v0.2` into `main` (e3e849e). Both were merge commits, with CI green.
 - **Cleanup, by the coded check only.** `scripts/cleanup_check.py`, with the project's `disposable:` patterns.

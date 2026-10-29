@@ -68,17 +68,17 @@ function buildResponder(over = {}) {
     if (label.startsWith('impl:') || label.startsWith('retry:')) {
       return { status: 'done', branch: `temper/e/${id}`, commit: 'abcdef12', summary: `did ${id}` };
     }
-    if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
+    if (label.startsWith('check:') || label.startsWith('recheck:')) return { status: 'done', pass: true, problems: [] };
     if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
     if (label === 'checkpoint') {
-      return { gate_passed: true, gate_log: 'full.log', flows: [{ flow: 'f', result: 'ok', evidence: 'ran' }], gaps: [], commit: 'c0ffee01' };
+      return { status: 'done', gate_passed: true, gate_log: 'full.log', flows: [{ flow: 'f', result: 'ok', evidence: 'ran' }], gaps: [], commit: 'c0ffee01' };
     }
-    if (label === 'behaviour-spec') return { groups: GROUPS, commit: 'beef0002' };
+    if (label === 'behaviour-spec') return { status: 'done', groups: GROUPS, commit: 'beef0002' };
     if (label === 'acceptance:g1') {
-      return { group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'wrong' }], untestable: [], commit: 'acce0003' };
+      return { status: 'done', group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'wrong' }], untestable: [], commit: 'acce0003' };
     }
-    if (label === 'acceptance:g2') return { group: 'g2', passing: ['G2-01'], failing: [], untestable: [], commit: 'acce0004' };
-    if (label.startsWith('green:')) return { fixed: ['G1-01'], corrected: [], questions: [], still_failing: [], commit: '9ee90005' };
+    if (label === 'acceptance:g2') return { status: 'done', group: 'g2', passing: ['G2-01'], failing: [], untestable: [], commit: 'acce0004' };
+    if (label.startsWith('green:')) return { status: 'done', fixed: ['G1-01'], corrected: [], questions: [], still_failing: [], commit: '9ee90005' };
     return null;
   };
 }
@@ -127,10 +127,10 @@ function stabiliseResponder(over = {}) {
       const v = over[label];
       return typeof v === 'function' ? v(call) : v;
     }
-    if (label.startsWith('second:review:')) return { findings: [] };
-    if (label.startsWith('review:')) return { findings: [finding('f9', 'important')] };
-    if (label.includes('verify:')) return { real: true, severity: 'important', reason: 'reproduced' };
-    if (label.startsWith('regress:')) return { regressions: [] };
+    if (label.startsWith('second:review:')) return { status: 'done', findings: [] };
+    if (label.startsWith('review:')) return { status: 'done', findings: [finding('f9', 'important')] };
+    if (label.includes('verify:')) return { status: 'done', real: true, severity: 'important', reason: 'reproduced' };
+    if (label.startsWith('regress:')) return { status: 'done', regressions: [] };
     if (label.startsWith('fix:')) return { status: 'fixed', commit: 'f1f1f1f1', note: 'done' };
     throw new Error(`unexpected label ${label}`);
   };
@@ -155,9 +155,9 @@ function publishArgs(extra = {}) {
 }
 
 const publishResponder = ({ label }) => ({
-  docs: { commit: 'd0c50001', files: ['README.md'], summary: 'docs' },
-  evidence: { script: 'evidence.sh', checklist: 'checklist.md', commit: 'e71d0002' },
-  gate: { passed: true, exit_status: 0, log_path: '/l' },
+  docs: { status: 'done', commit: 'd0c50001', files: ['README.md'], summary: 'docs' },
+  evidence: { status: 'done', script: 'evidence.sh', checklist: 'checklist.md', commit: 'e71d0002' },
+  gate: { status: 'done', passed: true, exit_status: 0, log_path: '/l' },
 })[label];
 
 const runPublish = (args) => runWorkflow('workflows/publish.js', { args, respond: publishResponder });
@@ -169,7 +169,7 @@ async function allCalls(extra = {}, host = { kind: 'local' }) {
   const add = (stage, calls) => {
     for (const c of calls) out.push({ stage, label: c.opts?.label, prompt: c.prompt, opts: c.opts });
   };
-  const b = await runBuild(buildArgs({ host, ...extra }), { 'check:a': { pass: false, problems: ['p'] } });
+  const b = await runBuild(buildArgs({ host, ...extra }), { 'check:a': { status: 'done', pass: false, problems: ['p'] } });
   add('build', b.calls);
   const b2 = await runBuild(buildArgs({ host, ...extra }));
   add('build', b2.calls);
@@ -270,9 +270,10 @@ test('PROMPTS-02 the order is parts, host text, build rule, gate wait, fixed rul
       assert.ok(iHost < iRule && iRule < iWait && iWait < iCommon, `${what}: order host ${iHost}, rule ${iRule}, wait ${iWait}, common ${iCommon}`);
       // The parts come first: the prompt opens with the agent's own text, not the shared tail.
       assert.ok(!prompt.startsWith(hostStart), `${what}: opens with the host text`);
-      // The fixed rules come last (a regression prompt adds only its attempt line after them).
+      // The fixed rules come last (a regression prompt, the checkpoint and later phase prompts, and
+      // every publish prompt add only their attempt line after them).
       const tail = prompt.slice(prompt.indexOf(RULES_COMMON_TAIL) + RULES_COMMON_TAIL.length);
-      if (label.startsWith('regress:')) assert.match(tail, /^\n\nRun attempt \d+\.$/, `${what}: tail ${JSON.stringify(tail)}`);
+      if (stage === 'publish' || /^(regress:|checkpoint$|behaviour-spec$|acceptance:|green:)/.test(label)) assert.match(tail, /^\n\nRun attempt \d+\.$/, `${what}: tail ${JSON.stringify(tail)}`);
       else assert.equal(tail, '', `${what}: text after the fixed rules: ${JSON.stringify(tail)}`);
       // Each piece is its own paragraph.
       assert.ok(prompt.includes(`\n\n${RULE_FRAME}`), `${what}: rule not its own paragraph`);
@@ -411,9 +412,9 @@ test('PROMPTS-12 checker, merge, implementer, green and fix schemas accept an op
   const calls = await allCalls({ flaky: ['t::a'] });
   const samples = {
     'impl:a': { status: 'done', branch: 'temper/e/a', commit: 'abcdef12', summary: 's' },
-    'check:a': { pass: true, problems: [] },
+    'check:a': { status: 'done', pass: true, problems: [] },
     'merge:wave0': { status: 'merged', merged: ['a'], gate_passed: true },
-    'green:1': { fixed: ['G1-01'], corrected: [], questions: [], still_failing: [], commit: '' },
+    'green:1': { status: 'done', fixed: ['G1-01'], corrected: [], questions: [], still_failing: [], commit: '' },
     'fix:f1': { status: 'fixed', commit: 'f1f1f1f1', note: 'n' },
   };
   const reruns = [{ test: 't::a', gate: 'quick' }, { test: 't::a', gate: 'acceptance' }];
@@ -433,7 +434,7 @@ test('PROMPTS-12 checker, merge, implementer, green and fix schemas accept an op
 
 test('PROMPTS-13 a checker that reports flaky_reruns shows in the build result as {id, test, gate}', async () => {
   const { result } = await runBuild(buildArgs({ flaky: ['t::a'] }), {
-    'check:a': { pass: true, problems: [], flaky_reruns: [{ test: 't::a', gate: 'quick' }] },
+    'check:a': { status: 'done', pass: true, problems: [], flaky_reruns: [{ test: 't::a', gate: 'quick' }] },
   });
   assert.equal(result.status, 'mvp', JSON.stringify(result));
   assert.ok(Array.isArray(result.flaky_reruns), `no flaky_reruns: ${JSON.stringify(result)}`);
@@ -461,7 +462,7 @@ test('PROMPTS-15 v1 args stay valid in every stage, and a build where every agen
   assert.notEqual(sweep.result.status, 'invalid', JSON.stringify(sweep.result));
   // Every agent answers done or merged, every check passes: mvp.
   const { result } = await runBuild(buildArgs(), {
-    'acceptance:g1': { group: 'g1', passing: ['G1-01'], failing: [], untestable: [], commit: 'acce0003' },
+    'acceptance:g1': { status: 'done', group: 'g1', passing: ['G1-01'], failing: [], untestable: [], commit: 'acce0003' },
   });
   assert.equal(result.status, 'mvp', JSON.stringify(result));
   const withGreen = await runBuild(buildArgs());

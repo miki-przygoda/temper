@@ -249,7 +249,9 @@ test('a finding id reaches the verify and fix prompts only inside the data block
   const block = lib.findingText(finding);
   for (const [name, p] of [['verify', local.verify], ['fix', local.fix]]) {
     assert.ok(p.includes(block), `${name}: the finding block`);
-    const outside = p.replace(block, '').replace('`Temper-Task: e/fix:security-01`', '');
+    // The verifier's throwaway path carries the id only sanitised to [a-z0-9-] (spec 8).
+    const outside = p.replace(block, '').replace('`Temper-Task: e/fix:security-01`', '')
+      .replace(lib.throwawayText(stabiliseArgs({ kind: 'local' }), 'verify:security-01'), '');
     assert.ok(!outside.includes('security-01'), `${name}: the id appears outside the data block`);
   }
   assert.ok(local.regress.includes('data'), 'the regress prompt marks its ids as data');
@@ -463,4 +465,112 @@ test('flakyRerunsOf labels each well-formed entry with the agent id and drops th
     lib.flakyRerunsOf('check:a', { flaky_reruns: [{ test: 't::a', gate: 'quick' }, { test: '', gate: 'quick' }, null, { test: 't::b' }] }),
     [{ id: 'check:a', test: 't::a', gate: 'quick' }],
   );
+});
+
+test('phaseBlockedReason maps a result to its blocked reason', () => {
+  assert.equal(lib.phaseBlockedReason({ status: 'done' }), null);
+  assert.equal(lib.phaseBlockedReason({ status: 'blocked', reason: 'HEAD detached' }), 'HEAD detached');
+  assert.equal(lib.phaseBlockedReason({ status: 'blocked' }), 'phase returned status blocked');
+  assert.equal(lib.phaseBlockedReason({ status: 'blocked', reason: '' }), 'phase returned status blocked');
+  assert.equal(lib.phaseBlockedReason({}), 'phase returned status undefined');
+});
+
+test('every phase prompt says how to return blocked', () => {
+  const b = buildArgs();
+  const p = publishArgs();
+  const prompts = {
+    checkpoint: lib.checkpointPrompt(b),
+    behaviourSpec: lib.behaviourSpecPrompt(b),
+    acceptance: lib.acceptancePrompt({ key: 'g1', title: 'Group 1' }, [{ id: 'G1-01', text: 'x' }], b),
+    green: lib.greenPrompt([{ id: 'G1-01', observed: 'y' }], 1, b),
+    docs: lib.docsPrompt(p),
+    evidence: lib.evidencePrompt(p),
+  };
+  for (const [name, prompt] of Object.entries(prompts)) {
+    assert.ok(typeof lib.PHASE_BLOCKED === 'string' && lib.PHASE_BLOCKED.length > 0, 'PHASE_BLOCKED missing');
+    assert.ok(prompt.includes(lib.PHASE_BLOCKED), `${name} prompt lacks PHASE_BLOCKED`);
+  }
+});
+
+test('the checkpoint and later phase prompts end with the attempt', () => {
+  const phases = (b) => ({
+    checkpoint: lib.checkpointPrompt(b),
+    behaviourSpec: lib.behaviourSpecPrompt(b),
+    acceptance: lib.acceptancePrompt(group, behaviours, b),
+    green: lib.greenPrompt(failing, 1, b),
+  });
+  for (const [name, prompt] of Object.entries(phases(buildArgs()))) {
+    assert.ok(prompt.endsWith('\n\nRun attempt 0.'), `${name}: ${JSON.stringify(prompt.slice(-40))}`);
+  }
+  for (const [name, prompt] of Object.entries(phases({ ...buildArgs(), attempt: 3 }))) {
+    assert.ok(prompt.endsWith('\n\nRun attempt 3.'), `${name}: ${JSON.stringify(prompt.slice(-40))}`);
+  }
+});
+
+test('task, checker and merge prompts carry no attempt', () => {
+  const b = { ...buildArgs(), attempt: 3 };
+  const prompts = {
+    implementer: lib.implementerPrompt(taskA, b),
+    implementerRetry: lib.implementerPrompt(taskA, b, 'missing test x'),
+    checker: lib.checkerPrompt(taskA, implResult, b),
+    merge: lib.mergePrompt([taskA, taskC], b),
+  };
+  for (const [name, prompt] of Object.entries(prompts)) assert.ok(!prompt.includes('Run attempt'), name);
+});
+
+test('the checkpoint commits its log section only on a green gate', () => {
+  const p = lib.checkpointPrompt(buildArgs());
+  assert.ok(p.includes('4. Only when the full gate passed:'), p);
+  assert.ok(p.includes('When the full gate failed: commit nothing, and return status "blocked" with the gate log in reason.'), p);
+  assert.ok(!p.includes('4. Append a checkpoint section'), p);
+});
+
+test('tmpLabel sanitises the label and appends its FNV-1a hash', () => {
+  assert.equal(lib.tmpLabel('a:b'), 'a-b-08bd8540');
+  assert.equal(lib.tmpLabel('a-b'), 'a-b-2a89df63');
+  assert.equal(lib.tmpLabel('check:t1'), 'check-t1-be2b7968');
+  assert.equal(lib.tmpLabel('gate'), 'gate-1660eb12');
+  assert.equal(lib.tmpLabel('review:failure paths and lifecycle'), 'review-failure-paths-and-lifecycle-20db6b18');
+  assert.equal(lib.tmpLabel('regress:fix:f1'), 'regress-fix-f1-57318b86');
+});
+
+test('tmpLabel never leaves tmp/', () => {
+  for (const label of ['../x', 'a/b', 'A B', 'é']) {
+    assert.match(lib.tmpLabel(label), /^[a-z0-9-]+-[0-9a-f]{8}$/, label);
+  }
+});
+
+test('throwawayText names the path, creates it detached or reuses it, and never removes it', () => {
+  const cases = [
+    [buildArgs(), '/r/.temper/worktrees/e/tmp/check-t1-be2b7968'],
+    [buildArgs({ kind: 'ssh', name: 'buildhost', root: '~/o', clone: '~/repo' }), '~/o/e/tmp/check-t1-be2b7968'],
+  ];
+  for (const [a, path] of cases) {
+    const t = lib.throwawayText(a, 'check:t1');
+    assert.ok(t.includes(`Your throwaway worktree is \`${path}\`.`), t);
+    assert.ok(t.includes(`\`git worktree add --detach ${path} `), t);
+    assert.ok(t.includes(`\`git -C ${path} checkout --detach `), t);
+    assert.ok(t.includes(`\`git -C ${path} rev-parse --show-toplevel\` prints the same directory as \`cd ${path} && pwd -P\``), t);
+    assert.ok(t.includes(`\`git -C ${path} status --porcelain\` prints nothing`), t);
+    assert.ok(t.includes('never delete or clean the path'), t);
+    assert.ok(!t.includes('git worktree remove'), t);
+  }
+});
+
+test('no prompt tells an agent to remove a worktree', () => {
+  for (const prompts of [local, ssh]) {
+    for (const [name, text] of Object.entries(prompts)) {
+      assert.doesNotMatch(text, /git worktree remove/, name);
+      assert.ok(text.includes('never push, merge, or delete branches or worktrees'), name);
+    }
+  }
+});
+
+test('the regression prompt counts only what reproduces on the branch tip', () => {
+  const s = stabiliseArgs({ kind: 'local' });
+  const p = lib.regressPrompt('f1', s);
+  assert.ok(p.includes(`The current tip of \`${s.branch}\` is what \`git rev-parse ${s.branch}\` prints when you start.`), p);
+  assert.ok(p.includes(`A regression counts only when it reproduces on the current tip of \`${s.branch}\` as well; give both reproductions.`), p);
+  assert.ok(p.includes(lib.throwawayText(s, 'regress:fix:f1')), p);
+  assert.match(p, /\n\nRun attempt 0\.$/);
 });

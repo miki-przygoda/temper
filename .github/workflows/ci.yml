@@ -17,10 +17,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Python 3.9 has no build for Ubuntu 26.04 (ubuntu-latest), so the oldest pair runs on 24.04.
-          - os: ubuntu-24.04
+          # The oldest supported pair (the README's requirements) and a current one.
+          - os: ubuntu-latest
             node: '20'
-            python: '3.9'
+            python: '3.10'
           - os: ubuntu-latest
             node: '24'
             python: '3.13'

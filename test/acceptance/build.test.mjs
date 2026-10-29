@@ -9,7 +9,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runWorkflow } from '../harness.mjs';
+import { loadLib, runWorkflow } from '../harness.mjs';
 import { ARGS_SCHEMA, namesField, schemaCases } from '../schema-cases.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -65,22 +65,23 @@ function responder(over = {}) {
     if (label.startsWith('impl:') || label.startsWith('retry:')) {
       return { status: 'done', branch: `temper/e/${id}`, commit: 'abcabc01', summary: `did ${id}` };
     }
-    if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
+    if (label.startsWith('check:') || label.startsWith('recheck:')) return { status: 'done', pass: true, problems: [] };
     if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
     if (label === 'checkpoint') {
       return {
+        status: 'done',
         gate_passed: true,
         gate_log: 'logs/full.log',
         flows: [{ flow: 'flow one', result: 'ok', evidence: 'ran it' }, { flow: 'flow two', result: 'gap', evidence: 'missing' }],
         gaps: ['flow two prints nothing'],
       };
     }
-    if (label === 'behaviour-spec') return { groups: GROUPS, commit: 'bbbbbb02' };
+    if (label === 'behaviour-spec') return { status: 'done', groups: GROUPS, commit: 'bbbbbb02' };
     if (label.startsWith('acceptance:')) {
       const g = GROUPS.find((x) => x.key === id);
-      return { group: id, passing: g ? g.behaviours.map((b) => b.id) : [], failing: [], untestable: [], commit: 'cccccc03' };
+      return { status: 'done', group: id, passing: g ? g.behaviours.map((b) => b.id) : [], failing: [], untestable: [], commit: 'cccccc03' };
     }
-    if (label.startsWith('green:')) return { fixed: [], corrected: [], questions: [], still_failing: [] };
+    if (label.startsWith('green:')) return { status: 'done', fixed: [], corrected: [], questions: [], still_failing: [] };
     return null;
   };
 }
@@ -118,6 +119,7 @@ test('BUILD-01 invalid args.json is refused naming the problem, before any agent
   // once with an ssh host.
   const full = buildArgs({
     default_branch: 'main',
+    attempt: 0,
     done: ['x1'],
     answers: { a: 'an answer' },
     behaviour: [{ key: 'g1', behaviours: [{ id: 'G1-01', text: 'given x then y' }] }],
@@ -162,7 +164,7 @@ test('BUILD-02 waves run in ascending order, each merged before the next starts'
 
 test('BUILD-03 a pending task goes through an implementer, a separate checker, and a retry only on failure', async () => {
   const { calls } = await run(buildArgs({ tasks: [task('a', 0), task('c', 0)] }), {
-    'check:c': { pass: false, problems: ['tests missing'] },
+    'check:c': { status: 'done', pass: false, problems: ['tests missing'] },
   });
   const a = taskLabels(calls, 'a');
   assert.deepEqual(a, ['impl:a', 'check:a'], 'a passing task gets no retry');
@@ -221,7 +223,7 @@ test('BUILD-05 the checker confirms owns[], tests present and not weakened, quic
 test('BUILD-06 a first checker failure gives exactly one retry, with the checker\'s report', async () => {
   const report = 'PROBLEM-UNIQUE-42: the diff touches src/other.rs';
   const { result, calls } = await run(buildArgs(), {
-    'check:a': { pass: false, problems: [report] },
+    'check:a': { status: 'done', pass: false, problems: [report] },
   });
   const a = taskLabels(calls, 'a');
   assert.equal(a.filter((l) => l.startsWith('retry:')).length, 1, a.join(', '));
@@ -233,8 +235,8 @@ test('BUILD-06 a first checker failure gives exactly one retry, with the checker
 
 test('BUILD-07 a second checker failure blocks the task with no third attempt', async () => {
   const { result, calls } = await run(buildArgs(), {
-    'check:a': { pass: false, problems: ['first'] },
-    'recheck:a': { pass: false, problems: ['second'] },
+    'check:a': { status: 'done', pass: false, problems: ['first'] },
+    'recheck:a': { status: 'done', pass: false, problems: ['second'] },
   });
   const attempts = taskLabels(calls, 'a').filter((l) => /^(impl|retry):/.test(l));
   assert.equal(attempts.length, 2, attempts.join(', '));
@@ -248,7 +250,7 @@ test('BUILD-08 a blocked agent lets its wave finish, then the run ends with the 
   const { result, calls } = await run(buildArgs({ tasks }), {
     'impl:c': { status: 'blocked', question: 'QUESTION-C: which format?', context: 'the spec names two' },
     'retry:d': { status: 'blocked', question: 'QUESTION-D: may I add a dep?', context: 'needs serde' },
-    'check:d': { pass: false, problems: ['missing test'] },
+    'check:d': { status: 'done', pass: false, problems: ['missing test'] },
   });
   const ls = labels(calls);
   assert.ok(ls.includes('impl:a') && ls.includes('check:a'), 'a finished');
@@ -265,12 +267,12 @@ test('BUILD-08 a blocked agent lets its wave finish, then the run ends with the 
 test('BUILD-09 a task its checker did not confirm is never reported as done', async () => {
   const tasks = [task('t1', 0), task('t2', 0), task('t3', 0), task('t4', 0), task('t5', 0), task('ok', 0)];
   const { result } = await run(buildArgs({ tasks, behaviour_groups: [] }), {
-    'check:t1': { pass: false, problems: ['p1'] }, // failed twice
-    'recheck:t1': { pass: false, problems: ['p2'] },
+    'check:t1': { status: 'done', pass: false, problems: ['p1'] }, // failed twice
+    'recheck:t1': { status: 'done', pass: false, problems: ['p2'] },
     'impl:t2': { status: 'blocked', question: 'q?', context: 'c' }, // blocked
     'impl:t3': null, // implementer returned nothing
     'check:t4': null, // checker returned nothing
-    'check:t5': { pass: false, problems: ['p'] }, // retry returned nothing
+    'check:t5': { status: 'done', pass: false, problems: ['p'] }, // retry returned nothing
     'retry:t5': null,
   });
   const unconfirmed = ['t1', 't2', 't3', 't4', 't5'];
@@ -332,8 +334,8 @@ test('BUILD-11 a phase id in args.done is skipped when the run reaches it', asyn
   await t.test('a to-green round', async () => {
     // green:1 committed in an earlier run; the run reaches to-green again with a failure.
     const { calls } = await run(buildArgs({ done: [...tasksDone, 'checkpoint', 'green:1'] }), {
-      'acceptance:g1': { group: 'g1', passing: ['G1-02'], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'c0c0c0c1' },
-      'green:2': { fixed: ['G1-01'], corrected: [], questions: [], still_failing: [] },
+      'acceptance:g1': { status: 'done', group: 'g1', passing: ['G1-02'], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'c0c0c0c1' },
+      'green:2': { status: 'done', fixed: ['G1-01'], corrected: [], questions: [], still_failing: [] },
     });
     assert.ok(!labels(calls).includes('green:1'), labels(calls).join(', '));
   });
@@ -341,9 +343,9 @@ test('BUILD-11 a phase id in args.done is skipped when the run reaches it', asyn
 
 test('BUILD-12 the phases after the waves commit with Temper-Task: <epic>/<phase id>', async () => {
   const { calls } = await run(buildArgs(), {
-    'acceptance:g1': { group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }, { id: 'G1-02', observed: 'y' }], untestable: [], commit: 'c0c0c0c1' },
-    'green:1': { fixed: ['G1-02'], corrected: [], questions: [], still_failing: ['G1-01'] },
-    'green:2': { fixed: ['G1-01'], corrected: [], questions: [], still_failing: [] },
+    'acceptance:g1': { status: 'done', group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }, { id: 'G1-02', observed: 'y' }], untestable: [], commit: 'c0c0c0c1' },
+    'green:1': { status: 'done', fixed: ['G1-02'], corrected: [], questions: [], still_failing: ['G1-01'] },
+    'green:2': { status: 'done', fixed: ['G1-01'], corrected: [], questions: [], still_failing: [] },
   });
   for (const id of ['checkpoint', 'behaviour-spec', 'acceptance:g1', 'acceptance:g2', 'green:1', 'green:2']) {
     assert.ok(promptOf(calls, id).includes(`Temper-Task: ${EPIC}/${id}`), `${id} prompt lacks its trailer`);
@@ -361,7 +363,7 @@ test('BUILD-12 the phases after the waves commit with Temper-Task: <epic>/<phase
     },
     respond: ({ label }) => {
       if (label.startsWith('fix:')) return { status: 'fixed', commit: 'f1f1f1f1', note: 'n' };
-      if (label.includes('review:')) return { findings: [] };
+      if (label.includes('review:')) return { status: 'done', findings: [] };
       return null;
     },
   });
@@ -534,9 +536,9 @@ test('BUILD-19 one acceptance agent per behaviour group, none touching product c
 
 test('BUILD-20 an acceptance test failing because of the product stays, marked ignored with its id', async () => {
   const { calls, result } = await run(buildArgs(), {
-    'acceptance:g1': { group: 'g1', passing: ['G1-02'], failing: [{ id: 'G1-01', observed: 'prints 2' }], untestable: [], commit: 'c0c0c0c1' },
-    'green:1': { fixed: [], corrected: [], questions: [], still_failing: ['G1-01'] },
-    'green:2': { fixed: [], corrected: [], questions: [], still_failing: ['G1-01'] },
+    'acceptance:g1': { status: 'done', group: 'g1', passing: ['G1-02'], failing: [{ id: 'G1-01', observed: 'prints 2' }], untestable: [], commit: 'c0c0c0c1' },
+    'green:1': { status: 'done', fixed: [], corrected: [], questions: [], still_failing: ['G1-01'] },
+    'green:2': { status: 'done', fixed: [], corrected: [], questions: [], still_failing: ['G1-01'] },
   });
   const p = promptOf(calls, 'acceptance:g1');
   assert.match(p, /fails because of the product stays/i);
@@ -548,11 +550,12 @@ test('BUILD-20 an acceptance test failing because of the product stays, marked i
 test('BUILD-21 each failure is a product fix, a test correction citing the spec, or a question in the report', async () => {
   const { calls, result } = await run(buildArgs(), {
     'acceptance:g1': {
+      status: 'done',
       group: 'g1', passing: [], untestable: [], commit: 'c0c0c0c1',
       failing: [{ id: 'G1-01', observed: 'a' }, { id: 'G1-02', observed: 'b' }],
     },
-    'acceptance:g2': { group: 'g2', passing: [], untestable: [], commit: 'c0c0c0c1', failing: [{ id: 'G2-01', observed: 'c' }] },
-    'green:1': { fixed: ['G1-01'], corrected: ['G1-02'], questions: [{ id: 'G2-01', question: 'QUESTION-G2: which order?' }], still_failing: [] },
+    'acceptance:g2': { status: 'done', group: 'g2', passing: [], untestable: [], commit: 'c0c0c0c1', failing: [{ id: 'G2-01', observed: 'c' }] },
+    'green:1': { status: 'done', fixed: ['G1-01'], corrected: ['G1-02'], questions: [{ id: 'G2-01', question: 'QUESTION-G2: which order?' }], still_failing: [] },
   });
   const p = promptOf(calls, 'green:1');
   assert.ok(p.includes('G1-01') && p.includes('G1-02') && p.includes('G2-01'));
@@ -568,7 +571,7 @@ test('BUILD-21 each failure is a product fix, a test correction citing the spec,
 
 test('BUILD-22 a to-green fix that breaks anything else is reverted, never patched on top', async () => {
   const { calls } = await run(buildArgs(), {
-    'acceptance:g1': { group: 'g1', passing: [], untestable: [], commit: 'c0c0c0c1', failing: [{ id: 'G1-01', observed: 'a' }] },
+    'acceptance:g1': { status: 'done', group: 'g1', passing: [], untestable: [], commit: 'c0c0c0c1', failing: [{ id: 'G1-01', observed: 'a' }] },
   });
   const p = promptOf(calls, 'green:1');
   assert.match(p, /whole acceptance suite/i);
@@ -578,9 +581,9 @@ test('BUILD-22 a to-green fix that breaks anything else is reverted, never patch
 
 test('BUILD-23 no third to-green round; what still fails goes into the report', async () => {
   const { calls, result } = await run(buildArgs(), {
-    'acceptance:g1': { group: 'g1', passing: [], untestable: [], commit: 'c0c0c0c1', failing: [{ id: 'G1-01', observed: 'a' }, { id: 'G1-02', observed: 'b' }] },
-    'green:1': { fixed: ['G1-02'], corrected: [], questions: [], still_failing: ['G1-01'] },
-    'green:2': { fixed: [], corrected: [], questions: [], still_failing: ['G1-01'] },
+    'acceptance:g1': { status: 'done', group: 'g1', passing: [], untestable: [], commit: 'c0c0c0c1', failing: [{ id: 'G1-01', observed: 'a' }, { id: 'G1-02', observed: 'b' }] },
+    'green:1': { status: 'done', fixed: ['G1-02'], corrected: [], questions: [], still_failing: ['G1-01'] },
+    'green:2': { status: 'done', fixed: [], corrected: [], questions: [], still_failing: ['G1-01'] },
     'green:3': () => { throw new Error('a third round ran'); },
   });
   const rounds = labels(calls).filter((l) => l.startsWith('green:'));
@@ -592,8 +595,8 @@ test('BUILD-23 no third to-green round; what still fails goes into the report', 
 
 test('BUILD-24 a finished run returns a build report with tasks, gates, flows, counts, questions and blocked items', async () => {
   const { result } = await run(buildArgs(), {
-    'acceptance:g1': { group: 'g1', passing: ['G1-02'], failing: [{ id: 'G1-01', observed: 'a' }], untestable: [], commit: 'c0c0c0c1' },
-    'green:1': { fixed: [], corrected: [], questions: [{ id: 'G1-01', question: 'q?' }], still_failing: [] },
+    'acceptance:g1': { status: 'done', group: 'g1', passing: ['G1-02'], failing: [{ id: 'G1-01', observed: 'a' }], untestable: [], commit: 'c0c0c0c1' },
+    'green:1': { status: 'done', fixed: [], corrected: [], questions: [{ id: 'G1-01', question: 'q?' }], still_failing: [] },
   });
   assert.equal(result.status, 'mvp');
   // tasks: every task of the epic appears in the report.
@@ -695,18 +698,18 @@ const ruleFinding = {
 };
 
 function stabiliseResponder({ label }) {
-  if (label.startsWith('second:review:')) return { findings: [] };
-  if (label.startsWith('review:')) return { findings: label === 'review:security' ? [ruleFinding] : [] };
-  if (/^(second:)?verify:/.test(label)) return { real: true, severity: 'critical', reason: 'reproduced' };
+  if (label.startsWith('second:review:')) return { status: 'done', findings: [] };
+  if (label.startsWith('review:')) return { status: 'done', findings: label === 'review:security' ? [ruleFinding] : [] };
+  if (/^(second:)?verify:/.test(label)) return { status: 'done', real: true, severity: 'critical', reason: 'reproduced' };
   if (label.startsWith('fix:')) return { status: 'fixed', commit: 'f1c5f1c5', note: 'done' };
-  if (label.startsWith('regress')) return { regressions: [] };
+  if (label.startsWith('regress')) return { status: 'done', regressions: [] };
   throw new Error(`unexpected label ${label}`);
 }
 
 function publishResponder({ label }) {
-  if (label === 'docs') return { commit: 'dddddd04', files: ['README.md'], summary: 'docs' };
-  if (label === 'evidence') return { script: 's.sh', checklist: 'c.md', commit: 'eeeeee05' };
-  if (label === 'gate') return { passed: true, exit_status: 0, log: 'full.log' };
+  if (label === 'docs') return { status: 'done', commit: 'dddddd04', files: ['README.md'], summary: 'docs' };
+  if (label === 'evidence') return { status: 'done', script: 's.sh', checklist: 'c.md', commit: 'eeeeee05' };
+  if (label === 'gate') return { status: 'done', passed: true, exit_status: 0, log: 'full.log' };
   throw new Error(`unexpected label ${label}`);
 }
 
@@ -755,7 +758,7 @@ test('BUILD-32 every agent prompt says a gate waiting for a slot is normal and n
 
 test('BUILD-28 every agent that commits is told to commit on its branch and check it moved', async () => {
   const failingG1 = {
-    'acceptance:g1': { group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'c0c0c0c1' },
+    'acceptance:g1': { status: 'done', group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'c0c0c0c1' },
   };
   const local = await run(buildArgs(), failingG1);
   const fix = await runWorkflow('workflows/stabilise.js', {
@@ -811,12 +814,13 @@ test('BUILD-29 the checker fails a task whose branch tip is not the reported com
 test('BUILD-30 build returns commits: the sha each phase reported, never an empty one', async () => {
   const over = {
     checkpoint: {
+      status: 'done',
       gate_passed: true, gate_log: 'l', flows: [], gaps: [], commit: 'c1c1c1c1',
     },
-    'behaviour-spec': { groups: GROUPS, commit: 'b1b1b1b1' },
-    'acceptance:g1': { group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'a1a1a1a1' },
-    'acceptance:g2': { group: 'g2', passing: ['G2-01'], failing: [], untestable: [] },
-    'green:1': { fixed: ['G1-01'], corrected: [], questions: [], still_failing: [], commit: '' },
+    'behaviour-spec': { status: 'done', groups: GROUPS, commit: 'b1b1b1b1' },
+    'acceptance:g1': { status: 'done', group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'a1a1a1a1' },
+    'acceptance:g2': { status: 'done', group: 'g2', passing: ['G2-01'], failing: [], untestable: [] },
+    'green:1': { status: 'done', fixed: ['G1-01'], corrected: [], questions: [], still_failing: [], commit: '' },
   };
   const { result } = await run(buildArgs(), over);
   assert.equal(result.status, 'mvp');
@@ -845,7 +849,7 @@ test('BUILD-30 build returns commits: the sha each phase reported, never an empt
 
 test('BUILD-33 quick-gate prompts carry the flaky list and the rerun-once rule; full-gate prompts say never rerun', async () => {
   const failingG1 = {
-    'acceptance:g1': { group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'c0c0c0c1' },
+    'acceptance:g1': { status: 'done', group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'c0c0c0c1' },
   };
   const b = await run(buildArgs({ flaky: ['t::a'] }), failingG1);
   const fix = await runWorkflow('workflows/stabilise.js', {
@@ -885,11 +889,11 @@ test('BUILD-34 build collects flaky_reruns from every agent that reports them', 
   const reruns = [{ test: 't::a', gate: 'quick' }];
   const { result } = await run(buildArgs({ tasks: [task('t1', 0)], flaky: ['t::a'] }), {
     'impl:t1': { status: 'done', branch: 'temper/e/t1', commit: 'abcabc01', summary: 'did t1', flaky_reruns: reruns },
-    'check:t1': { pass: true, problems: [], flaky_reruns: reruns },
+    'check:t1': { status: 'done', pass: true, problems: [], flaky_reruns: reruns },
     'merge:wave0': { status: 'merged', merged: ['t1'], gate_passed: true, flaky_reruns: reruns },
     // One failing acceptance test sends the run to green, whose round reports a rerun too.
-    'acceptance:g1': { group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'c0c0c0c1' },
-    'green:1': { fixed: ['G1-01'], corrected: [], questions: [], still_failing: [], flaky_reruns: reruns },
+    'acceptance:g1': { status: 'done', group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'c0c0c0c1' },
+    'green:1': { status: 'done', fixed: ['G1-01'], corrected: [], questions: [], still_failing: [], flaky_reruns: reruns },
   });
   assert.equal(result.status, 'mvp');
   assert.deepEqual(result.flaky_reruns, [
@@ -901,11 +905,92 @@ test('BUILD-34 build collects flaky_reruns from every agent that reports them', 
 
   // A blocked run still carries the reruns reported before it; a run with none carries [].
   const blocked = await run(buildArgs({ tasks: [task('t1', 0)] }), {
-    'check:t1': { pass: true, problems: [], flaky_reruns: reruns },
+    'check:t1': { status: 'done', pass: true, problems: [], flaky_reruns: reruns },
     'merge:wave0': { status: 'blocked', merged: [], gate_passed: false },
   });
   assert.equal(blocked.result.status, 'blocked');
   assert.deepEqual(blocked.result.flaky_reruns, [{ id: 'check:t1', test: 't::a', gate: 'quick' }]);
   const plain = await run(buildArgs());
   assert.deepEqual(plain.result.flaky_reruns, []);
+});
+
+// A phase's blocked result, every other required field sent empty.
+const BLOCKED_PHASE = {
+  checkpoint: { status: 'blocked', reason: 'HEAD detached', gate_passed: false, gate_log: '', flows: [], gaps: [] },
+  'behaviour-spec': { status: 'blocked', reason: 'HEAD detached', groups: [], commit: '' },
+  'acceptance:g1': { status: 'blocked', reason: 'HEAD detached', group: '', passing: [], failing: [], untestable: [], commit: '' },
+  'green:1': { status: 'blocked', reason: 'HEAD detached', fixed: [], corrected: [], questions: [], still_failing: [] },
+};
+
+test('BUILD-37 a phase that returns blocked blocks the build with its reason and runs nothing after it', async () => {
+  for (const [id, blockedResult] of Object.entries(BLOCKED_PHASE)) {
+    const over = { [id]: blockedResult };
+    // Green runs only when acceptance reports a failing id.
+    if (id === 'green:1') {
+      over['acceptance:g1'] = { status: 'done', group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'cccccc03' };
+    }
+    const { result, calls } = await run(buildArgs(), over);
+    assert.equal(result.status, 'blocked', id);
+    assert.deepEqual(result.blocked, [{ id, reason: 'HEAD detached' }], id);
+    assert.equal(labels(calls).at(-1), id, `${id}: something ran after it: ${labels(calls).join(', ')}`);
+  }
+});
+
+test('BUILD-38 a blocked phase still records a sha commit, and adds no not-a-sha entry', async () => {
+  const sha = await run(buildArgs(), { checkpoint: { ...BLOCKED_PHASE.checkpoint, commit: 'c1c1c1c1' } });
+  assert.equal(sha.result.status, 'blocked');
+  assert.deepEqual(sha.result.commits, { checkpoint: 'c1c1c1c1' });
+  const notSha = await run(buildArgs(), { checkpoint: { ...BLOCKED_PHASE.checkpoint, commit: 'not a sha' } });
+  assert.equal(notSha.result.status, 'blocked');
+  assert.deepEqual(notSha.result.commits, {});
+  assert.deepEqual(notSha.result.blocked, [{ id: 'checkpoint', reason: 'HEAD detached' }]);
+});
+
+test('BUILD-39 a done checkpoint with a red gate still blocks', async () => {
+  const { result } = await run(buildArgs(), {
+    checkpoint: { status: 'done', gate_passed: false, gate_log: 'g.log', flows: [], gaps: [] },
+  });
+  assert.equal(result.status, 'blocked');
+  assert.deepEqual(result.blocked, [{ id: 'checkpoint', reason: 'full gate failed: g.log' }]);
+});
+
+test('BUILD-40 a blocked phase without a reason is blocked with its status', async () => {
+  const { result } = await run(buildArgs(), { 'behaviour-spec': { status: 'blocked' } });
+  assert.equal(result.status, 'blocked');
+  assert.deepEqual(result.blocked, [{ id: 'behaviour-spec', reason: 'phase returned status blocked' }]);
+});
+
+test('BUILD-41 a resume with attempt bumped gives a checkpoint prompt that differs, and identical task prompts', async () => {
+  const first = await run(buildArgs({ attempt: 0 }));
+  const second = await run(buildArgs({ attempt: 1 }));
+  const taskCalls = (calls) => calls.filter((c) => /^(impl|check|merge):/.test(c.opts.label));
+  const a = taskCalls(first.calls);
+  const b = taskCalls(second.calls);
+  assert.ok(a.length > 0, 'no task calls');
+  assert.deepEqual(labels(a), labels(b));
+  for (let i = 0; i < a.length; i++) assert.equal(a[i].prompt, b[i].prompt, a[i].opts.label);
+  assert.notEqual(promptOf(first.calls, 'checkpoint'), promptOf(second.calls, 'checkpoint'));
+});
+
+test('BUILD-42 a red checkpoint is told to commit nothing and return blocked', async () => {
+  const { calls } = await run(buildArgs(), {
+    checkpoint: { status: 'done', gate_passed: false, gate_log: 'g.log', flows: [], gaps: [] },
+  });
+  const p = promptOf(calls, 'checkpoint');
+  assert.ok(p.includes('4. Only when the full gate passed: append a checkpoint section to docs/temper/e/log.md with the gate result, the flows and the gaps, and commit it.'), p);
+  assert.ok(p.includes('When the full gate failed: commit nothing, and return status "blocked" with the gate log in reason.'), p);
+});
+
+test("BUILD-43 the checker's prompt names its throwaway worktree under tmp/", async () => {
+  const lib = loadLib();
+  const a = buildArgs();
+  const { calls } = await run(a, { 'check:a': { status: 'done', pass: false, problems: ['first'] } });
+  const check = promptOf(calls, 'check:a');
+  const recheck = promptOf(calls, 'recheck:a');
+  const checkText = lib.throwawayText(a, 'check:a');
+  const recheckText = lib.throwawayText(a, 'recheck:a');
+  assert.ok(check.includes(checkText), check);
+  assert.ok(recheck.includes(recheckText), recheck);
+  assert.ok(checkText.includes('/r/.temper/worktrees/e/tmp/'), checkText);
+  assert.notEqual(checkText, recheckText);
 });

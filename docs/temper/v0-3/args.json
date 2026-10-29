@@ -1,0 +1,300 @@
+{
+  "epic": "v0-3",
+  "repo": ".",
+  "branch": "epic/v0-3",
+  "base": "v0.3",
+  "default_branch": "main",
+  "spec": "docs/temper/v0-3/spec.md",
+  "plan": "docs/temper/v0-3/plan.md",
+  "log": "docs/temper/v0-3/log.md",
+  "host": {
+    "kind": "local"
+  },
+  "gates": {
+    "quick": "npm test",
+    "full": "npm test && node scripts/bundle.mjs --check && CLAUDE_CONFIG_DIR=\"$(mktemp -d)\" claude plugin validate . --strict"
+  },
+  "tasks": [
+    {
+      "id": "plan-skill",
+      "title": "The plan skill makes a task own the tests its change breaks",
+      "wave": 0,
+      "owns": [
+        "skills/plan/SKILL.md",
+        "templates/plan-additions.md",
+        "test/plan-skill-v03.test.mjs",
+        "test/skills.test.mjs",
+        "test/templates.test.mjs",
+        "test/project-skills-v02.test.mjs",
+        "test/acceptance/skills-packaging.test.mjs",
+        "test/acceptance/head-v02.test.mjs",
+        "test/acceptance/state.test.mjs",
+        "test/acceptance/build.test.mjs",
+        "test/acceptance/git-safety.test.mjs",
+        "test/acceptance/publish.test.mjs"
+      ],
+      "uses": [],
+      "provides": [],
+      "text": "Your task is the plan section '### Task 1 `plan-skill`' in docs/temper/v0-3/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-3/spec.md, section \"Contracts between parts\"."
+    },
+    {
+      "id": "cleanup-skill",
+      "title": "The cleanup skill removes detached throwaway worktrees",
+      "wave": 1,
+      "owns": [
+        "skills/cleanup/SKILL.md",
+        "test/cleanup-skill-v03.test.mjs",
+        "test/skills.test.mjs",
+        "test/acceptance/skills-packaging.test.mjs",
+        "tests_py/acceptance/test_skills_packaging.py",
+        "tests_py/acceptance/test_git_safety.py",
+        "test/acceptance/git-safety.test.mjs",
+        "test/acceptance/publish.test.mjs"
+      ],
+      "uses": [],
+      "provides": [],
+      "text": "Your task is the plan section '### Task 2 `cleanup-skill`' in docs/temper/v0-3/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-3/spec.md, section \"Contracts between parts\"."
+    },
+    {
+      "id": "run-skill",
+      "title": "The run skill bumps attempt on every build resume and handles blocked phases",
+      "wave": 2,
+      "owns": [
+        "skills/run/SKILL.md",
+        "test/run-skill-v03.test.mjs",
+        "test/run-skill-v02.test.mjs",
+        "test/skills.test.mjs",
+        "test/acceptance/skills-packaging.test.mjs",
+        "test/acceptance/head-v02.test.mjs",
+        "test/acceptance/state.test.mjs",
+        "tests_py/acceptance/test_skills_packaging.py",
+        "tests_py/acceptance/test_git_safety.py",
+        "test/acceptance/publish.test.mjs",
+        "test/publish.test.mjs",
+        "test/acceptance/git-safety.test.mjs",
+        "test/acceptance/stabilise.test.mjs",
+        "test/acceptance/stabilise-v02.test.mjs",
+        "tests_py/acceptance/test_state.py"
+      ],
+      "uses": [],
+      "provides": [],
+      "text": "Your task is the plan section '### Task 3 `run-skill`' in docs/temper/v0-3/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-3/spec.md, section \"Contracts between parts\"."
+    },
+    {
+      "id": "phase-status",
+      "title": "Phases can say they're blocked",
+      "wave": 3,
+      "owns": [
+        "src/lib.js",
+        "src/build.js",
+        "src/publish.js",
+        "workflows/build.js",
+        "workflows/stabilise.js",
+        "workflows/publish.js",
+        "test/lib-core.test.mjs",
+        "test/lib-prompts.test.mjs",
+        "test/build-phases.test.mjs",
+        "test/build-waves.test.mjs",
+        "test/publish.test.mjs",
+        "test/acceptance/build.test.mjs",
+        "test/acceptance/commits.test.mjs",
+        "test/acceptance/git-safety.test.mjs",
+        "test/acceptance/prompts.test.mjs",
+        "test/acceptance/publish.test.mjs",
+        "test/acceptance/skills-packaging.test.mjs",
+        "test/acceptance/state.test.mjs"
+      ],
+      "uses": [],
+      "provides": [
+        "phase-status-v03"
+      ],
+      "text": "Your task is the plan section '### Task 4 `phase-status`' in docs/temper/v0-3/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-3/spec.md, section \"Contracts between parts\"."
+    },
+    {
+      "id": "build-attempt",
+      "title": "The build's attempt, and a checkpoint that commits only on a green gate",
+      "wave": 4,
+      "owns": [
+        "src/lib.js",
+        "schemas/args.schema.json",
+        "workflows/build.js",
+        "workflows/stabilise.js",
+        "workflows/publish.js",
+        "test/lib-core.test.mjs",
+        "test/schema-cases.mjs",
+        "test/lib-prompts.test.mjs",
+        "test/build-phases.test.mjs",
+        "test/acceptance/build.test.mjs",
+        "test/acceptance/commits.test.mjs",
+        "test/acceptance/prompts.test.mjs",
+        "test/acceptance/stabilise-v02.test.mjs",
+        "test/acceptance/git-safety.test.mjs",
+        "test/acceptance/state.test.mjs",
+        "test/acceptance/skills-packaging.test.mjs",
+        "test/acceptance/stabilise.test.mjs",
+        "test/acceptance/publish.test.mjs",
+        "test/templates.test.mjs"
+      ],
+      "uses": [
+        "phase-status-v03"
+      ],
+      "provides": [
+        "build-attempt-v03"
+      ],
+      "text": "Your task is the plan section '### Task 5 `build-attempt`' in docs/temper/v0-3/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-3/spec.md, section \"Contracts between parts\"."
+    },
+    {
+      "id": "throwaway",
+      "title": "Throwaway worktrees are named and removed",
+      "wave": 5,
+      "owns": [
+        "src/lib.js",
+        "src/build.js",
+        "src/stabilise.js",
+        "src/publish.js",
+        "workflows/build.js",
+        "workflows/stabilise.js",
+        "workflows/publish.js",
+        "test/lib-prompts.test.mjs",
+        "test/build-waves.test.mjs",
+        "test/stabilise-sweep.test.mjs",
+        "test/stabilise-fix.test.mjs",
+        "test/publish.test.mjs",
+        "test/acceptance/build.test.mjs",
+        "test/acceptance/commits.test.mjs",
+        "test/acceptance/prompts.test.mjs",
+        "test/acceptance/stabilise.test.mjs",
+        "test/acceptance/stabilise-v02.test.mjs",
+        "test/acceptance/publish.test.mjs",
+        "test/acceptance/git-safety.test.mjs",
+        "test/lib-core.test.mjs"
+      ],
+      "uses": [
+        "phase-status-v03"
+      ],
+      "provides": [
+        "throwaway-v03"
+      ],
+      "text": "Your task is the plan section '### Task 6 `throwaway`' in docs/temper/v0-3/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-3/spec.md, section \"Contracts between parts\"."
+    },
+    {
+      "id": "regress-tip",
+      "title": "A regression counts only when it reproduces on the branch tip",
+      "wave": 6,
+      "owns": [
+        "src/lib.js",
+        "workflows/build.js",
+        "workflows/stabilise.js",
+        "workflows/publish.js",
+        "test/lib-prompts.test.mjs",
+        "test/stabilise-fix.test.mjs",
+        "test/acceptance/stabilise.test.mjs",
+        "test/acceptance/stabilise-v02.test.mjs",
+        "test/acceptance/prompts.test.mjs",
+        "test/acceptance/git-safety.test.mjs"
+      ],
+      "uses": [
+        "throwaway-v03"
+      ],
+      "provides": [
+        "regress-tip-v03"
+      ],
+      "text": "Your task is the plan section '### Task 7 `regress-tip`' in docs/temper/v0-3/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-3/spec.md, section \"Contracts between parts\"."
+    },
+    {
+      "id": "cleanup-detached",
+      "title": "cleanup_check.py checks a detached worktree",
+      "wave": 7,
+      "owns": [
+        "scripts/cleanup_check.py",
+        "tests_py/test_git_scripts.py",
+        "tests_py/acceptance/test_git_safety.py",
+        "tests_py/acceptance/test_skills_packaging.py",
+        "test/acceptance/git-safety.test.mjs"
+      ],
+      "uses": [],
+      "provides": [
+        "cleanup-detached-cli"
+      ],
+      "text": "Your task is the plan section '### Task 8 `cleanup-detached`' in docs/temper/v0-3/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-3/spec.md, section \"Contracts between parts\"."
+    },
+    {
+      "id": "host-prune",
+      "title": "The private host refs are pruned",
+      "wave": 8,
+      "owns": [
+        "scripts/host_sync.py",
+        "tests_py/acceptance/test_git_safety.py",
+        "test/acceptance/git-safety.test.mjs",
+        "test/acceptance/publish.test.mjs"
+      ],
+      "uses": [],
+      "provides": [
+        "host-prune-v03"
+      ],
+      "text": "Your task is the plan section '### Task 9 `host-prune`' in docs/temper/v0-3/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-3/spec.md, section \"Contracts between parts\"."
+    },
+    {
+      "id": "ci-py310",
+      "title": "CI's oldest job runs Python 3.10",
+      "wave": 9,
+      "owns": [
+        ".github/workflows/ci.yml",
+        "test/ci-v03.test.mjs"
+      ],
+      "uses": [],
+      "provides": [],
+      "text": "Your task is the plan section '### Task 10 `ci-py310`' in docs/temper/v0-3/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-3/spec.md, section \"Contracts between parts\"."
+    },
+    {
+      "id": "docs-v03",
+      "title": "README, design-spec amendments, logs, behaviour lines and the version",
+      "wave": 10,
+      "owns": [
+        "README.md",
+        "docs/specs/2026-10-24-temper-design.md",
+        "docs/v1-log.md",
+        "docs/v1-behaviour.md",
+        ".claude-plugin/plugin.json",
+        "test/readme-v03.test.mjs",
+        "test/readme-v02.test.mjs",
+        "test/manifest.test.mjs",
+        "test/acceptance/head-v02.test.mjs",
+        "test/acceptance/skills-packaging.test.mjs",
+        "test/acceptance/git-safety.test.mjs",
+        "test/acceptance/publish.test.mjs",
+        "tests_py/test_layout.py",
+        "tests_py/acceptance/test_hook.py",
+        "test/acceptance/state.test.mjs"
+      ],
+      "uses": [],
+      "provides": [],
+      "text": "Your task is the plan section '### Task 11 `docs-v03`' in docs/temper/v0-3/plan.md (read it in full: its Files, Interfaces and every step, including the tests to write first and the commit message). The contracts are in docs/temper/v0-3/spec.md, section \"Contracts between parts\"."
+    }
+  ],
+  "behaviour_groups": [
+    {
+      "key": "phases",
+      "title": "phase, docs and evidence agents can return blocked with a reason, and the build's `attempt` reruns a red checkpoint live (spec, user flows 1 and 2)"
+    },
+    {
+      "key": "worktrees",
+      "title": "throwaway worktrees are named under `tmp/` and removed, `cleanup_check.py --detached` judges them, and stale private host refs are pruned (spec, user flows 3 and 5)"
+    },
+    {
+      "key": "regress",
+      "title": "the per-fix regression check counts only what reproduces on the branch tip (spec, user flow 4)"
+    },
+    {
+      "key": "head",
+      "title": "the plan, cleanup and run skills carry the head's side (spec, user flow 6)"
+    }
+  ],
+  "done": [
+    "cleanup-skill",
+    "plan-skill",
+    "run-skill"
+  ],
+  "answers": {},
+  "attempt": 1
+}

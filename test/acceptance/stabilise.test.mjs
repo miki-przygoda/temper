@@ -10,7 +10,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runWorkflow } from '../harness.mjs';
+import { loadLib, runWorkflow } from '../harness.mjs';
 import { namesField, schemaCases } from '../schema-cases.mjs';
 
 // A hex sha for a fix id, as a fix agent reports one (spec 8: only hex shas reach commits).
@@ -68,16 +68,16 @@ const reviewsOf = (calls) => calls.filter((c) => /(^|:)review:/.test(c.opts?.lab
 // reproduces the finding with the reviewer's severity unless `verdicts[id]` overrides it; every fix
 // is `fixed` unless `fixes[id]` overrides it. `second` holds the second sweep's reviews by lens.
 // Every `regress:fix:<id>` agent returns `regress`, or `regress(id)` when it is a function.
-function responder({ reviews = {}, second = {}, verdicts = {}, fixes = {}, regress = { regressions: [] } } = {}) {
+function responder({ reviews = {}, second = {}, verdicts = {}, fixes = {}, regress = { status: 'done', regressions: [] } } = {}) {
   const all = {};
   for (const fs of [...Object.values(reviews), ...Object.values(second)]) for (const f of fs) all[f.id] = f;
   return ({ label }) => {
-    if (label.startsWith('second:review:')) return { findings: second[label.slice('second:review:'.length)] ?? [] };
-    if (label.startsWith('review:')) return { findings: reviews[label.slice('review:'.length)] ?? [] };
+    if (label.startsWith('second:review:')) return { status: 'done', findings: second[label.slice('second:review:'.length)] ?? [] };
+    if (label.startsWith('review:')) return { status: 'done', findings: reviews[label.slice('review:'.length)] ?? [] };
     const v = label.match(/^(?:second:)?verify:(.*)$/);
     if (v) {
       if (Object.prototype.hasOwnProperty.call(verdicts, v[1])) return verdicts[v[1]];
-      return { real: true, severity: all[v[1]].severity, reason: 'reproduced' };
+      return { status: 'done', real: true, severity: all[v[1]].severity, reason: 'reproduced' };
     }
     if (label.startsWith('fix:')) {
       const id = label.slice('fix:'.length);
@@ -246,7 +246,7 @@ test('STABILISE-04 a separate agent tries to disprove each finding; disproved on
     args: args(),
     respond: responder({
       reviews: { security: [a, b], 'failure paths and lifecycle': [dup] },
-      verdicts: { 'security-02': { real: false, severity: 'important', reason: 'could not reproduce' } },
+      verdicts: { 'security-02': { status: 'done', real: false, severity: 'important', reason: 'could not reproduce' } },
     }),
   });
   const verifies = calls.filter((c) => c.opts.label.startsWith('verify:'));
@@ -272,8 +272,8 @@ test("STABILISE-05 the verifier re-rates severity against the rubric and the pro
     respond: responder({
       reviews: { security: [up, down] },
       verdicts: {
-        'security-01': { real: true, severity: 'critical', reason: 'panics on user input' },
-        'security-02': { real: true, severity: 'important', reason: 'not a security issue' },
+        'security-01': { status: 'done', real: true, severity: 'critical', reason: 'panics on user input' },
+        'security-02': { status: 'done', real: true, severity: 'important', reason: 'not a security issue' },
       },
     }),
   });
@@ -522,7 +522,7 @@ test('STABILISE-19 there is never a third sweep', async (t) => {
           assert.ok(m, 'the review prompt says how to name the ids');
           const f = finding(`${m[1]}-01`, r[1] ? 'severe' : 'critical');
           seen[f.id] = f;
-          return { findings: [f] };
+          return { status: 'done', findings: [f] };
         }
         return responder({ reviews: { security: Object.values(seen) } })(call);
       };
@@ -785,7 +785,7 @@ test('STABILISE-25 a proven regression hands over before blocked, and the check 
 
   const proven = await runWorkflow(WF, {
     args: fixArgs({ selected: sel }),
-    respond: responder({ fixes, regress: (id) => (id === 'f2' ? { regressions } : { regressions: [] }) }),
+    respond: responder({ fixes, regress: (id) => (id === 'f2' ? { status: 'done', regressions } : { status: 'done', regressions: [] }) }),
   });
   assert.ok(labels(proven.calls).includes('regress:fix:f2'));
   assert.ok(!labels(proven.calls).includes('regress:fix:f1'), 'a blocked fix left no commit to check');
@@ -943,11 +943,53 @@ test('STABILISE-30 second-sweep ids are put into the second: namespace by the sc
   const bare = finding('security-07', 'severe');
   const { calls, result } = await runWorkflow(WF, {
     args: fixArgs({ selected: [finding('security-01', 'critical')] }),
-    respond: responder({ second: { security: [bare] }, verdicts: { 'second:security-07': { real: true, severity: 'severe', reason: 'r' } } }),
+    respond: responder({ second: { security: [bare] }, verdicts: { 'second:security-07': { status: 'done', real: true, severity: 'severe', reason: 'r' } } }),
   });
   const ls = labels(calls);
   assert.ok(ls.includes('second:verify:second:security-07'), ls.join(', '));
   assert.ok(ls.includes('fix:second:security-07'), ls.join(', '));
   assert.ok(!ls.includes('fix:security-07'), ls.join(', '));
   assert.deepEqual(result.second_sweep_findings.map((f) => f.id), ['second:security-07']);
+});
+
+test('STABILISE-32 reviewer, verifier and regression prompts name their throwaway worktree under tmp/', async () => {
+  const lib = loadLib();
+  const sweepArgs = args();
+  const sweep = await runWorkflow(WF, {
+    args: sweepArgs,
+    respond: responder({ reviews: { security: [finding('security-01', 'critical')] } }),
+  });
+  const fArgs = fixArgs({ selected: [finding('security-01', 'critical')] });
+  const fix = await runWorkflow(WF, {
+    args: fArgs,
+    respond: responder({ second: { security: [finding('second:security-02', 'critical')] } }),
+  });
+  const seen = new Set();
+  for (const [a, calls] of [[sweepArgs, sweep.calls], [fArgs, fix.calls]]) {
+    for (const c of calls) {
+      const label = c.opts.label;
+      const kind = label.match(/^(review|verify|second:review|second:verify|regress):/);
+      if (!kind) continue;
+      seen.add(kind[1]);
+      const text = lib.throwawayText(a, label);
+      assert.ok(text.includes(`/r/.temper/worktrees/e/tmp/${lib.tmpLabel(label)}`), text);
+      assert.ok(c.prompt.includes(text), `${label}: ${c.prompt}`);
+      assert.match(c.prompt, /throwaway worktree/i, label);
+    }
+  }
+  assert.deepEqual([...seen].sort(), ['regress', 'review', 'second:review', 'second:verify', 'verify']);
+});
+
+test('STABILISE-33 each regress:fix:<id> prompt names the branch tip and counts only what still reproduces there', async () => {
+  for (const attempt of [undefined, 2]) {
+    const a = fixArgs({ selected: [finding('f1', 'critical'), finding('f2', 'important')], attempt });
+    const { calls } = await runWorkflow(WF, { args: a, respond: responder() });
+    const regs = calls.filter((c) => (c.opts?.label ?? '').startsWith('regress:fix:'));
+    assert.deepEqual(regs.map((c) => c.opts.label).sort(), ['regress:fix:f1', 'regress:fix:f2']);
+    for (const c of regs) {
+      assert.ok(c.prompt.includes(`git rev-parse ${a.branch}`), c.prompt);
+      assert.ok(c.prompt.includes(`the current tip of \`${a.branch}\` as well; give both reproductions`), c.prompt);
+      assert.ok(c.prompt.endsWith(`Run attempt ${attempt ?? 0}.`), c.prompt);
+    }
+  }
 });
