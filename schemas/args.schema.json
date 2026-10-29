@@ -14,6 +14,7 @@
     "plan": { "type": "string" },
     "log": { "type": "string" },
     "build_rule": { "type": "string", "description": "Optional. The project's build rule (project.md's ## Build rule), passed to every agent as data." },
+    "attempt": { "type": "integer", "minimum": 0, "description": "Optional. The build's attempt counter, bumped on every resume; missing means 0. It ends the checkpoint and later phase prompts, so a resume reruns them live." },
     "flaky": { "type": "array", "items": { "type": "string" }, "description": "Optional. Known flaky tests (project.md's flaky:), which a quick gate may rerun once." },
     "host": {
       "oneOf": [

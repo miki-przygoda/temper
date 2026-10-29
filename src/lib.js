@@ -195,11 +195,25 @@ function checkTask(t, i, errors) {
   return ok;
 }
 
+// The build's and stabilise's optional attempt counter: missing means 0.
+function checkAttempt(args, errors) {
+  if (args.attempt !== undefined && !(Number.isInteger(args.attempt) && args.attempt >= 0)) {
+    errors.push('attempt must be an integer >= 0');
+  }
+}
+
+// The attempt line that ends the checkpoint and later phase prompts (and the regression prompt):
+// bumping it on a resume changes those prompts, so the resume cache never replays an old result.
+function attemptText(args) {
+  return `Run attempt ${args.attempt ?? 0}.`;
+}
+
 function validateBuildArgs(args) {
   const errors = [];
   if (!isObject(args)) return ['args must be an object'];
   checkCommon(args, errors);
   checkStrings(args, ['spec', 'plan'], errors);
+  checkAttempt(args, errors);
 
   let tasks = [];
   if (!Array.isArray(args.tasks) || args.tasks.length === 0) {
@@ -298,9 +312,7 @@ function validateStabiliseArgs(args) {
   }
   if (typeof args.severity_notes !== 'string') errors.push('severity_notes must be a string');
   if (args.sweeps !== undefined && args.sweeps !== 1 && args.sweeps !== 2) errors.push('sweeps must be 1 or 2');
-  if (args.attempt !== undefined && !(Number.isInteger(args.attempt) && args.attempt >= 0)) {
-    errors.push('attempt must be an integer >= 0');
-  }
+  checkAttempt(args, errors);
   if (args.gate_slots !== undefined && !(Number.isInteger(args.gate_slots) && args.gate_slots >= 1)) {
     errors.push('gate_slots must be an integer >= 1');
   }
@@ -803,23 +815,24 @@ function epicCommitText(args) {
 }
 
 function checkpointPrompt(args) {
-  return withRules(args, [
+  return `${withRules(args, [
     `You run the MVP checkpoint for epic ${args.epic} on \`${args.branch}\`.`,
     `1. Run the full gate: \`${args.gates.full}\`. Record whether it passed and where its log is. ${NO_RERUN}`,
     `2. Run each user flow from the user flows section of the spec ${args.spec} on the real program, by hand, as a user would. Record each flow as ok or gap, with evidence (the commands and what they printed).`,
     '3. Record gaps; fix nothing. Change no product code and no tests.',
-    `4. Append a checkpoint section to ${args.log} with the gate result, the flows and the gaps. ${commitText(args.epic, 'checkpoint')}`,
+    `4. Only when the full gate passed: append a checkpoint section to ${args.log} with the gate result, the flows and the gaps, and commit it. ${commitText(args.epic, 'checkpoint')}`,
+    'When the full gate failed: commit nothing, and return status "blocked" with the gate log in reason.',
     epicCommitText(args),
     PHASE_BLOCKED,
     'Return the gate result, its log, the flows, the gaps, and the commit sha.',
-  ]);
+  ])}\n\n${attemptText(args)}`;
 }
 
 function behaviourSpecPrompt(args) {
   const groups = args.behaviour_groups
     .map((g) => `- ${g.key}: ${g.title} (ids ${String(g.key).toUpperCase()}-01, ${String(g.key).toUpperCase()}-02, ...)`)
     .join('\n');
-  return withRules(args, [
+  return `${withRules(args, [
     `You write the behaviour spec for epic ${args.epic}, from the spec ${args.spec} only: do not read product code, its tests or the plan.`,
     `Write \`${epicDir(args)}/behaviour.md\`, in these groups:\n${groups}`,
     'Each behaviour is given/when/then lines and has an id `<GROUPKEY>-NN`: the group key in capitals and a two-digit number. Write only what the spec states or clearly implies.',
@@ -827,12 +840,12 @@ function behaviourSpecPrompt(args) {
     epicCommitText(args),
     PHASE_BLOCKED,
     'Return the groups with their behaviours (id and text) and the commit sha.',
-  ]);
+  ])}\n\n${attemptText(args)}`;
 }
 
 function acceptancePrompt(group, behaviours, args) {
   const list = behaviours.map((b) => `- ${b.id}: ${b.text}`).join('\n');
-  return withRules(args, [
+  return `${withRules(args, [
     `You write the acceptance tests for behaviour group ${group.key} (${group.title}) of epic ${args.epic}, on \`${args.branch}\`.`,
     `The behaviours (from ${epicDir(args)}/behaviour.md):\n${list}`,
     '- Write one test per behaviour id, driving the real program (its CLI, API or UI), not its internals.',
@@ -842,7 +855,7 @@ function acceptancePrompt(group, behaviours, args) {
     epicCommitText(args),
     PHASE_BLOCKED,
     'Return the group key, the passing ids, the failing ids with what you observed, the untestable ids with the reason, and the commit sha.',
-  ]);
+  ])}\n\n${attemptText(args)}`;
 }
 
 // markedToo: some acceptance groups ran in an earlier run, so their failures are known only from the repo.
@@ -850,7 +863,7 @@ function greenPrompt(failing, round, args, markedToo = false) {
   const list = failing
     .map((f) => (typeof f === 'string' ? `- ${f}` : `- ${f.id}: ${f.observed}`))
     .join('\n');
-  return withRules(args, [
+  return `${withRules(args, [
     `You run to-green round ${round} of at most 2 for epic ${args.epic}, on \`${args.branch}\`. The spec is ${args.spec}; the behaviour spec is ${epicDir(args)}/behaviour.md.`,
     `The failing behaviours:\n${list || '- (none listed)'}`,
     markedToo
@@ -866,7 +879,7 @@ function greenPrompt(failing, round, args, markedToo = false) {
     epicCommitText(args),
     PHASE_BLOCKED,
     'Return the ids you fixed (product), corrected (test), the questions (id and question), the ids still failing, and the commit sha (empty when you committed nothing).',
-  ]);
+  ])}\n\n${attemptText(args)}`;
 }
 
 function lensSlug(lens) {
