@@ -1,8 +1,9 @@
-"""Acceptance tests for the git-safety group (docs/v1-behaviour.md, GIT-SAFETY-04..11, 14).
+"""Acceptance tests for the git-safety group (docs/v1-behaviour.md, GIT-SAFETY-04..11, 14..17).
 
 The scripts are driven through their CLIs with subprocess, the way the run and cleanup skills run
 them: ``done_tasks.py <repo> <branch> <base> <epic>`` and
-``cleanup_check.py <repo> <branch> [--worktree P]``. Every test builds throwaway git repos: a
+``cleanup_check.py <repo> <branch> [--worktree P]`` or
+``cleanup_check.py <repo> --detached --worktree P``. Every test builds throwaway git repos: a
 bare ``origin`` with a default branch, a clone of it as the user's repo, and a second clone that
 plays "someone else, on the remote". HOME, CLAUDE_CONFIG_DIR and the git global config are
 temporary, so the user's own config is never read or written. The only remote anything touches is
@@ -397,6 +398,67 @@ class TestGitSafety(GitSandbox):
         after = self._snapshot(repo, [wt_ok, wt_bad], origin)
         self.assertEqual(after, before)
 
+    # ---- GIT-SAFETY-15..17: a detached throwaway worktree, through --detached ----
+
+    def cleanup_argv(self, *argv):
+        proc = subprocess.run([sys.executable, str(CLEANUP), *argv],
+                              cwd=str(self.tmp), env=self.env, capture_output=True, text=True,
+                              check=False, timeout=60)
+        try:
+            out = json.loads(proc.stdout)
+        except ValueError:
+            self.fail(f'cleanup_check printed no JSON: {proc.stdout!r} {proc.stderr!r}')
+        return proc.returncode, out, proc.stdout
+
+    def throwaway(self, repo, commit='main', label='lens-1'):
+        path = Path(repo) / '.temper' / 'worktrees' / 'e' / 'tmp' / label
+        path.parent.mkdir(parents=True, exist_ok=True)
+        (Path(repo) / '.git' / 'info' / 'exclude').write_text('.temper/\n', encoding='utf-8')
+        self.git(repo, 'worktree', 'add', '-q', '--detach', str(path), commit)
+        return path
+
+    def test_GIT_SAFETY_15_a_clean_detached_throwaway_on_origin_main_passes(self):
+        repo, _origin = self.remote()
+        wt = self.throwaway(repo)
+        code, out, raw = self.cleanup_argv(str(repo), '--detached', '--worktree', str(wt))
+        self.assertEqual(code, 0, raw)
+        self.assertEqual(out, {'ok': True, 'reasons': []})
+
+    def test_GIT_SAFETY_16_a_detached_throwaway_on_no_remote_branch_or_with_a_change_fails(self):
+        repo, _origin = self.remote()
+        # A commit on no remote branch.
+        local = self.throwaway(repo, label='local-only')
+        self.commit(local, 'feat: local only')
+        # An uncommitted change on a commit that is on origin/main.
+        changed = self.throwaway(repo, label='changed')
+        tracked = sorted(p.name for p in changed.iterdir() if p.suffix == '.txt')[0]
+        (changed / tracked).write_text('edited, not committed\n', encoding='utf-8')
+        for wt in (local, changed):
+            files = sorted(str(p.relative_to(wt)) for p in wt.rglob('*')
+                           if '.git' not in p.relative_to(wt).parts)
+            code, out, raw = self.cleanup_argv(str(repo), '--detached', '--worktree', str(wt))
+            self.assertEqual(code, 1, raw)
+            self.assertIs(out['ok'], False, raw)
+            self.assertTrue(out['reasons'], raw)
+            self.assertTrue(wt.is_dir(), f'{wt} is still there')
+            self.assertIn(str(wt), self.git(repo, 'worktree', 'list', '--porcelain'))
+            self.assertEqual(sorted(str(p.relative_to(wt)) for p in wt.rglob('*')
+                                    if '.git' not in p.relative_to(wt).parts), files)
+        self.assertEqual((changed / tracked).read_text(encoding='utf-8'),
+                         'edited, not committed\n')
+
+    def test_GIT_SAFETY_17_detached_usage_errors_exit_1_with_a_reason(self):
+        repo, _origin = self.remote()
+        wt = self.throwaway(repo)
+        for argv in ([str(repo), '--detached'],
+                     [str(repo), 'main', '--detached', '--worktree', str(wt)],
+                     [str(repo)]):
+            code, out, raw = self.cleanup_argv(*argv)
+            self.assertEqual(code, 1, raw)
+            self.assertIs(out['ok'], False, raw)
+            self.assertEqual(len(out['reasons']), 1, raw)
+            self.assertTrue(out['reasons'][0].strip(), raw)
+
     # ---- A7: the ssh host's commits come back before done_tasks.py and before a push ----
 
     def _stub_ssh(self):
@@ -597,6 +659,37 @@ class TestGitSafety(GitSandbox):
         self.assertEqual(self.git(repo, 'rev-parse', 'refs/temper/host/temper/e/a'), rewritten)
         self.assertEqual(self.git(repo, 'rev-parse', 'temper/e/a'), rewritten)
 
+    def test_GIT_SAFETY_18_a_task_branch_deleted_on_the_host_leaves_no_private_ref(self):
+        cmd = self._fetch_back_cmd()
+        repo, origin = self.remote()
+        self.git(repo, 'branch', '--no-track', 'epic/e', 'main')
+        host_clone = self.tmp / 'host' / 'repo'
+        self.git(self.tmp, 'clone', '-q', str(origin), str(host_clone))
+        self.git(host_clone, 'branch', '--no-track', 'epic/e', 'origin/main')
+        env, _log = self._stub_ssh()
+        # Another epic's private ref, which this epic's fetch must never touch.
+        other = self.git(repo, 'rev-parse', 'main')
+        self.git(repo, 'update-ref', 'refs/temper/host/temper/other/x', other)
+        # Two task branches on the host, fetched back once.
+        for task in ('a', 'b'):
+            self.git(host_clone, 'checkout', '-q', '-b', f'temper/e/{task}', 'epic/e')
+            self.commit(host_clone, f'feat: {task}\n\nTemper-Task: e/{task}', name=f'{task}.txt')
+        self.git(host_clone, 'checkout', '-q', '--detach')
+        proc = self._run_skill_cmd(cmd, env, repo, host_clone)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        b = self.git(repo, 'rev-parse', 'refs/heads/temper/e/b')
+        # The host deletes temper/e/b; the next fetch-back drops its private copy only.
+        self.git(host_clone, 'branch', '-D', 'temper/e/b')
+        proc = self._run_skill_cmd(cmd, env, repo, host_clone)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        listed = self.git(repo, 'for-each-ref', '--format=%(refname)',
+                          'refs/temper/host/temper/e/').split()
+        self.assertEqual(listed, ['refs/temper/host/temper/e/a'])
+        self.assertEqual(self.git(repo, 'rev-parse', 'refs/heads/temper/e/b'), b,
+                         'a local branch is never deleted')
+        self.assertEqual(self.git(repo, 'rev-parse', 'refs/temper/host/temper/other/x'), other,
+                         "another epic's private ref survives")
+
     # ---- SECOND-TESTS-DOCS-1: the epic branch, with the spec and plan, reaches the host clone ----
 
     def _push_cmd(self, section_start, section_end):
@@ -746,8 +839,14 @@ class TestGitSafety(GitSandbox):
 
     def test_SECOND_SAFETY_7_the_host_cleanup_check_runs_isolated_from_the_login_directory(self):
         lines = [l.strip() for l in CLEANUP_SKILL.splitlines() if l.strip().startswith('ssh <host> python3')]
-        self.assertEqual(len(lines), 1, 'the cleanup skill gives one ssh form of the check')
-        cmd = lines[0]
+        # One ssh form for a branch, and one for a detached worktree (`--detached`); both isolated.
+        branch_lines = [l for l in lines if '--detached' not in l]
+        detached_lines = [l for l in lines if '--detached' in l]
+        self.assertEqual(len(branch_lines), 1, 'the cleanup skill gives one ssh form of the branch check')
+        self.assertEqual(len(detached_lines), 1, 'the cleanup skill gives one ssh form of the detached check')
+        for l in lines:
+            self.assertTrue(l.startswith('ssh <host> python3 -I - '), l)
+        cmd = branch_lines[0]
         repo, _origin = self.remote()
         wt = self.tmp / 'wt'
         self.git(repo, 'worktree', 'add', '-q', '-b', 'temper/e/a', str(wt), 'main')

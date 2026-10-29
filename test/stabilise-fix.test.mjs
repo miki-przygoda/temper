@@ -49,7 +49,7 @@ function fixArgs(extra = {}) {
 // Fixes return `fixed` unless `fixes` overrides one by finding id. The second sweep's security
 // review returns `second` (nothing by default); every verify reproduces with the reported severity.
 // Every `regress:fix:<id>` agent returns `regress`, or `regress(id)` when it is a function.
-function responder({ fixes = {}, second = [], regress = { regressions: [] } } = {}) {
+function responder({ fixes = {}, second = [], regress = { status: 'done', regressions: [] } } = {}) {
   const byId = Object.fromEntries(second.map((f) => [f.id, f]));
   return ({ label }) => {
     if (label.startsWith('fix:')) {
@@ -57,11 +57,11 @@ function responder({ fixes = {}, second = [], regress = { regressions: [] } } = 
       if (id in fixes) return fixes[id];
       return { status: 'fixed', commit: shaFor(id), note: 'done' };
     }
-    if (label === 'second:review:security') return { findings: second };
-    if (label.startsWith('second:review:')) return { findings: [] };
+    if (label === 'second:review:security') return { status: 'done', findings: second };
+    if (label.startsWith('second:review:')) return { status: 'done', findings: [] };
     if (label.startsWith('second:verify:')) {
       const id = label.slice('second:verify:'.length);
-      return { real: true, severity: byId[id].severity, reason: 'reproduced' };
+      return { status: 'done', real: true, severity: byId[id].severity, reason: 'reproduced' };
     }
     if (label.startsWith('regress:fix:')) {
       const id = label.slice('regress:fix:'.length);
@@ -163,7 +163,7 @@ test('regressions the check finds are returned', async () => {
   const regressions = [{ fix: 'second:s1', evidence: 'test x fails' }];
   const { result } = await runWorkflow(WF, {
     args: fixArgs(),
-    respond: responder({ second: [S1], regress: (id) => (id === 'second:s1' ? { regressions } : { regressions: [] }) }),
+    respond: responder({ second: [S1], regress: (id) => (id === 'second:s1' ? { status: 'done', regressions } : { status: 'done', regressions: [] }) }),
   });
   assert.equal(result.status, 'handover');
   assert.deepEqual(result.regressions, regressions);
@@ -262,7 +262,7 @@ test('a resume after the block is resolved checks every landed fix for regressio
 
 test('a regression check that finds a regression or returns nothing stops before the second sweep (SECOND-CONTROL-FLOW-4)', async () => {
   const regressions = [{ fix: 'f1', evidence: 'test x fails' }];
-  for (const [reply, status] of [[{ regressions }, 'handover'], [null, 'blocked']]) {
+  for (const [reply, status] of [[{ status: 'done', regressions }, 'handover'], [null, 'blocked']]) {
     const base = responder();
     const respond = (q) => (q.label === 'regress:fix:f1' ? reply : base(q));
     for (const extra of [{}, { done: ['fix:f2'], answers: { f1: 'do X' } }]) {
@@ -300,7 +300,7 @@ test('an unverified second-sweep finding that duplicates a verified one is liste
   const u = finding('second:u1', 'important', { line: 61, summary: 'same bug', lens: 'failure paths and lifecycle' });
   const base = responder({ second: [v] });
   const respond = (q) => {
-    if (q.label === 'second:review:failure paths and lifecycle') return { findings: [u] };
+    if (q.label === 'second:review:failure paths and lifecycle') return { status: 'done', findings: [u] };
     if (q.label === 'second:verify:second:u1') return null;
     return base(q);
   };
@@ -338,8 +338,8 @@ test('a first-sweep finding whose id is in the second: namespace is never verifi
   const sweep = await runWorkflow(WF, {
     args: { ...fixArgs(), part: 'sweep', selected: undefined },
     respond: ({ label }) => (label === 'review:security'
-      ? { findings: [finding('second:security-01', 'critical')] }
-      : label.startsWith('review:') ? { findings: [] } : { real: true, severity: 'critical', reason: 'r' }),
+      ? { status: 'done', findings: [finding('second:security-01', 'critical')] }
+      : label.startsWith('review:') ? { status: 'done', findings: [] } : { status: 'done', real: true, severity: 'critical', reason: 'r' }),
   });
   assert.ok(!labels(sweep.calls).some((l) => l.startsWith('verify:')), labels(sweep.calls).join(', '));
   assert.deepEqual(sweep.result.findings, []);
@@ -379,7 +379,7 @@ test('a null regression agent in a later chunk still blocks its fix', async () =
   const selected = ['h1', 'h2', 'h3'].map((id, i) => finding(id, 'important', { line: 60 + i }));
   const { result } = await runWorkflow(WF, {
     args: fixArgs({ selected, sweeps: 1, gate_slots: 2 }),
-    respond: responder({ regress: (id) => (id === 'h3' ? null : { regressions: [] }) }),
+    respond: responder({ regress: (id) => (id === 'h3' ? null : { status: 'done', regressions: [] }) }),
   });
   assert.equal(result.status, 'blocked');
   assert.deepEqual(result.blocked, [{ id: 'regress:fix:h3', reason: 'agent returned nothing' }]);

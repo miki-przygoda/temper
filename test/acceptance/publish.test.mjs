@@ -11,7 +11,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runWorkflow } from '../harness.mjs';
+import { loadLib, runWorkflow } from '../harness.mjs';
 import { namesField, schemaCases } from '../schema-cases.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -88,7 +88,7 @@ function agents(repo, { gateResult } = {}) {
       writeFileSync(join(repo, body), '## What changed\n\ngreet()\n\n## Open items\n\n- a minor thing\n');
       writeFileSync(join(repo, 'README.md'), '# app\n\n`greet(name)` says hello.\n');
       const sha = commit(repo, [body, 'README.md'], `docs: greet\n\nTemper-Task: e/docs`);
-      return { commit: sha, files: ['README.md', body], summary: 'Add greet\nwith more detail' };
+      return { status: 'done', commit: sha, files: ['README.md', body], summary: 'Add greet\nwith more detail' };
     }
     if (label === 'evidence') {
       const script = ticked(prompt, /`([^`]*\.sh)`/);
@@ -96,7 +96,7 @@ function agents(repo, { gateResult } = {}) {
       writeFileSync(join(repo, script), '#!/bin/sh\n# run as root, by the owner\nsudo systemctl restart app\n');
       writeFileSync(join(repo, checklist), '- [ ] restart the app as root and check it greets\n');
       const sha = commit(repo, [script, checklist], `docs: owner evidence\n\nTemper-Task: e/evidence`);
-      return { script, checklist, commit: sha };
+      return { status: 'done', script, checklist, commit: sha };
     }
     if (label === 'gate') {
       if (gateResult) return gateResult;
@@ -104,7 +104,7 @@ function agents(repo, { gateResult } = {}) {
       const r = spawnSync('sh', ['-c', cmd], { cwd: repo, encoding: 'utf8' });
       const log = join(repo, '..', 'gate.log');
       writeFileSync(log, `${r.stdout}${r.stderr}`);
-      return { passed: r.status === 0, exit_status: r.status, log_path: log };
+      return { status: 'done', passed: r.status === 0, exit_status: r.status, log_path: log };
     }
     throw new Error(`unexpected label ${label}`);
   };
@@ -133,9 +133,9 @@ async function allPublishPrompts() {
       const { calls } = await runWorkflow(WF, {
         args: args('/r', { host: s.host, done: s.done }),
         respond: ({ label }) => ({
-          docs: { commit: 'd0d0d0d1', files: ['README.md'], summary: 'x' },
-          evidence: { script: 's.sh', checklist: 'c.md', commit: 'e0e0e0e1' },
-          gate: { passed: gatePassed, exit_status: gatePassed ? 0 : 1, log_path: '/l' },
+          docs: { status: 'done', commit: 'd0d0d0d1', files: ['README.md'], summary: 'x' },
+          evidence: { status: 'done', script: 's.sh', checklist: 'c.md', commit: 'e0e0e0e1' },
+          gate: { status: 'done', passed: gatePassed, exit_status: gatePassed ? 0 : 1, log_path: '/l' },
         })[label],
       });
       for (const c of calls) prompts.push({ label: c.opts.label, prompt: c.prompt });
@@ -297,7 +297,7 @@ test('PUBLISH-06 the full gate is not green: nothing is pushed and no PR is open
     try {
       const { result } = await runWorkflow(WF, {
         args: args(r.repo),
-        respond: agents(r.repo, { gateResult: { passed: true, exit_status: 1, log_path: '/l' } }),
+        respond: agents(r.repo, { gateResult: { status: 'done', passed: true, exit_status: 1, log_path: '/l' } }),
       });
       assert.notEqual(result.status, 'ready', 'a full gate that exited 1 was reported ready');
       assert.ok(!('pr' in result));
@@ -355,9 +355,9 @@ test('PUBLISH-08 an open PR is never merged by temper', async () => {
 test('PUBLISH-09 publish returns commits for docs and evidence', async () => {
   const respond = (over = {}) => ({ label }) => {
     if (Object.prototype.hasOwnProperty.call(over, label)) return over[label];
-    if (label === 'docs') return { commit: 'd0c5d0c5', files: ['README.md'], summary: 'docs' };
-    if (label === 'evidence') return { script: 's.sh', checklist: 'c.md', commit: 'e7e7e7e7' };
-    if (label === 'gate') return { passed: true, exit_status: 0, log_path: 'full.log' };
+    if (label === 'docs') return { status: 'done', commit: 'd0c5d0c5', files: ['README.md'], summary: 'docs' };
+    if (label === 'evidence') return { status: 'done', script: 's.sh', checklist: 'c.md', commit: 'e7e7e7e7' };
+    if (label === 'gate') return { status: 'done', passed: true, exit_status: 0, log_path: 'full.log' };
     throw new Error(`unexpected label ${label}`);
   };
   const ready = await runWorkflow(WF, { args: args('/r'), respond: respond() });
@@ -367,7 +367,7 @@ test('PUBLISH-09 publish returns commits for docs and evidence', async () => {
   // Every result after validation carries it, the failing ones too; an empty sha never goes in.
   const failed = await runWorkflow(WF, {
     args: args('/r'),
-    respond: respond({ evidence: { script: 's.sh', checklist: 'c.md', commit: '' }, gate: { passed: false, exit_status: 1, log_path: 'l' } }),
+    respond: respond({ evidence: { status: 'done', script: 's.sh', checklist: 'c.md', commit: '' }, gate: { status: 'done', passed: false, exit_status: 1, log_path: 'l' } }),
   });
   assert.equal(failed.result.status, 'gate_failed');
   assert.deepEqual(failed.result.commits, { docs: 'd0c5d0c5' });
@@ -379,4 +379,79 @@ test('PUBLISH-09 publish returns commits for docs and evidence', async () => {
   const invalid = await runWorkflow(WF, { args: args('/r', { spec: '' }), respond: respond() });
   assert.equal(invalid.result.status, 'invalid');
   assert.ok(!('commits' in invalid.result));
+});
+
+test('PUBLISH-10 publish returns blocked, never ready, when docs or evidence returns blocked', async () => {
+  const respond = (over = {}) => ({ label }) => {
+    if (Object.prototype.hasOwnProperty.call(over, label)) return over[label];
+    if (label === 'docs') return { status: 'done', commit: 'd0c5d0c5', files: ['README.md'], summary: 'docs' };
+    if (label === 'evidence') return { status: 'done', script: 's.sh', checklist: 'c.md', commit: 'e7e7e7e7' };
+    if (label === 'gate') return { status: 'done', passed: true, exit_status: 0, log_path: 'full.log' };
+    throw new Error(`unexpected label ${label}`);
+  };
+  const callLabels = (calls) => calls.map((c) => c.opts.label);
+
+  const docs = await runWorkflow(WF, {
+    args: args('/r'),
+    respond: respond({ docs: { status: 'blocked', reason: 'HEAD detached', commit: '', files: [], summary: '' } }),
+  });
+  assert.equal(docs.result.status, 'blocked');
+  assert.deepEqual(docs.result.blocked, [{ id: 'docs', reason: 'HEAD detached' }]);
+  assert.ok(!callLabels(docs.calls).includes('evidence'), 'evidence ran after a blocked docs');
+  assert.ok(!callLabels(docs.calls).includes('gate'), 'the gate ran after a blocked docs');
+
+  const evidence = await runWorkflow(WF, {
+    args: args('/r'),
+    respond: respond({ evidence: { status: 'blocked', reason: 'HEAD detached', script: '', checklist: '', commit: '' } }),
+  });
+  assert.equal(evidence.result.status, 'blocked');
+  assert.deepEqual(evidence.result.blocked, [{ id: 'evidence', reason: 'HEAD detached' }]);
+  assert.deepEqual(evidence.result.commits, { docs: 'd0c5d0c5' });
+  assert.ok(!callLabels(evidence.calls).includes('gate'), 'the gate ran after a blocked evidence');
+});
+
+test('PUBLISH-11 the gate runs in a throwaway worktree under tmp/', async () => {
+  const lib = loadLib();
+  const a = args('/r');
+  const respond = ({ label }) => {
+    if (label === 'docs') return { status: 'done', commit: 'd0c5d0c5', files: ['README.md'], summary: 'docs' };
+    if (label === 'evidence') return { status: 'done', script: 's.sh', checklist: 'c.md', commit: 'e7e7e7e7' };
+    if (label === 'gate') return { status: 'done', passed: true, exit_status: 0, log_path: 'full.log' };
+    throw new Error(`unexpected label ${label}`);
+  };
+  const { calls } = await runWorkflow(WF, { args: a, respond });
+  const gate = calls.find((c) => c.opts.label === 'gate');
+  assert.ok(gate, 'no gate call');
+  const text = lib.throwawayText(a, 'gate');
+  assert.ok(text.includes('/r/.temper/worktrees/e/tmp/gate-1660eb12'), text);
+  assert.ok(gate.prompt.includes(text), gate.prompt);
+});
+
+test('PUBLISH-12 a resume with attempt bumped gives docs, evidence and gate prompts that differ, each ending with the attempt line', async () => {
+  const respond = ({ label }) => {
+    if (label === 'docs') return { status: 'done', commit: 'd0c5d0c5', files: ['README.md'], summary: 'docs' };
+    if (label === 'evidence') return { status: 'done', script: 's.sh', checklist: 'c.md', commit: 'e7e7e7e7' };
+    if (label === 'gate') return { status: 'done', passed: true, exit_status: 0, log_path: 'full.log' };
+    throw new Error(`unexpected label ${label}`);
+  };
+  const promptOf = (calls, label) => {
+    const c = calls.find((x) => x.opts.label === label);
+    assert.ok(c, `no ${label} call`);
+    return c.prompt;
+  };
+  const missing = await runWorkflow(WF, { args: args('/r'), respond });
+  const first = await runWorkflow(WF, { args: args('/r', { attempt: 0 }), respond });
+  const second = await runWorkflow(WF, { args: args('/r', { attempt: 1 }), respond });
+  for (const label of ['docs', 'evidence', 'gate']) {
+    assert.equal(promptOf(missing.calls, label), promptOf(first.calls, label), `${label}: missing attempt means 0`);
+    assert.ok(promptOf(first.calls, label).endsWith('\n\nRun attempt 0.'), promptOf(first.calls, label));
+    assert.ok(promptOf(second.calls, label).endsWith('\n\nRun attempt 1.'), promptOf(second.calls, label));
+    assert.notEqual(promptOf(first.calls, label), promptOf(second.calls, label), label);
+  }
+});
+
+test('PUBLISH-12 the run skill bumps attempt on every publish resume and saves it', () => {
+  const s5 = STAGE5.replace(/\s+/g, ' ');
+  assert.match(s5, /`attempt`: `0` on the first launch of publish, and one more than the last launch's on every resume of it/);
+  assert.match(s5, /Save `attempt` in `args\.json`/);
 });

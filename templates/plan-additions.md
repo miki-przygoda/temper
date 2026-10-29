@@ -13,7 +13,7 @@ Provides: B-contract
 Wave: 1
 ```
 
-- **Owns:** the files only this task may change. No two tasks in the same wave own the same file.
+- **Owns:** the files only this task may change, including every existing test file that asserts what it changes. No two tasks in the same wave own the same file.
 - **Uses:** the contracts this task builds against. Each must be provided by a task in an earlier wave.
 - **Provides:** the contracts this task defines, written out at the boundary (types, signatures, formats, errors).
 - **Wave:** an integer from 0. Tasks that block others come first, and wave 0 builds the shared contracts.

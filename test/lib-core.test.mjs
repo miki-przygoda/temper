@@ -72,6 +72,16 @@ test('a task id that is a phase id is refused, so its trailer never skips that p
   assert.deepEqual(lib.validateBuildArgs(ok), []);
 });
 
+test('a task id of tmp is refused, so its worktree never takes the throwaway worktrees root', () => {
+  const args = goodArgs();
+  args.tasks[0].id = 'tmp';
+  const errors = lib.validateBuildArgs(args);
+  assert.ok(hasError(errors, 'task id tmp is reserved for the throwaway worktrees root'), errors.join('\n'));
+  const ok = goodArgs();
+  ok.tasks[0].id = 'tmp-notes';
+  assert.deepEqual(lib.validateBuildArgs(ok), []);
+});
+
 test('a task id of epic is refused, so its worktree never takes the shared epic worktree path (spec 3.1)', () => {
   const args = goodArgs();
   args.tasks[0].id = 'epic';
@@ -500,9 +510,29 @@ test('attempt must be an integer >= 0', () => {
     assert.ok(matches(errors, /attempt must be an integer >= 0/), `${JSON.stringify(bad)}: ${errors.join('\n')}`);
   }
   for (const ok of [0, 4]) assert.deepEqual(lib.validateStabiliseArgs({ ...stabiliseArgs(), attempt: ok }), []);
-  // Only stabilise checks it.
-  assert.ok(!matches(lib.validateBuildArgs({ ...goodArgs(), attempt: -1 }), /attempt/));
-  assert.ok(!matches(lib.validatePublishArgs({ ...publishArgs(), attempt: -1 }), /attempt/));
+  // Build and publish refuse it too.
+  assert.ok(matches(lib.validateBuildArgs({ ...goodArgs(), attempt: -1 }), /attempt must be an integer >= 0/));
+  assert.ok(matches(lib.validatePublishArgs({ ...publishArgs(), attempt: -1 }), /attempt must be an integer >= 0/));
+});
+
+test('validatePublishArgs accepts an optional attempt', () => {
+  for (const bad of [-1, 1.5, '0']) {
+    const errors = lib.validatePublishArgs({ ...publishArgs(), attempt: bad });
+    assert.ok(matches(errors, /attempt must be an integer >= 0/), `${JSON.stringify(bad)}: ${errors.join('\n')}`);
+  }
+  for (const ok of [0, 4]) assert.deepEqual(lib.validatePublishArgs({ ...publishArgs(), attempt: ok }), []);
+  assert.deepEqual(lib.validatePublishArgs(publishArgs()), []);
+});
+
+test('validateBuildArgs accepts an optional attempt', () => {
+  for (const bad of [-1, 1.5, '0']) {
+    const errors = lib.validateBuildArgs({ ...goodArgs(), attempt: bad });
+    assert.ok(matches(errors, /attempt must be an integer >= 0/), `${JSON.stringify(bad)}: ${errors.join('\n')}`);
+  }
+  for (const ok of [0, 4]) assert.deepEqual(lib.validateBuildArgs({ ...goodArgs(), attempt: ok }), []);
+  const missing = goodArgs();
+  delete missing.attempt;
+  assert.deepEqual(lib.validateBuildArgs(missing), []);
 });
 
 test('gate_slots must be an integer >= 1 when given', () => {
@@ -511,4 +541,14 @@ test('gate_slots must be an integer >= 1 when given', () => {
     assert.ok(matches(errors, /gate_slots must be an integer >= 1/), `${JSON.stringify(bad)}: ${errors.join('\n')}`);
   }
   for (const ok of [1, 3]) assert.deepEqual(lib.validateStabiliseArgs({ ...stabiliseArgs(), gate_slots: ok }), []);
+});
+
+test('phase schemas require status done or blocked and allow a reason', () => {
+  for (const n of ['CHECKPOINT_SCHEMA', 'BEHAVIOUR_SCHEMA', 'ACCEPTANCE_SCHEMA', 'GREEN_SCHEMA', 'DOCS_SCHEMA', 'EVIDENCE_SCHEMA']) {
+    const s = lib[n];
+    assert.ok(s.required.includes('status'), `${n}.required lacks status`);
+    assert.ok(!s.required.includes('reason'), `${n}.required has reason`);
+    assert.deepEqual(s.properties.status.enum, ['done', 'blocked'], n);
+    assert.deepEqual(s.properties.reason, { type: 'string' }, n);
+  }
 });

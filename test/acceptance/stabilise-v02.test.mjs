@@ -63,17 +63,17 @@ const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 // reviewer's severity unless `verdicts[id]` overrides it (null: the verifier returned nothing). Every
 // fix is `fixed` unless `fixes[id]` overrides it. Every `regress:fix:<id>` returns `regress`, or
 // `regress(id)` when it is a function.
-function responder({ reviews = {}, second = {}, verdicts = {}, fixes = {}, regress = { regressions: [] } } = {}) {
+function responder({ reviews = {}, second = {}, verdicts = {}, fixes = {}, regress = { status: 'done', regressions: [] } } = {}) {
   const all = {};
   for (const fs of Object.values(reviews)) for (const f of fs) all[f.id] = f;
   for (const fs of Object.values(second)) for (const f of fs) { all[f.id] = f; all[`second:${f.id}`] = f; }
   return ({ label }) => {
-    if (label.startsWith('second:review:')) return { findings: second[label.slice('second:review:'.length)] ?? [] };
-    if (label.startsWith('review:')) return { findings: reviews[label.slice('review:'.length)] ?? [] };
+    if (label.startsWith('second:review:')) return { status: 'done', findings: second[label.slice('second:review:'.length)] ?? [] };
+    if (label.startsWith('review:')) return { status: 'done', findings: reviews[label.slice('review:'.length)] ?? [] };
     const v = label.match(/^(?:second:)?verify:(.*)$/);
     if (v) {
       if (has(verdicts, v[1])) return verdicts[v[1]];
-      return { real: true, severity: all[v[1]].severity, reason: 'reproduced' };
+      return { status: 'done', real: true, severity: all[v[1]].severity, reason: 'reproduced' };
     }
     if (label.startsWith('regress:fix:')) {
       const id = label.slice('regress:fix:'.length);
@@ -232,7 +232,7 @@ test('STABILISE-06 a proven regression makes the status handover and no second s
     respond: responder({
       fixes: { 'security-02': { status: 'blocked', note: 'stuck' } },
       regress: (id) => {
-        if (id === 'security-01') return { regressions: [{ fix: 'security-01', evidence: 'test t fails; passes on parent' }] };
+        if (id === 'security-01') return { status: 'done', regressions: [{ fix: 'security-01', evidence: 'test t fails; passes on parent' }] };
         return null;
       },
     }),
@@ -259,7 +259,7 @@ test('STABILISE-07 no proven regression and a blocked fix or regression agent ma
   {
     const { result } = await runWorkflow(WF, {
       args: fixArgs({ selected: sel, sweeps: 1 }),
-      respond: responder({ regress: (id) => (id === 'security-02' ? null : { regressions: [] }) }),
+      respond: responder({ regress: (id) => (id === 'security-02' ? null : { status: 'done', regressions: [] }) }),
     });
     assert.equal(result.status, 'blocked');
   }
@@ -269,7 +269,7 @@ test("STABILISE-08 a regression agent that returns nothing blocks its fix as reg
   const sel = [finding('security-01', 'critical'), finding('security-02', 'important')];
   const { result } = await runWorkflow(WF, {
     args: fixArgs({ selected: sel, sweeps: 1 }),
-    respond: responder({ regress: (id) => (id === 'security-01' ? undefined : { regressions: [] }) }),
+    respond: responder({ regress: (id) => (id === 'security-01' ? undefined : { status: 'done', regressions: [] }) }),
   });
   assert.deepEqual(result.blocked, [{ id: 'regress:fix:security-01', reason: 'agent returned nothing' }]);
 });
@@ -283,7 +283,7 @@ test('STABILISE-08 a second-sweep regression agent that returns nothing blocks i
       args: fixArgs({ selected: sel, sweeps: 2 }),
       respond: responder({
         second: { security: secondFindings },
-        regress: (id) => (id === 'second:security-07' ? undefined : { regressions: [] }),
+        regress: (id) => (id === 'second:security-07' ? undefined : { status: 'done', regressions: [] }),
       }),
     });
     assert.deepEqual(result.blocked, [{ id: 'regress:fix:second:security-07', reason: 'agent returned nothing' }]);
@@ -292,7 +292,7 @@ test('STABILISE-08 a second-sweep regression agent that returns nothing blocks i
   {
     const { calls, result } = await runWorkflow(WF, {
       args: fixArgs({ selected: sel, done: ['fix:security-01', 'fix:second:security-08'], attempt: 1 }),
-      respond: responder({ regress: (id) => (id === 'second:security-08' ? undefined : { regressions: [] }) }),
+      respond: responder({ regress: (id) => (id === 'second:security-08' ? undefined : { status: 'done', regressions: [] }) }),
     });
     assert.ok(labels(calls).includes('regress:fix:second:security-08'), 'the lost second-sweep fix was not checked');
     assert.equal(result.status, 'handover');
@@ -408,7 +408,7 @@ test('STABILISE-16 a finding whose verifier returned nothing is kept unverified,
   {
     const { result } = await runWorkflow(WF, {
       args: args(),
-      respond: responder({ reviews: { security: [a, b] }, verdicts: { 'security-01': null, 'security-02': { real: false, severity: 'important', reason: 'no' } } }),
+      respond: responder({ reviews: { security: [a, b] }, verdicts: { 'security-01': null, 'security-02': { status: 'done', real: false, severity: 'important', reason: 'no' } } }),
     });
     assert.deepEqual(result.findings, []);
     assert.equal(result.refuted, 1, 'the unverified finding was counted as refuted');
@@ -611,7 +611,7 @@ test('STABILISE-25 on every part fix path, fresh or resumed, no third sweep runs
     { name: 'sweeps 2 resumed with saved findings', a: fixArgs({ selected: sel, done: ['fix:security-01', 'fix:security-02', 'fix:second:security-08'], second_sweep_findings: [savedSevere], attempt: 2 }) },
     { name: 'resumed, second fix trailer, no saved findings', a: fixArgs({ selected: sel, done: ['fix:security-01', 'fix:second:security-08'], attempt: 1 }) },
     { name: 'legacy trailer', a: fixArgs({ selected: sel, done: ['fix:second-security-08'] }) },
-    { name: 'regression found', a: fixArgs({ selected: sel }), regress: (id) => ({ regressions: id === 'security-01' ? [{ fix: id, evidence: 'e' }] : [] }) },
+    { name: 'regression found', a: fixArgs({ selected: sel }), regress: (id) => ({ status: 'done', regressions: id === 'security-01' ? [{ fix: id, evidence: 'e' }] : [] }) },
   ];
   for (const p of paths) {
     const { calls } = await runWorkflow(WF, {

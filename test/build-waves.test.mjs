@@ -40,13 +40,13 @@ function responder(over = {}) {
     if (label.startsWith('impl:') || label.startsWith('retry:')) {
       return { status: 'done', branch: `temper/e/${id}`, commit: 'abcabc01', summary: `did ${id}` };
     }
-    if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
+    if (label.startsWith('check:') || label.startsWith('recheck:')) return { status: 'done', pass: true, problems: [] };
     if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
     // The phases after the waves (Task 6) succeed with nothing failing.
-    if (label === 'checkpoint') return { gate_passed: true, gate_log: 'logs/full.log', flows: [], gaps: [] };
-    if (label === 'behaviour-spec') return { groups: [{ key: 'g1', behaviours: [{ id: 'G1-01', text: 't' }] }], commit: 'bbbbbb02' };
-    if (label.startsWith('acceptance:')) return { group: id, passing: ['G1-01'], failing: [], untestable: [], commit: 'cccccc03' };
-    if (label.startsWith('green:')) return { fixed: [], corrected: [], questions: [], still_failing: [] };
+    if (label === 'checkpoint') return { status: 'done', gate_passed: true, gate_log: 'logs/full.log', flows: [], gaps: [] };
+    if (label === 'behaviour-spec') return { status: 'done', groups: [{ key: 'g1', behaviours: [{ id: 'G1-01', text: 't' }] }], commit: 'bbbbbb02' };
+    if (label.startsWith('acceptance:')) return { status: 'done', group: id, passing: ['G1-01'], failing: [], untestable: [], commit: 'cccccc03' };
+    if (label.startsWith('green:')) return { status: 'done', fixed: [], corrected: [], questions: [], still_failing: [] };
     return null;
   };
 }
@@ -101,7 +101,7 @@ test('tasks in done are skipped', async () => {
 test('a check that fails once gets exactly one retry and one recheck', async () => {
   const { result, calls } = await runWorkflow(WF, {
     args: buildArgs(),
-    respond: responder({ 'check:a': { pass: false, problems: ['missing test x'] } }),
+    respond: responder({ 'check:a': { status: 'done', pass: false, problems: ['missing test x'] } }),
   });
   const ls = labels(calls);
   assert.equal(ls.filter((l) => l === 'retry:a').length, 1);
@@ -118,8 +118,8 @@ test('a check that fails twice blocks the task, finishes the wave and merges onl
   const { result, calls } = await runWorkflow(WF, {
     args: buildArgs(),
     respond: responder({
-      'check:a': { pass: false, problems: ['missing test x'] },
-      'recheck:a': { pass: false, problems: ['still missing test x'] },
+      'check:a': { status: 'done', pass: false, problems: ['missing test x'] },
+      'recheck:a': { status: 'done', pass: false, problems: ['still missing test x'] },
     }),
   });
   const ls = labels(calls);
@@ -187,8 +187,8 @@ test('an implementer that returns null is blocked, never done (Review Focus 1)',
 test('a null at any later step is blocked with agent returned nothing', async () => {
   for (const over of [
     { 'check:a': null },
-    { 'check:a': { pass: false, problems: ['p'] }, 'retry:a': null },
-    { 'check:a': { pass: false, problems: ['p'] }, 'recheck:a': null },
+    { 'check:a': { status: 'done', pass: false, problems: ['p'] }, 'retry:a': null },
+    { 'check:a': { status: 'done', pass: false, problems: ['p'] }, 'recheck:a': null },
   ]) {
     const { result } = await runWorkflow(WF, { args: buildArgs(), respond: responder(over) });
     assert.equal(result.status, 'blocked', JSON.stringify(over));

@@ -91,12 +91,12 @@ function responder(overrides = {}) {
     if (overrides[label] !== undefined) return overrides[label];
     const id = label.slice(label.indexOf(':') + 1);
     if (label.startsWith('impl:') || label.startsWith('retry:')) return { status: 'done', branch: `temper/e/${id}`, commit: 'abcabc01', summary: `did ${id}` };
-    if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
+    if (label.startsWith('check:') || label.startsWith('recheck:')) return { status: 'done', pass: true, problems: [] };
     if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
-    if (label === 'checkpoint') return { gate_passed: true, gate_log: 'full.log', flows: [{ flow: 'greet', result: 'ok', evidence: 'ran' }], gaps: [] };
-    if (label === 'behaviour-spec') return { groups: [{ key: 'g1', behaviours: [{ id: 'G1-01', text: 'given a name then a greeting' }] }], commit: 'bbbbbb02' };
-    if (label.startsWith('acceptance:')) return { group: id, passing: ['G1-01'], failing: [], untestable: [], commit: 'cccccc03' };
-    if (label.startsWith('green:')) return { fixed: [], corrected: [], questions: [], still_failing: [] };
+    if (label === 'checkpoint') return { status: 'done', gate_passed: true, gate_log: 'full.log', flows: [{ flow: 'greet', result: 'ok', evidence: 'ran' }], gaps: [] };
+    if (label === 'behaviour-spec') return { status: 'done', groups: [{ key: 'g1', behaviours: [{ id: 'G1-01', text: 'given a name then a greeting' }] }], commit: 'bbbbbb02' };
+    if (label.startsWith('acceptance:')) return { status: 'done', group: id, passing: ['G1-01'], failing: [], untestable: [], commit: 'cccccc03' };
+    if (label.startsWith('green:')) return { status: 'done', fixed: [], corrected: [], questions: [], still_failing: [] };
     return null;
   };
 }
@@ -312,7 +312,7 @@ test('SKILLS-PACKAGING-05 /temper:build, /temper:stabilise and /temper:publish a
   const common = { epic: 'e', repo: '/srv/app', branch: 'temper/e', base: 'main', log: 'docs/temper/e/log.md', host: { kind: 'local' }, gates: { quick: 'make check', full: 'make ci' }, done: [] };
   const stab = await runWorkflow('workflows/stabilise.js', {
     args: { ...common, part: 'sweep', lenses: [], severity_notes: 'NOTE-XYZ' },
-    respond: () => ({ findings: [] }),
+    respond: () => ({ status: 'done', findings: [] }),
   });
   assert.notEqual(stab.result.status, 'invalid', JSON.stringify(stab.result));
   assert.ok(stab.calls.length > 0);

@@ -40,7 +40,7 @@ async function implement(task, retryReport) {
 }
 
 async function check(task, impl, label) {
-  const r = await agent(checkerPrompt(task, impl, args), { schema: CHECK_SCHEMA, label, phase: 'Waves' });
+  const r = await agent(checkerPrompt(task, impl, args, label), { schema: CHECK_SCHEMA, label, phase: 'Waves' });
   recordReruns(label, r);
   return r;
 }
@@ -55,11 +55,19 @@ async function implStage(task) {
   return { task, impl, blocked: implBlocked(task, impl) };
 }
 
+// A checker that returned blocked (its throwaway worktree could not be used, for one) never
+// checked: the task blocks under the checker's own id, with its reason (test-strength-and-docs-01).
+function checkBlocked(label, result) {
+  const reason = phaseBlockedReason(result);
+  return reason === null ? null : blockedEntry(label, reason);
+}
+
 async function checkStage(state) {
   if (state.blocked) return state;
-  const result = await check(state.task, state.impl, `check:${state.task.id}`);
+  const label = `check:${state.task.id}`;
+  const result = await check(state.task, state.impl, label);
   if (result === null || result === undefined) return { ...state, blocked: blockedEntry(state.task.id, NOTHING) };
-  return { ...state, check: result };
+  return { ...state, check: result, blocked: checkBlocked(label, result) };
 }
 
 async function retryStage(state) {
@@ -68,8 +76,11 @@ async function retryStage(state) {
   const impl = await implement(task, problemsOf(state.check).join('\n'));
   const blocked = implBlocked(task, impl);
   if (blocked) return { ...state, impl, blocked };
-  const result = await check(task, impl, `recheck:${task.id}`);
+  const label = `recheck:${task.id}`;
+  const result = await check(task, impl, label);
   if (result === null || result === undefined) return { ...state, impl, blocked: blockedEntry(task.id, NOTHING) };
+  const recheckBlocked = checkBlocked(label, result);
+  if (recheckBlocked) return { ...state, impl, check: result, blocked: recheckBlocked };
   if (result.pass !== true) {
     return { ...state, impl, check: result, blocked: blockedEntry(task.id, `failed the check twice: ${problemsOf(result).join('; ')}`) };
   }
@@ -133,6 +144,19 @@ function phaseBlocked(id, reason, doneNow) {
   return { status: 'blocked', blocked: [blockedEntry(id, reason)], done_now: doneNow, commits, flaky_reruns };
 }
 
+// spec "Phase results", the order of checks for a non-null phase result r: the agent's own blocked
+// status (its sha commit still recorded, and no second not-a-sha entry), then a reported non-sha
+// commit. Returns the blocked build result, or null to go on.
+function phaseIssue(id, r, doneNow) {
+  const reason = phaseBlockedReason(r);
+  if (reason !== null) {
+    recordCommit(id, r);
+    return phaseBlocked(id, reason, doneNow);
+  }
+  if (recordCommit(id, r)) return phaseBlocked(id, NOT_A_SHA, doneNow);
+  return null;
+}
+
 // Returns {blocked} or {checkpoint}; checkpoint is null when it was done in an earlier run.
 async function runCheckpoint(doneNow) {
   if (isDone('checkpoint')) {
@@ -142,7 +166,8 @@ async function runCheckpoint(doneNow) {
   phase('Checkpoint');
   const cp = await agent(checkpointPrompt(args), { schema: CHECKPOINT_SCHEMA, label: 'checkpoint', phase: 'Checkpoint' });
   if (cp === null || cp === undefined) return { blocked: phaseBlocked('checkpoint', NOTHING, doneNow) };
-  if (recordCommit('checkpoint', cp)) return { blocked: phaseBlocked('checkpoint', NOT_A_SHA, doneNow) };
+  const cpIssue = phaseIssue('checkpoint', cp, doneNow);
+  if (cpIssue) return { blocked: cpIssue };
   if (cp.gate_passed !== true) return { blocked: phaseBlocked('checkpoint', 'full gate failed: ' + cp.gate_log, doneNow) };
   return { checkpoint: cp };
 }
@@ -159,7 +184,8 @@ async function runBehaviourSpec(doneNow) {
   phase('Behaviour');
   const b = await agent(behaviourSpecPrompt(args), { schema: BEHAVIOUR_SCHEMA, label: 'behaviour-spec', phase: 'Behaviour' });
   if (b === null || b === undefined) return { blocked: phaseBlocked('behaviour-spec', NOTHING, doneNow) };
-  if (recordCommit('behaviour-spec', b)) return { blocked: phaseBlocked('behaviour-spec', NOT_A_SHA, doneNow) };
+  const bIssue = phaseIssue('behaviour-spec', b, doneNow);
+  if (bIssue) return { blocked: bIssue };
   return { groups: arr(b.groups) };
 }
 
@@ -178,7 +204,8 @@ async function runAcceptance(groups, doneNow) {
     const behaviours = spec ? arr(spec.behaviours) : [];
     const r = await agent(acceptancePrompt(group, behaviours, args), { schema: ACCEPTANCE_SCHEMA, label: id, phase: 'Behaviour' });
     if (r === null || r === undefined) return { blocked: phaseBlocked(id, NOTHING, doneNow) };
-    if (recordCommit(id, r)) return { blocked: phaseBlocked(id, NOT_A_SHA, doneNow) };
+    const issue = phaseIssue(id, r, doneNow);
+    if (issue) return { blocked: issue };
     out.passing += arr(r.passing).length;
     out.failing.push(...arr(r.failing));
     out.untestable.push(...arr(r.untestable));
@@ -203,7 +230,8 @@ async function runGreen(failing, markedToo, doneNow) {
     const g = await agent(greenPrompt(left, r, args, markedToo), { schema: GREEN_SCHEMA, label: id, phase: 'Green' });
     if (g === null || g === undefined) return { blocked: phaseBlocked(id, NOTHING, doneNow) };
     recordReruns(id, g);
-    if (recordCommit(id, g)) return { blocked: phaseBlocked(id, NOT_A_SHA, doneNow) };
+    const issue = phaseIssue(id, g, doneNow);
+    if (issue) return { blocked: issue };
     markedToo = false;
     out.rounds = r;
     out.fixed.push(...arr(g.fixed));

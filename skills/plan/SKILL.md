@@ -25,7 +25,11 @@ The additions:
 - **a written contract at every boundary between tasks:** types, signatures, formats and errors, exact enough to build against;
 - **a task id** in each task's heading, lowercase and matching `^[a-z0-9][a-z0-9:-]*$`; it becomes the commit trailer `Temper-Task: <epic>/<id>`;
 - under each task's heading, the four lines:
-  - `Owns:` the files only this task may change;
+  - `Owns:` the files only this task may change. Build it in these steps, for every task:
+    1. List every function, constant, schema, label, prompt line and file the task changes, and every value it changes (a version number, for one).
+    2. `git grep` each of them over the repo's test directories, and put every existing test file that asserts them into `Owns:`.
+    3. `git grep` each of them over the whole repo as well: every file outside the tests that holds its own copy (bundled or generated from a changed file) goes into `Owns:` too. For temper, a task that touches `src/` owns `workflows/*.js`.
+    4. When two tasks need the same test file, put them in different waves, each owning it;
   - `Uses:` the contracts it builds against;
   - `Provides:` the contracts it defines;
   - `Wave:` an integer from 0;
@@ -61,6 +65,7 @@ The build workflow checks `args.json` with `validateBuildArgs` and refuses to st
 - every `wave` is an integer of 0 or more;
 - every task has a non-empty `owns`, string arrays `uses` and `provides`, a `title` and a non-empty `text`;
 - **ownership:** no two tasks in the same wave own the same path;
+- **test ownership:** done by the planner with `git grep` in step 1; no code checks it, since which tests a change breaks isn't knowable from `args.json`;
 - **dependencies:** every contract a task `uses` is provided by a task in an earlier wave. A contract provided in the same wave or a later one doesn't count, because dependencies point to earlier waves;
 - every `answers` key is a task id;
 - `build_rule` is a string and `flaky` an array of strings;
