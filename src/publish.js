@@ -53,6 +53,9 @@ if (!publishDone.includes('evidence')) {
 
 phase('Gate');
 const gate = await agent(gatePrompt(args), { schema: GATE_SCHEMA, label: 'gate', phase: 'Gate' });
+// A gate agent that returned blocked (its throwaway worktree could not be used, for one) never ran
+// the gate: blocked with its reason, so the resume reruns it (test-strength-and-docs-01).
+if (gate && phaseBlockedReason(gate) !== null) return blockedAt('gate', phaseBlockedReason(gate));
 // Green means passed and a real exit status of 0; anything else is not green (spec 8).
 if (!gate || gate.passed !== true || gate.exit_status !== 0) return { status: 'gate_failed', gate, commits };
 

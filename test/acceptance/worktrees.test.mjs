@@ -48,19 +48,19 @@ function respond({ label }) {
   if (label.startsWith('impl:') || label.startsWith('retry:')) {
     return { status: 'done', branch: 'temper/e/a', commit: 'abcabc01', summary: 'did a' };
   }
-  if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
+  if (label.startsWith('check:') || label.startsWith('recheck:')) return { status: 'done', pass: true, problems: [] };
   if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
   if (label === 'checkpoint') return { status: 'done', gate_passed: true, gate_log: 'l', flows: [], gaps: [], commit: 'aaaaaa01' };
   if (label === 'behaviour-spec') return { status: 'done', groups: [], commit: 'bbbbbb02' };
-  if (label.startsWith('second:review:')) return { findings: [] };
-  if (label.startsWith('review:security')) return { findings: [finding('security-01')] };
-  if (label.startsWith('review:')) return { findings: [] };
-  if (/^(second:)?verify:/.test(label)) return { real: true, severity: 'critical', reason: 'reproduced' };
+  if (label.startsWith('second:review:')) return { status: 'done', findings: [] };
+  if (label.startsWith('review:security')) return { status: 'done', findings: [finding('security-01')] };
+  if (label.startsWith('review:')) return { status: 'done', findings: [] };
+  if (/^(second:)?verify:/.test(label)) return { status: 'done', real: true, severity: 'critical', reason: 'reproduced' };
   if (label.startsWith('fix:')) return { status: 'fixed', commit: 'f1f1f1f1', note: 'n' };
-  if (label.startsWith('regress:fix:')) return { regressions: [] };
+  if (label.startsWith('regress:fix:')) return { status: 'done', regressions: [] };
   if (label === 'docs') return { status: 'done', commit: 'eeeeee05', files: ['README.md'], summary: 'docs' };
   if (label === 'evidence') return { status: 'done', script: 's.sh', checklist: 'c.md', commit: 'ffffff06' };
-  if (label === 'gate') return { passed: true, exit_status: 0, log: 'full.log' };
+  if (label === 'gate') return { status: 'done', passed: true, exit_status: 0, log: 'full.log' };
   return null;
 }
 
@@ -185,8 +185,52 @@ test('WORKTREES-08 an existing throwaway is reused with checkout --detach, never
       const co = c.prompt.indexOf(`\`git -C ${path} checkout --detach `);
       assert.ok(top >= 0 && clean >= 0 && top < co && clean < co, `${label}: ${c.prompt}`);
       assert.match(c.prompt, /never delete or clean the path/, label);
-      assert.match(c.prompt, /If either check or the checkout fails, stop and report the reason in your result as blocked/, label);
+      assert.match(c.prompt, /If either check or the checkout fails, stop and return status "blocked" with the reason in reason/, label);
       assert.match(c.prompt, /you never delete a worktree/, label);
     }
+  }
+});
+
+// test-strength-and-docs-01: an agent whose throwaway can't be reused says so in its result. Each
+// of the five schemas carries status done|blocked, and the workflow turns a blocked result into a
+// blocked entry with that agent's id and reason, never a clean check, lens, verdict or gate.
+test('WORKTREES-08 a throwaway agent that returns blocked blocks its id, never a clean result', async () => {
+  for (const s of [lib.CHECK_SCHEMA, lib.FINDINGS_SCHEMA, lib.VERDICT_SCHEMA, lib.REGRESS_SCHEMA, lib.GATE_SCHEMA]) {
+    assert.deepEqual(s.properties.status.enum, ['done', 'blocked']);
+    assert.ok(s.required.includes('status'));
+    assert.equal(s.properties.reason.type, 'string');
+  }
+  const R = 'the throwaway is dirty';
+  const blockedAt = (target, empty) => ({ label }) => (label === target ? { status: 'blocked', reason: R, ...empty } : respond({ label }));
+
+  const b = await runWorkflow('workflows/build.js', { args: buildArgs(LOCAL), respond: blockedAt('check:a', { pass: false, problems: [] }) });
+  assert.equal(b.result.status, 'blocked');
+  assert.deepEqual(b.result.blocked, [{ id: 'check:a', reason: R }]);
+  assert.ok(!b.calls.some((c) => /^(retry|merge):/.test(c.opts.label)));
+
+  const rv = await runWorkflow('workflows/stabilise.js', { args: stabiliseArgs(LOCAL), respond: blockedAt('review:security', { findings: [finding('security-01')] }) });
+  assert.ok(rv.result.blocked.some((e) => e.id === 'review:security' && e.reason === R), JSON.stringify(rv.result));
+  assert.ok(!rv.calls.some((c) => c.opts.label.startsWith('verify:')));
+  assert.deepEqual(rv.result.findings, []);
+
+  const vf = await runWorkflow('workflows/stabilise.js', { args: stabiliseArgs(LOCAL), respond: blockedAt('verify:security-01', { real: false, severity: 'critical' }) });
+  assert.equal(vf.result.refuted, 0);
+  assert.deepEqual(vf.result.findings, []);
+  assert.deepEqual(vf.result.unverified.map((f) => f.id), ['security-01']);
+  assert.ok(vf.result.blocked.some((e) => e.id === 'verify:security-01' && e.reason === R), JSON.stringify(vf.result));
+
+  const fixArgs = stabiliseArgs(LOCAL, { part: 'fix', selected: [finding('security-01')] });
+  const rg = await runWorkflow('workflows/stabilise.js', { args: fixArgs, respond: blockedAt('regress:fix:security-01', { regressions: [] }) });
+  assert.equal(rg.result.status, 'blocked');
+  assert.deepEqual(rg.result.blocked, [{ id: 'regress:fix:security-01', reason: R }]);
+  assert.ok(!rg.calls.some((c) => c.opts.label.startsWith('second:')));
+
+  const g = await runWorkflow('workflows/publish.js', { args: common(LOCAL), respond: blockedAt('gate', { passed: true, exit_status: 0, log_path: '' }) });
+  assert.equal(g.result.status, 'blocked');
+  assert.deepEqual(g.result.blocked, [{ id: 'gate', reason: R }]);
+
+  for (const { c } of await throwawayPrompts(LOCAL)) {
+    assert.match(c.prompt, /return status "blocked" with the reason in reason/, c.opts.label);
+    assert.match(c.prompt, /Otherwise return status "done"/, c.opts.label);
   }
 });

@@ -68,7 +68,7 @@ function buildResponder(over = {}) {
     if (label.startsWith('impl:') || label.startsWith('retry:')) {
       return { status: 'done', branch: `temper/e/${id}`, commit: 'abcdef12', summary: `did ${id}` };
     }
-    if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
+    if (label.startsWith('check:') || label.startsWith('recheck:')) return { status: 'done', pass: true, problems: [] };
     if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
     if (label === 'checkpoint') {
       return { status: 'done', gate_passed: true, gate_log: 'full.log', flows: [{ flow: 'f', result: 'ok', evidence: 'ran' }], gaps: [], commit: 'c0ffee01' };
@@ -127,10 +127,10 @@ function stabiliseResponder(over = {}) {
       const v = over[label];
       return typeof v === 'function' ? v(call) : v;
     }
-    if (label.startsWith('second:review:')) return { findings: [] };
-    if (label.startsWith('review:')) return { findings: [finding('f9', 'important')] };
-    if (label.includes('verify:')) return { real: true, severity: 'important', reason: 'reproduced' };
-    if (label.startsWith('regress:')) return { regressions: [] };
+    if (label.startsWith('second:review:')) return { status: 'done', findings: [] };
+    if (label.startsWith('review:')) return { status: 'done', findings: [finding('f9', 'important')] };
+    if (label.includes('verify:')) return { status: 'done', real: true, severity: 'important', reason: 'reproduced' };
+    if (label.startsWith('regress:')) return { status: 'done', regressions: [] };
     if (label.startsWith('fix:')) return { status: 'fixed', commit: 'f1f1f1f1', note: 'done' };
     throw new Error(`unexpected label ${label}`);
   };
@@ -157,7 +157,7 @@ function publishArgs(extra = {}) {
 const publishResponder = ({ label }) => ({
   docs: { status: 'done', commit: 'd0c50001', files: ['README.md'], summary: 'docs' },
   evidence: { status: 'done', script: 'evidence.sh', checklist: 'checklist.md', commit: 'e71d0002' },
-  gate: { passed: true, exit_status: 0, log_path: '/l' },
+  gate: { status: 'done', passed: true, exit_status: 0, log_path: '/l' },
 })[label];
 
 const runPublish = (args) => runWorkflow('workflows/publish.js', { args, respond: publishResponder });
@@ -169,7 +169,7 @@ async function allCalls(extra = {}, host = { kind: 'local' }) {
   const add = (stage, calls) => {
     for (const c of calls) out.push({ stage, label: c.opts?.label, prompt: c.prompt, opts: c.opts });
   };
-  const b = await runBuild(buildArgs({ host, ...extra }), { 'check:a': { pass: false, problems: ['p'] } });
+  const b = await runBuild(buildArgs({ host, ...extra }), { 'check:a': { status: 'done', pass: false, problems: ['p'] } });
   add('build', b.calls);
   const b2 = await runBuild(buildArgs({ host, ...extra }));
   add('build', b2.calls);
@@ -412,7 +412,7 @@ test('PROMPTS-12 checker, merge, implementer, green and fix schemas accept an op
   const calls = await allCalls({ flaky: ['t::a'] });
   const samples = {
     'impl:a': { status: 'done', branch: 'temper/e/a', commit: 'abcdef12', summary: 's' },
-    'check:a': { pass: true, problems: [] },
+    'check:a': { status: 'done', pass: true, problems: [] },
     'merge:wave0': { status: 'merged', merged: ['a'], gate_passed: true },
     'green:1': { status: 'done', fixed: ['G1-01'], corrected: [], questions: [], still_failing: [], commit: '' },
     'fix:f1': { status: 'fixed', commit: 'f1f1f1f1', note: 'n' },
@@ -434,7 +434,7 @@ test('PROMPTS-12 checker, merge, implementer, green and fix schemas accept an op
 
 test('PROMPTS-13 a checker that reports flaky_reruns shows in the build result as {id, test, gate}', async () => {
   const { result } = await runBuild(buildArgs({ flaky: ['t::a'] }), {
-    'check:a': { pass: true, problems: [], flaky_reruns: [{ test: 't::a', gate: 'quick' }] },
+    'check:a': { status: 'done', pass: true, problems: [], flaky_reruns: [{ test: 't::a', gate: 'quick' }] },
   });
   assert.equal(result.status, 'mvp', JSON.stringify(result));
   assert.ok(Array.isArray(result.flaky_reruns), `no flaky_reruns: ${JSON.stringify(result)}`);

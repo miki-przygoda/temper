@@ -10,7 +10,9 @@
 // refuted or fixed. The unverified list is deduped within itself and against the verified one, so a
 // bug that one lens's verifier reproduced is listed once, verified. An unverified finding above minor
 // is blocked ("agent returned nothing"). A review that returns nothing leaves its lens unreviewed: it
-// is blocked ("agent returned nothing"), never a lens with no findings.
+// is blocked ("agent returned nothing"), never a lens with no findings. A reviewer or verifier that
+// returns status blocked (its throwaway worktree could not be used, for one) is handled the same way,
+// with the agent's own reason: its lens is unreviewed, its finding unverified, never refuted.
 // A finding needs an input and the wrong result it produces (spec 7 4a.1); one without is not accepted.
 const hasInputAndWrongResult = (f) => !!f
   && typeof f.input === 'string' && f.input.trim() !== ''
@@ -28,6 +30,8 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
     },
     async (review) => {
       if (!review) return null;
+      const reviewBlocked = phaseBlockedReason(review);
+      if (reviewBlocked !== null) return { reviewBlocked, pairs: [] };
       // A second-sweep id is put into the second: namespace, whatever the reviewer wrote, so its
       // fix:<id> trailer always marks a second-sweep fix (spec 3.9, SECOND-CONTROL-FLOW-7).
       const all = (Array.isArray(review.findings) ? review.findings : []).filter(hasInputAndWrongResult)
@@ -52,10 +56,15 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
   const kept = [];
   const raw = [];
   const blocked = [];
+  const verifyReasons = new Map();
   let refuted = 0;
   for (const [i, lensResult] of perLens.entries()) {
     if (!lensResult) {
       blocked.push({ id: `${labelPrefix}review:${lenses[i]}`, reason: 'agent returned nothing' });
+      continue;
+    }
+    if (lensResult.reviewBlocked) {
+      blocked.push({ id: `${labelPrefix}review:${lenses[i]}`, reason: lensResult.reviewBlocked });
       continue;
     }
     if (lensResult.badIds) {
@@ -69,6 +78,12 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
         raw.push(finding);
         continue;
       }
+      const verifyBlocked = phaseBlockedReason(verdict);
+      if (verifyBlocked !== null) {
+        raw.push(finding);
+        verifyReasons.set(finding.id, verifyBlocked);
+        continue;
+      }
       if (verdict.real !== true) {
         refuted += 1;
         continue;
@@ -79,7 +94,7 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
   const findings = sortFindings(dedupeFindings(kept));
   const unverified = sortFindings(dedupeAgainst(dedupeFindings(raw), findings)).map((f) => ({ ...f, unverified: true }));
   for (const f of unverified) {
-    if (f.severity !== 'minor') blocked.push({ id: `${labelPrefix}verify:${f.id}`, reason: 'agent returned nothing' });
+    if (f.severity !== 'minor') blocked.push({ id: `${labelPrefix}verify:${f.id}`, reason: verifyReasons.get(f.id) ?? 'agent returned nothing' });
   }
   return { findings, refuted, blocked, unverified };
 }
@@ -139,7 +154,8 @@ const out = { fixed: [], reverted: [], contract_items: [], blocked: [], commits:
 const toFix = args.selected;
 
 // spec 3.3: one regression agent per fix, in parallel, labelled regress:fix:<id>. The prompt carries
-// args.attempt, so a resume that bumps it reruns these live. An agent that returns nothing blocks its fix.
+// args.attempt, so a resume that bumps it reruns these live. An agent that returns nothing, or returns
+// status blocked (with its own reason), blocks its fix: its check never ran.
 // They launch in chunks of gateSlotsOf(args), one parallel call per chunk, so no more agents run
 // their gates at once than A13 sized for the build host.
 async function regressEach(ids, phaseTitle = 'Fix') {
@@ -157,6 +173,7 @@ async function regressEach(ids, phaseTitle = 'Fix') {
   const blocked = [];
   for (const [i, r] of results.entries()) {
     if (!r) blocked.push({ id: `regress:fix:${ids[i]}`, reason: 'agent returned nothing' });
+    else if (phaseBlockedReason(r) !== null) blocked.push({ id: `regress:fix:${ids[i]}`, reason: phaseBlockedReason(r) });
     else if (Array.isArray(r.regressions)) regressions.push(...r.regressions);
   }
   return { regressions, blocked };

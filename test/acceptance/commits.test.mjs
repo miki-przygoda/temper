@@ -73,7 +73,7 @@ function buildResponder(over = {}) {
     if (label.startsWith('impl:') || label.startsWith('retry:')) {
       return { status: 'done', branch: `temper/e/${id}`, commit: 'abcdef12', summary: `did ${id}` };
     }
-    if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
+    if (label.startsWith('check:') || label.startsWith('recheck:')) return { status: 'done', pass: true, problems: [] };
     if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
     if (label === 'checkpoint') {
       return { status: 'done', gate_passed: true, gate_log: 'full.log', flows: [{ flow: 'f', result: 'ok', evidence: 'ran' }], gaps: [], commit: SHAS.checkpoint };
@@ -127,8 +127,8 @@ function finding(id, severity) {
 // Scripted stabilise agents: no findings in any sweep, every fix lands with `fixShas[id]`, no regressions.
 function stabiliseResponder(fixShas = {}) {
   return ({ label }) => {
-    if (label.startsWith('second:review:') || label.startsWith('review:')) return { findings: [] };
-    if (label.startsWith('regress:')) return { regressions: [] };
+    if (label.startsWith('second:review:') || label.startsWith('review:')) return { status: 'done', findings: [] };
+    if (label.startsWith('regress:')) return { status: 'done', regressions: [] };
     if (label.startsWith('fix:')) {
       const id = label.slice('fix:'.length);
       return { status: 'fixed', commit: fixShas[id] ?? '', note: 'done' };
@@ -155,7 +155,7 @@ function publishArgs(extra = {}) {
 const publishResponder = ({ label }) => ({
   docs: { status: 'done', commit: 'd0c50001', files: ['README.md'], summary: 'docs' },
   evidence: { status: 'done', script: 'evidence.sh', checklist: 'checklist.md', commit: 'e71d0002' },
-  gate: { passed: true, exit_status: 0, log_path: '/l' },
+  gate: { status: 'done', passed: true, exit_status: 0, log_path: '/l' },
 })[label];
 
 const promptOf = (calls, label) => {
@@ -185,7 +185,7 @@ async function allCommitterPrompts(host) {
   const b = await runBuild(buildArgs({ host }));
   const impls = ['impl:a', 'impl:b'].map((l) => ({ label: l, prompt: promptOf(b.calls, l), branch: `temper/e/${idOf(l)}` }));
   // A retry is an implementer too.
-  const r = await runBuild(buildArgs({ host }), { 'check:a': { pass: false, problems: ['p'] } });
+  const r = await runBuild(buildArgs({ host }), { 'check:a': { status: 'done', pass: false, problems: ['p'] } });
   impls.push({ label: 'retry:a', prompt: promptOf(r.calls, 'retry:a'), branch: 'temper/e/a' });
   const epic = (await epicCommitterPrompts(host)).map((x) => ({ ...x, branch: BRANCH }));
   return [...impls, ...epic];

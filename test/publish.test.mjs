@@ -27,7 +27,7 @@ function args(extra = {}) {
 const REPLIES = {
   docs: { status: 'done', commit: 'd1d1d1d1', files: ['README.md', 'docs/temper/e/pr-body.md'], summary: 'Add the auth flow\nmore detail' },
   evidence: { status: 'done', script: 'docs/temper/e/owner-steps.sh', checklist: 'docs/temper/e/owner-checklist.md', commit: 'e1e1e1e1' },
-  gate: { passed: true, exit_status: 0, log_path: '/tmp/gate.log' },
+  gate: { status: 'done', passed: true, exit_status: 0, log_path: '/tmp/gate.log' },
 };
 
 function responder(overrides = {}) {
@@ -76,9 +76,9 @@ test('the agents get their schemas', async () => {
 });
 
 test('a failing gate gives gate_failed', async () => {
-  const { result } = await runWorkflow(WF, { args: args(), respond: responder({ gate: { passed: false } }) });
+  const { result } = await runWorkflow(WF, { args: args(), respond: responder({ gate: { status: 'done', passed: false } }) });
   assert.equal(result.status, 'gate_failed');
-  assert.deepEqual(result.gate, { passed: false });
+  assert.deepEqual(result.gate, { status: 'done', passed: false });
 });
 
 test('a gate agent that returns nothing is a failed gate, not ready', async () => {

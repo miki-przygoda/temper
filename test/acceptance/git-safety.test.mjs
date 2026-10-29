@@ -54,8 +54,8 @@ function buildArgs(host) {
 function buildRespond({ label }) {
   const id = label.slice(label.indexOf(':') + 1);
   if (label.startsWith('impl:') || label.startsWith('retry:')) return { status: 'done', branch: `temper/e/${id}`, commit: 'c0c0c0c1', summary: `did ${id}` };
-  if (label === 'check:a') return { pass: false, problems: ['missing test'] };
-  if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
+  if (label === 'check:a') return { status: 'done', pass: false, problems: ['missing test'] };
+  if (label.startsWith('check:') || label.startsWith('recheck:')) return { status: 'done', pass: true, problems: [] };
   if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
   if (label === 'checkpoint') return { status: 'done', gate_passed: true, gate_log: 'l', flows: [], gaps: [] };
   if (label === 'behaviour-spec') return { status: 'done', groups: GROUPS, commit: 'b0b0b0b1' };
@@ -71,12 +71,12 @@ const finding = (id, severity) => ({
 // Stabilise: one finding in the first sweep, one severe finding in the second (so a severe fix and
 // the regression check run).
 function stabiliseRespond({ label }) {
-  if (label === 'review:security') return { findings: [finding('security-01', 'critical')] };
-  if (label === 'second:review:security') return { findings: [finding('second:security-01', 'severe')] };
-  if (label.includes('review:')) return { findings: [] };
-  if (label.includes('verify:')) return { real: true, severity: label.includes('second:security') ? 'severe' : 'critical', reason: 'ran it' };
+  if (label === 'review:security') return { status: 'done', findings: [finding('security-01', 'critical')] };
+  if (label === 'second:review:security') return { status: 'done', findings: [finding('second:security-01', 'severe')] };
+  if (label.includes('review:')) return { status: 'done', findings: [] };
+  if (label.includes('verify:')) return { status: 'done', real: true, severity: label.includes('second:security') ? 'severe' : 'critical', reason: 'ran it' };
   if (label.startsWith('fix:')) return { status: 'fixed', commit: 'f0f0f0f1', note: 'n' };
-  if (label.startsWith('regress:fix:')) return { regressions: [] };
+  if (label.startsWith('regress:fix:')) return { status: 'done', regressions: [] };
   throw new Error(`unexpected label ${label}`);
 }
 
@@ -84,7 +84,7 @@ function publishRespond({ label }) {
   return ({
     docs: { status: 'done', commit: 'd0d0d0d1', files: ['README.md'], summary: 'Add a thing' },
     evidence: { status: 'done', script: 'docs/temper/e/owner-steps.sh', checklist: 'docs/temper/e/owner-checklist.md', commit: 'e0e0e0e1' },
-    gate: { passed: true, exit_status: 0, log_path: '/l' },
+    gate: { status: 'done', passed: true, exit_status: 0, log_path: '/l' },
   })[label];
 }
 

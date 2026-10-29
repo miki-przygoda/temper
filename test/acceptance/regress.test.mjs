@@ -38,8 +38,8 @@ function fixArgs(extra = {}) {
 // Every fix lands; every regression check is clean.
 function respond({ label }) {
   if (label.startsWith('fix:')) return { status: 'fixed', commit: shaFor(label.slice(4)), note: 'done' };
-  if (label.startsWith('regress:fix:')) return { regressions: [] };
-  if (label.startsWith('review:') || label.startsWith('second:review:')) return { findings: [] };
+  if (label.startsWith('regress:fix:')) return { status: 'done', regressions: [] };
+  if (label.startsWith('review:') || label.startsWith('second:review:')) return { status: 'done', findings: [] };
   throw new Error(`unexpected label ${label}`);
 }
 

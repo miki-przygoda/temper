@@ -68,16 +68,16 @@ const reviewsOf = (calls) => calls.filter((c) => /(^|:)review:/.test(c.opts?.lab
 // reproduces the finding with the reviewer's severity unless `verdicts[id]` overrides it; every fix
 // is `fixed` unless `fixes[id]` overrides it. `second` holds the second sweep's reviews by lens.
 // Every `regress:fix:<id>` agent returns `regress`, or `regress(id)` when it is a function.
-function responder({ reviews = {}, second = {}, verdicts = {}, fixes = {}, regress = { regressions: [] } } = {}) {
+function responder({ reviews = {}, second = {}, verdicts = {}, fixes = {}, regress = { status: 'done', regressions: [] } } = {}) {
   const all = {};
   for (const fs of [...Object.values(reviews), ...Object.values(second)]) for (const f of fs) all[f.id] = f;
   return ({ label }) => {
-    if (label.startsWith('second:review:')) return { findings: second[label.slice('second:review:'.length)] ?? [] };
-    if (label.startsWith('review:')) return { findings: reviews[label.slice('review:'.length)] ?? [] };
+    if (label.startsWith('second:review:')) return { status: 'done', findings: second[label.slice('second:review:'.length)] ?? [] };
+    if (label.startsWith('review:')) return { status: 'done', findings: reviews[label.slice('review:'.length)] ?? [] };
     const v = label.match(/^(?:second:)?verify:(.*)$/);
     if (v) {
       if (Object.prototype.hasOwnProperty.call(verdicts, v[1])) return verdicts[v[1]];
-      return { real: true, severity: all[v[1]].severity, reason: 'reproduced' };
+      return { status: 'done', real: true, severity: all[v[1]].severity, reason: 'reproduced' };
     }
     if (label.startsWith('fix:')) {
       const id = label.slice('fix:'.length);
@@ -246,7 +246,7 @@ test('STABILISE-04 a separate agent tries to disprove each finding; disproved on
     args: args(),
     respond: responder({
       reviews: { security: [a, b], 'failure paths and lifecycle': [dup] },
-      verdicts: { 'security-02': { real: false, severity: 'important', reason: 'could not reproduce' } },
+      verdicts: { 'security-02': { status: 'done', real: false, severity: 'important', reason: 'could not reproduce' } },
     }),
   });
   const verifies = calls.filter((c) => c.opts.label.startsWith('verify:'));
@@ -272,8 +272,8 @@ test("STABILISE-05 the verifier re-rates severity against the rubric and the pro
     respond: responder({
       reviews: { security: [up, down] },
       verdicts: {
-        'security-01': { real: true, severity: 'critical', reason: 'panics on user input' },
-        'security-02': { real: true, severity: 'important', reason: 'not a security issue' },
+        'security-01': { status: 'done', real: true, severity: 'critical', reason: 'panics on user input' },
+        'security-02': { status: 'done', real: true, severity: 'important', reason: 'not a security issue' },
       },
     }),
   });
@@ -522,7 +522,7 @@ test('STABILISE-19 there is never a third sweep', async (t) => {
           assert.ok(m, 'the review prompt says how to name the ids');
           const f = finding(`${m[1]}-01`, r[1] ? 'severe' : 'critical');
           seen[f.id] = f;
-          return { findings: [f] };
+          return { status: 'done', findings: [f] };
         }
         return responder({ reviews: { security: Object.values(seen) } })(call);
       };
@@ -785,7 +785,7 @@ test('STABILISE-25 a proven regression hands over before blocked, and the check 
 
   const proven = await runWorkflow(WF, {
     args: fixArgs({ selected: sel }),
-    respond: responder({ fixes, regress: (id) => (id === 'f2' ? { regressions } : { regressions: [] }) }),
+    respond: responder({ fixes, regress: (id) => (id === 'f2' ? { status: 'done', regressions } : { status: 'done', regressions: [] }) }),
   });
   assert.ok(labels(proven.calls).includes('regress:fix:f2'));
   assert.ok(!labels(proven.calls).includes('regress:fix:f1'), 'a blocked fix left no commit to check');
@@ -943,7 +943,7 @@ test('STABILISE-30 second-sweep ids are put into the second: namespace by the sc
   const bare = finding('security-07', 'severe');
   const { calls, result } = await runWorkflow(WF, {
     args: fixArgs({ selected: [finding('security-01', 'critical')] }),
-    respond: responder({ second: { security: [bare] }, verdicts: { 'second:security-07': { real: true, severity: 'severe', reason: 'r' } } }),
+    respond: responder({ second: { security: [bare] }, verdicts: { 'second:security-07': { status: 'done', real: true, severity: 'severe', reason: 'r' } } }),
   });
   const ls = labels(calls);
   assert.ok(ls.includes('second:verify:second:security-07'), ls.join(', '));

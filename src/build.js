@@ -55,11 +55,19 @@ async function implStage(task) {
   return { task, impl, blocked: implBlocked(task, impl) };
 }
 
+// A checker that returned blocked (its throwaway worktree could not be used, for one) never
+// checked: the task blocks under the checker's own id, with its reason (test-strength-and-docs-01).
+function checkBlocked(label, result) {
+  const reason = phaseBlockedReason(result);
+  return reason === null ? null : blockedEntry(label, reason);
+}
+
 async function checkStage(state) {
   if (state.blocked) return state;
-  const result = await check(state.task, state.impl, `check:${state.task.id}`);
+  const label = `check:${state.task.id}`;
+  const result = await check(state.task, state.impl, label);
   if (result === null || result === undefined) return { ...state, blocked: blockedEntry(state.task.id, NOTHING) };
-  return { ...state, check: result };
+  return { ...state, check: result, blocked: checkBlocked(label, result) };
 }
 
 async function retryStage(state) {
@@ -68,8 +76,11 @@ async function retryStage(state) {
   const impl = await implement(task, problemsOf(state.check).join('\n'));
   const blocked = implBlocked(task, impl);
   if (blocked) return { ...state, impl, blocked };
-  const result = await check(task, impl, `recheck:${task.id}`);
+  const label = `recheck:${task.id}`;
+  const result = await check(task, impl, label);
   if (result === null || result === undefined) return { ...state, impl, blocked: blockedEntry(task.id, NOTHING) };
+  const recheckBlocked = checkBlocked(label, result);
+  if (recheckBlocked) return { ...state, impl, check: result, blocked: recheckBlocked };
   if (result.pass !== true) {
     return { ...state, impl, check: result, blocked: blockedEntry(task.id, `failed the check twice: ${problemsOf(result).join('; ')}`) };
   }

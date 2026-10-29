@@ -54,7 +54,7 @@ function responder() {
     const label = opts.label;
     const id = label.slice(label.indexOf(':') + 1);
     if (label.startsWith('impl:') || label.startsWith('retry:')) return { status: 'done', branch: `temper/e/${id}`, commit: 'abcabc01', summary: `did ${id}` };
-    if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
+    if (label.startsWith('check:') || label.startsWith('recheck:')) return { status: 'done', pass: true, problems: [] };
     if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
     if (label === 'checkpoint') return { status: 'done', gate_passed: true, gate_log: 'full.log', flows: [{ flow: 'greet', result: 'ok', evidence: 'ran' }], gaps: [] };
     if (label === 'behaviour-spec') return { status: 'done', groups: [{ key: 'g1', behaviours: [{ id: 'G1-01', text: 'given a name then a greeting' }] }], commit: 'bbbbbb02' };

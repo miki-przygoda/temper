@@ -45,7 +45,7 @@ function responder(over = {}) {
     if (label.startsWith('impl:') || label.startsWith('retry:')) {
       return { status: 'done', branch: `temper/e/${id}`, commit: 'abcabc01', summary: `did ${id}` };
     }
-    if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
+    if (label.startsWith('check:') || label.startsWith('recheck:')) return { status: 'done', pass: true, problems: [] };
     if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
     if (label === 'checkpoint') {
       return { status: 'done', gate_passed: true, gate_log: 'logs/full.log', flows: [{ flow: 'f1', result: 'ok', evidence: 'ran' }], gaps: [] };

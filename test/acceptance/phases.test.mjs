@@ -77,7 +77,7 @@ function buildResponder(over = {}) {
     if (label.startsWith('impl:') || label.startsWith('retry:')) {
       return { status: 'done', branch: `temper/e/${id}`, commit: 'abcabc01', summary: `did ${id}` };
     }
-    if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
+    if (label.startsWith('check:') || label.startsWith('recheck:')) return { status: 'done', pass: true, problems: [] };
     if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
     if (label === 'checkpoint') {
       return { status: 'done', gate_passed: true, gate_log: 'logs/full.log', flows: [], gaps: [], commit: 'aaaaaa01' };
@@ -102,7 +102,7 @@ function publishResponder(over = {}) {
     }
     if (label === 'docs') return { status: 'done', commit: 'eeeeee05', files: ['README.md'], summary: 'docs' };
     if (label === 'evidence') return { status: 'done', script: 's.sh', checklist: 'c.md', commit: 'ffffff06' };
-    if (label === 'gate') return { passed: true, exit_status: 0, log: 'logs/full.log' };
+    if (label === 'gate') return { status: 'done', passed: true, exit_status: 0, log: 'logs/full.log' };
     return null;
   };
 }

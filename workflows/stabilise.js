@@ -476,7 +476,9 @@ function listOf(properties) {
 const FLAKY_RERUNS = listOf({ test: STR, gate: STR });
 
 // spec "Phase results": every phase agent (checkpoint, behaviour spec, acceptance, green, docs,
-// evidence) says whether it finished. A blocked one sends its other required fields empty.
+// evidence) says whether it finished. A blocked one sends its other required fields empty. So does
+// every agent with a throwaway worktree (checker, reviewer, verifier, regression, gate), whose
+// throwaway may not be reusable (test-strength-and-docs-01, owner, 29 Oct).
 const PHASE_STATUS = { status: { type: 'string', enum: ['done', 'blocked'] }, reason: STR };
 
 function phaseSchema(properties, required) {
@@ -495,7 +497,7 @@ const IMPL_SCHEMA = objectSchema(
   ['status', 'branch', 'summary'],
 );
 
-const CHECK_SCHEMA = objectSchema(
+const CHECK_SCHEMA = phaseSchema(
   { pass: { type: 'boolean' }, problems: STRS, flaky_reruns: FLAKY_RERUNS },
   ['pass', 'problems'],
 );
@@ -565,9 +567,9 @@ const FINDING_SCHEMA = objectSchema(
   ['id', 'lens', 'file', 'line', 'summary', 'input', 'wrong_result', 'severity', 'kind'],
 );
 
-const FINDINGS_SCHEMA = objectSchema({ findings: { type: 'array', items: FINDING_SCHEMA } }, ['findings']);
+const FINDINGS_SCHEMA = phaseSchema({ findings: { type: 'array', items: FINDING_SCHEMA } }, ['findings']);
 
-const VERDICT_SCHEMA = objectSchema(
+const VERDICT_SCHEMA = phaseSchema(
   { real: { type: 'boolean' }, severity: { type: 'string', enum: SEVERITIES }, reason: STR },
   ['real', 'severity', 'reason'],
 );
@@ -583,9 +585,9 @@ const FIX_SCHEMA = objectSchema(
   ['status', 'note'],
 );
 
-const REGRESS_SCHEMA = objectSchema({ regressions: listOf({ fix: STR, evidence: STR }) }, ['regressions']);
+const REGRESS_SCHEMA = phaseSchema({ regressions: listOf({ fix: STR, evidence: STR }) }, ['regressions']);
 
-const GATE_SCHEMA = objectSchema(
+const GATE_SCHEMA = phaseSchema(
   { passed: { type: 'boolean' }, exit_status: { type: 'integer' }, log_path: STR },
   ['passed', 'exit_status', 'log_path'],
 );
@@ -649,10 +651,14 @@ function throwawayText(args, label) {
   const path = `${worktreesDir(args)}/tmp/${tmpLabel(label)}`;
   return [
     `Your throwaway worktree is \`${path}\`.`,
-    `If that path does not exist, create it detached: \`git worktree add --detach ${path} <the branch or commit you check>\`. If it already exists (an earlier agent left it), reuse it only when \`git -C ${path} rev-parse --show-toplevel\` prints the same directory as \`cd ${path} && pwd -P\` (a worktree of its own, never the enclosing checkout) and \`git -C ${path} status --porcelain\` prints nothing (an earlier agent's changes would stay through a checkout); then \`git -C ${path} checkout --detach <the branch or commit you check>\`. If either check or the checkout fails, stop and report the reason in your result as blocked; never delete or clean the path.`,
+    `If that path does not exist, create it detached: \`git worktree add --detach ${path} <the branch or commit you check>\`. If it already exists (an earlier agent left it), reuse it only when \`git -C ${path} rev-parse --show-toplevel\` prints the same directory as \`cd ${path} && pwd -P\` (a worktree of its own, never the enclosing checkout) and \`git -C ${path} status --porcelain\` prints nothing (an earlier agent's changes would stay through a checkout); then \`git -C ${path} checkout --detach <the branch or commit you check>\`. If either check or the checkout fails, stop and return status "blocked" with the reason in reason; never delete or clean the path.`,
     "Change nothing on any branch and commit nothing. Leave the worktree in place when you finish: you never delete a worktree (a fixed rule); temper's cleanup removes it.",
   ].join('\n');
 }
+
+// What every agent with a throwaway worktree returns when it cannot do its task. The workflow takes
+// any status but "done" as a blocked entry with the agent's id and reason, never a clean result.
+const THROWAWAY_BLOCKED = 'If you cannot do this task (your throwaway worktree cannot be used, for one), return status "blocked" with the reason in reason, and send every other required field empty ("", [], false or 0; a verdict sends the finding\'s severity). Otherwise return status "done".';
 
 // spec 3.1: merge and phase agents share one epic worktree with the epic branch checked out
 // (git refuses to check a branch out in a second worktree). They run one after another.
@@ -824,6 +830,7 @@ function checkerPrompt(task, implResult, args, label = `check:${task.id}`) {
     throwawayText(args, label),
     `The diff is \`git diff ${args.branch}...${branch}\`. The quick gate is \`${args.gates.quick}\`. Undo your spot-check break; commit nothing.`,
     flakyText(args),
+    THROWAWAY_BLOCKED,
     'Return pass true when all five hold; otherwise pass false, with one problem per failed check in problems, each precise enough for the implementer to fix.',
   ]);
 }
@@ -932,6 +939,7 @@ function reviewPrompt(lens, args, alreadyFixed, label = `${args.part === 'fix' ?
     rubricText(args),
     fixed,
     `Give each finding an id \`${prefix}${lensSlug(lens)}-NN\` (a two-digit number), the lens, the file and line, a one-line summary, the input, the wrong result, the severity and the kind.`,
+    THROWAWAY_BLOCKED,
   ]);
 }
 
@@ -943,6 +951,7 @@ function verifyPrompt(finding, args, label = `verify:${finding.id}`) {
     throwawayText(args, label),
     'Re-rate its severity with the rubric below. When you cannot reproduce it, return real:false.',
     rubricText(args),
+    THROWAWAY_BLOCKED,
     'Return real (true only when you reproduced it), the severity, and the reason (what you ran and what it printed).',
   ]);
 }
@@ -977,6 +986,7 @@ function regressPrompt(fixId, args) {
     'Prove what this fix broke: a failing test, or a command and its wrong output, together with the case that behaved correctly on the parent commit (the commit before the fix). Without that proof, it is not a regression.',
     `The current tip of \`${args.branch}\` is what \`git rev-parse ${args.branch}\` prints when you start.`,
     `A regression counts only when it reproduces on the current tip of \`${args.branch}\` as well; give both reproductions.`,
+    THROWAWAY_BLOCKED,
     'Return the regressions, each with the fix id and the evidence.',
   ])}\n\nRun attempt ${args.attempt ?? 0}.`;
 }
@@ -1010,6 +1020,7 @@ function gatePrompt(args) {
     throwawayText(args, 'gate'),
     'Change nothing and commit nothing. Save its whole output to a log file.',
     NO_RERUN,
+    THROWAWAY_BLOCKED,
     'Return its real exit status (passed is true only for exit status 0) and the log path.',
   ])}\n\n${attemptText(args)}`;
 }
@@ -1025,7 +1036,9 @@ function gatePrompt(args) {
 // refuted or fixed. The unverified list is deduped within itself and against the verified one, so a
 // bug that one lens's verifier reproduced is listed once, verified. An unverified finding above minor
 // is blocked ("agent returned nothing"). A review that returns nothing leaves its lens unreviewed: it
-// is blocked ("agent returned nothing"), never a lens with no findings.
+// is blocked ("agent returned nothing"), never a lens with no findings. A reviewer or verifier that
+// returns status blocked (its throwaway worktree could not be used, for one) is handled the same way,
+// with the agent's own reason: its lens is unreviewed, its finding unverified, never refuted.
 // A finding needs an input and the wrong result it produces (spec 7 4a.1); one without is not accepted.
 const hasInputAndWrongResult = (f) => !!f
   && typeof f.input === 'string' && f.input.trim() !== ''
@@ -1043,6 +1056,8 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
     },
     async (review) => {
       if (!review) return null;
+      const reviewBlocked = phaseBlockedReason(review);
+      if (reviewBlocked !== null) return { reviewBlocked, pairs: [] };
       // A second-sweep id is put into the second: namespace, whatever the reviewer wrote, so its
       // fix:<id> trailer always marks a second-sweep fix (spec 3.9, SECOND-CONTROL-FLOW-7).
       const all = (Array.isArray(review.findings) ? review.findings : []).filter(hasInputAndWrongResult)
@@ -1067,10 +1082,15 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
   const kept = [];
   const raw = [];
   const blocked = [];
+  const verifyReasons = new Map();
   let refuted = 0;
   for (const [i, lensResult] of perLens.entries()) {
     if (!lensResult) {
       blocked.push({ id: `${labelPrefix}review:${lenses[i]}`, reason: 'agent returned nothing' });
+      continue;
+    }
+    if (lensResult.reviewBlocked) {
+      blocked.push({ id: `${labelPrefix}review:${lenses[i]}`, reason: lensResult.reviewBlocked });
       continue;
     }
     if (lensResult.badIds) {
@@ -1084,6 +1104,12 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
         raw.push(finding);
         continue;
       }
+      const verifyBlocked = phaseBlockedReason(verdict);
+      if (verifyBlocked !== null) {
+        raw.push(finding);
+        verifyReasons.set(finding.id, verifyBlocked);
+        continue;
+      }
       if (verdict.real !== true) {
         refuted += 1;
         continue;
@@ -1094,7 +1120,7 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
   const findings = sortFindings(dedupeFindings(kept));
   const unverified = sortFindings(dedupeAgainst(dedupeFindings(raw), findings)).map((f) => ({ ...f, unverified: true }));
   for (const f of unverified) {
-    if (f.severity !== 'minor') blocked.push({ id: `${labelPrefix}verify:${f.id}`, reason: 'agent returned nothing' });
+    if (f.severity !== 'minor') blocked.push({ id: `${labelPrefix}verify:${f.id}`, reason: verifyReasons.get(f.id) ?? 'agent returned nothing' });
   }
   return { findings, refuted, blocked, unverified };
 }
@@ -1154,7 +1180,8 @@ const out = { fixed: [], reverted: [], contract_items: [], blocked: [], commits:
 const toFix = args.selected;
 
 // spec 3.3: one regression agent per fix, in parallel, labelled regress:fix:<id>. The prompt carries
-// args.attempt, so a resume that bumps it reruns these live. An agent that returns nothing blocks its fix.
+// args.attempt, so a resume that bumps it reruns these live. An agent that returns nothing, or returns
+// status blocked (with its own reason), blocks its fix: its check never ran.
 // They launch in chunks of gateSlotsOf(args), one parallel call per chunk, so no more agents run
 // their gates at once than A13 sized for the build host.
 async function regressEach(ids, phaseTitle = 'Fix') {
@@ -1172,6 +1199,7 @@ async function regressEach(ids, phaseTitle = 'Fix') {
   const blocked = [];
   for (const [i, r] of results.entries()) {
     if (!r) blocked.push({ id: `regress:fix:${ids[i]}`, reason: 'agent returned nothing' });
+    else if (phaseBlockedReason(r) !== null) blocked.push({ id: `regress:fix:${ids[i]}`, reason: phaseBlockedReason(r) });
     else if (Array.isArray(r.regressions)) regressions.push(...r.regressions);
   }
   return { regressions, blocked };

@@ -480,7 +480,9 @@ function listOf(properties) {
 const FLAKY_RERUNS = listOf({ test: STR, gate: STR });
 
 // spec "Phase results": every phase agent (checkpoint, behaviour spec, acceptance, green, docs,
-// evidence) says whether it finished. A blocked one sends its other required fields empty.
+// evidence) says whether it finished. A blocked one sends its other required fields empty. So does
+// every agent with a throwaway worktree (checker, reviewer, verifier, regression, gate), whose
+// throwaway may not be reusable (test-strength-and-docs-01, owner, 29 Oct).
 const PHASE_STATUS = { status: { type: 'string', enum: ['done', 'blocked'] }, reason: STR };
 
 function phaseSchema(properties, required) {
@@ -499,7 +501,7 @@ const IMPL_SCHEMA = objectSchema(
   ['status', 'branch', 'summary'],
 );
 
-const CHECK_SCHEMA = objectSchema(
+const CHECK_SCHEMA = phaseSchema(
   { pass: { type: 'boolean' }, problems: STRS, flaky_reruns: FLAKY_RERUNS },
   ['pass', 'problems'],
 );
@@ -569,9 +571,9 @@ const FINDING_SCHEMA = objectSchema(
   ['id', 'lens', 'file', 'line', 'summary', 'input', 'wrong_result', 'severity', 'kind'],
 );
 
-const FINDINGS_SCHEMA = objectSchema({ findings: { type: 'array', items: FINDING_SCHEMA } }, ['findings']);
+const FINDINGS_SCHEMA = phaseSchema({ findings: { type: 'array', items: FINDING_SCHEMA } }, ['findings']);
 
-const VERDICT_SCHEMA = objectSchema(
+const VERDICT_SCHEMA = phaseSchema(
   { real: { type: 'boolean' }, severity: { type: 'string', enum: SEVERITIES }, reason: STR },
   ['real', 'severity', 'reason'],
 );
@@ -587,9 +589,9 @@ const FIX_SCHEMA = objectSchema(
   ['status', 'note'],
 );
 
-const REGRESS_SCHEMA = objectSchema({ regressions: listOf({ fix: STR, evidence: STR }) }, ['regressions']);
+const REGRESS_SCHEMA = phaseSchema({ regressions: listOf({ fix: STR, evidence: STR }) }, ['regressions']);
 
-const GATE_SCHEMA = objectSchema(
+const GATE_SCHEMA = phaseSchema(
   { passed: { type: 'boolean' }, exit_status: { type: 'integer' }, log_path: STR },
   ['passed', 'exit_status', 'log_path'],
 );
@@ -653,10 +655,14 @@ function throwawayText(args, label) {
   const path = `${worktreesDir(args)}/tmp/${tmpLabel(label)}`;
   return [
     `Your throwaway worktree is \`${path}\`.`,
-    `If that path does not exist, create it detached: \`git worktree add --detach ${path} <the branch or commit you check>\`. If it already exists (an earlier agent left it), reuse it only when \`git -C ${path} rev-parse --show-toplevel\` prints the same directory as \`cd ${path} && pwd -P\` (a worktree of its own, never the enclosing checkout) and \`git -C ${path} status --porcelain\` prints nothing (an earlier agent's changes would stay through a checkout); then \`git -C ${path} checkout --detach <the branch or commit you check>\`. If either check or the checkout fails, stop and report the reason in your result as blocked; never delete or clean the path.`,
+    `If that path does not exist, create it detached: \`git worktree add --detach ${path} <the branch or commit you check>\`. If it already exists (an earlier agent left it), reuse it only when \`git -C ${path} rev-parse --show-toplevel\` prints the same directory as \`cd ${path} && pwd -P\` (a worktree of its own, never the enclosing checkout) and \`git -C ${path} status --porcelain\` prints nothing (an earlier agent's changes would stay through a checkout); then \`git -C ${path} checkout --detach <the branch or commit you check>\`. If either check or the checkout fails, stop and return status "blocked" with the reason in reason; never delete or clean the path.`,
     "Change nothing on any branch and commit nothing. Leave the worktree in place when you finish: you never delete a worktree (a fixed rule); temper's cleanup removes it.",
   ].join('\n');
 }
+
+// What every agent with a throwaway worktree returns when it cannot do its task. The workflow takes
+// any status but "done" as a blocked entry with the agent's id and reason, never a clean result.
+const THROWAWAY_BLOCKED = 'If you cannot do this task (your throwaway worktree cannot be used, for one), return status "blocked" with the reason in reason, and send every other required field empty ("", [], false or 0; a verdict sends the finding\'s severity). Otherwise return status "done".';
 
 // spec 3.1: merge and phase agents share one epic worktree with the epic branch checked out
 // (git refuses to check a branch out in a second worktree). They run one after another.
@@ -828,6 +834,7 @@ function checkerPrompt(task, implResult, args, label = `check:${task.id}`) {
     throwawayText(args, label),
     `The diff is \`git diff ${args.branch}...${branch}\`. The quick gate is \`${args.gates.quick}\`. Undo your spot-check break; commit nothing.`,
     flakyText(args),
+    THROWAWAY_BLOCKED,
     'Return pass true when all five hold; otherwise pass false, with one problem per failed check in problems, each precise enough for the implementer to fix.',
   ]);
 }
@@ -936,6 +943,7 @@ function reviewPrompt(lens, args, alreadyFixed, label = `${args.part === 'fix' ?
     rubricText(args),
     fixed,
     `Give each finding an id \`${prefix}${lensSlug(lens)}-NN\` (a two-digit number), the lens, the file and line, a one-line summary, the input, the wrong result, the severity and the kind.`,
+    THROWAWAY_BLOCKED,
   ]);
 }
 
@@ -947,6 +955,7 @@ function verifyPrompt(finding, args, label = `verify:${finding.id}`) {
     throwawayText(args, label),
     'Re-rate its severity with the rubric below. When you cannot reproduce it, return real:false.',
     rubricText(args),
+    THROWAWAY_BLOCKED,
     'Return real (true only when you reproduced it), the severity, and the reason (what you ran and what it printed).',
   ]);
 }
@@ -981,6 +990,7 @@ function regressPrompt(fixId, args) {
     'Prove what this fix broke: a failing test, or a command and its wrong output, together with the case that behaved correctly on the parent commit (the commit before the fix). Without that proof, it is not a regression.',
     `The current tip of \`${args.branch}\` is what \`git rev-parse ${args.branch}\` prints when you start.`,
     `A regression counts only when it reproduces on the current tip of \`${args.branch}\` as well; give both reproductions.`,
+    THROWAWAY_BLOCKED,
     'Return the regressions, each with the fix id and the evidence.',
   ])}\n\nRun attempt ${args.attempt ?? 0}.`;
 }
@@ -1014,6 +1024,7 @@ function gatePrompt(args) {
     throwawayText(args, 'gate'),
     'Change nothing and commit nothing. Save its whole output to a log file.',
     NO_RERUN,
+    THROWAWAY_BLOCKED,
     'Return its real exit status (passed is true only for exit status 0) and the log path.',
   ])}\n\n${attemptText(args)}`;
 }
@@ -1074,11 +1085,19 @@ async function implStage(task) {
   return { task, impl, blocked: implBlocked(task, impl) };
 }
 
+// A checker that returned blocked (its throwaway worktree could not be used, for one) never
+// checked: the task blocks under the checker's own id, with its reason (test-strength-and-docs-01).
+function checkBlocked(label, result) {
+  const reason = phaseBlockedReason(result);
+  return reason === null ? null : blockedEntry(label, reason);
+}
+
 async function checkStage(state) {
   if (state.blocked) return state;
-  const result = await check(state.task, state.impl, `check:${state.task.id}`);
+  const label = `check:${state.task.id}`;
+  const result = await check(state.task, state.impl, label);
   if (result === null || result === undefined) return { ...state, blocked: blockedEntry(state.task.id, NOTHING) };
-  return { ...state, check: result };
+  return { ...state, check: result, blocked: checkBlocked(label, result) };
 }
 
 async function retryStage(state) {
@@ -1087,8 +1106,11 @@ async function retryStage(state) {
   const impl = await implement(task, problemsOf(state.check).join('\n'));
   const blocked = implBlocked(task, impl);
   if (blocked) return { ...state, impl, blocked };
-  const result = await check(task, impl, `recheck:${task.id}`);
+  const label = `recheck:${task.id}`;
+  const result = await check(task, impl, label);
   if (result === null || result === undefined) return { ...state, impl, blocked: blockedEntry(task.id, NOTHING) };
+  const recheckBlocked = checkBlocked(label, result);
+  if (recheckBlocked) return { ...state, impl, check: result, blocked: recheckBlocked };
   if (result.pass !== true) {
     return { ...state, impl, check: result, blocked: blockedEntry(task.id, `failed the check twice: ${problemsOf(result).join('; ')}`) };
   }
