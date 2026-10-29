@@ -188,6 +188,8 @@ function checkTask(t, i, errors) {
   else if (isPhaseId(t.id)) bad(`task id ${t.id} is reserved for a phase`);
   // A task's worktree is <worktrees dir>/<id>, so the id epic would share the epic worktree (spec 3.1).
   else if (t.id === 'epic') bad('task id epic is reserved for the shared epic worktree');
+  // Every throwaway worktree lives under <worktrees dir>/tmp, so the id tmp would nest them in that task's worktree.
+  else if (t.id === 'tmp') bad('task id tmp is reserved for the throwaway worktrees root');
   if (typeof t.title !== 'string') bad('title must be a string');
   if (!Number.isInteger(t.wave) || t.wave < 0) bad('wave must be an integer >= 0');
   if (!isStringArray(t.owns) || t.owns.length === 0) bad('owns must be a non-empty array of strings');

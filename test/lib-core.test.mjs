@@ -72,6 +72,16 @@ test('a task id that is a phase id is refused, so its trailer never skips that p
   assert.deepEqual(lib.validateBuildArgs(ok), []);
 });
 
+test('a task id of tmp is refused, so its worktree never takes the throwaway worktrees root', () => {
+  const args = goodArgs();
+  args.tasks[0].id = 'tmp';
+  const errors = lib.validateBuildArgs(args);
+  assert.ok(hasError(errors, 'task id tmp is reserved for the throwaway worktrees root'), errors.join('\n'));
+  const ok = goodArgs();
+  ok.tasks[0].id = 'tmp-notes';
+  assert.deepEqual(lib.validateBuildArgs(ok), []);
+});
+
 test('a task id of epic is refused, so its worktree never takes the shared epic worktree path (spec 3.1)', () => {
   const args = goodArgs();
   args.tasks[0].id = 'epic';
