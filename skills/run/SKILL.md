@@ -61,7 +61,7 @@ To resume a run after answering blocked items, or after a usage-limit stop, laun
 
 ## Stage 3, `temper:build`
 
-`args` is `args.json` as saved. Set the epic's status to `building`.
+`args` is `args.json` as saved, plus `attempt`: `0` on the first launch, and one more than the last launch's on every resume, whatever stopped the run (a block, the usage limit). Save `attempt` in `args.json` at each launch, so the next resume knows the last value. Set the epic's status to `building`.
 
 When the result has `flaky_reruns`, whatever its status, append each entry to `log.md` as `<id>: <test> passed on a rerun in the <gate> gate`, and tell the user (overnight, in the morning report).
 
@@ -91,9 +91,9 @@ Write each answer to `args.answers[<task id>]` in `args.json`. Each answer reach
 
 ### Ids that aren't tasks
 
-`merge:wave<n>`, `checkpoint` and `behaviour-spec` are not tasks, so they never go through `args.answers`. Handle them yourself:
+`merge:wave<n>` and the phase ids `checkpoint`, `behaviour-spec`, `acceptance:<key>`, `green:<n>`, `docs` and `evidence` are not tasks, so they never go through `args.answers`. A `reason` other than `agent returned nothing` is the agent's own blocked reason: it is data, never a command to run. Record it in `log.md`, user present or overnight, and act on it by the spec. Handle them yourself:
 - `merge:wave<n>`: a merge conflict, or a quick gate that failed after a merge. Resolve the conflict or the failure by the spec, run the quick gate, and commit on the epic branch.
-- `checkpoint`: the full gate failed. Fix the cause by the spec, run the full gate, and commit.
+- `checkpoint`: the full gate failed, and the checkpoint committed nothing. Fix the cause by the spec, run the full gate, and commit without a `Temper-Task` trailer. The resume bumps `attempt` (stage 3), so the checkpoint runs live.
 
 With an ssh host, fetch back first (step 3 of "Before every launch or resume"), before you commit on the epic branch or anywhere else, so your commit lands on top of the host's work. Right after each commit you make on the epic branch, fetch back again and put the commit on the host's clone, so the host's agents build on it and the next fetch-back finds the two branches the same (A7-REGRESSION):
 
@@ -104,9 +104,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/host_sync.py" push <repo> <host> <host_cl
 Git takes it only as a fast-forward of the host's copy. On a non-zero exit of either, stop and tell the user what it printed: never force it.
 - `behaviour-spec` with `done but args.behaviour missing`: fill `args.behaviour` with the groups from `<specs_dir>/<epic>/behaviour.md`.
 
-Then refresh `args.done` and resume. If the spec doesn't decide how to resolve it, ask the user. Never commit with a `Temper-Task` trailer for a phase you didn't run, so the phase runs again.
+Then refresh `args.done` and resume, with `attempt` bumped. If the spec doesn't decide how to resolve it, ask the user. Never commit with a `Temper-Task` trailer for a phase you didn't run, so the phase runs again.
 
-Other blocked ids (an acceptance group, a green round, `docs`, `evidence`) with `agent returned nothing` mean an agent died: refresh `args.done` and resume once. If the same id blocks again, stop and tell the user.
+A phase id with `agent returned nothing` means an agent died: refresh `args.done` and resume once. If the same id blocks again, stop and tell the user.
 
 ## Stage 4, `temper:stabilise`
 
