@@ -979,3 +979,17 @@ test('STABILISE-32 reviewer, verifier and regression prompts name their throwawa
   }
   assert.deepEqual([...seen].sort(), ['regress', 'review', 'second:review', 'second:verify', 'verify']);
 });
+
+test('STABILISE-33 each regress:fix:<id> prompt names the branch tip and counts only what still reproduces there', async () => {
+  for (const attempt of [undefined, 2]) {
+    const a = fixArgs({ selected: [finding('f1', 'critical'), finding('f2', 'important')], attempt });
+    const { calls } = await runWorkflow(WF, { args: a, respond: responder() });
+    const regs = calls.filter((c) => (c.opts?.label ?? '').startsWith('regress:fix:'));
+    assert.deepEqual(regs.map((c) => c.opts.label).sort(), ['regress:fix:f1', 'regress:fix:f2']);
+    for (const c of regs) {
+      assert.ok(c.prompt.includes(`git rev-parse ${a.branch}`), c.prompt);
+      assert.ok(c.prompt.includes(`the current tip of \`${a.branch}\` as well; give both reproductions`), c.prompt);
+      assert.ok(c.prompt.endsWith(`Run attempt ${attempt ?? 0}.`), c.prompt);
+    }
+  }
+});

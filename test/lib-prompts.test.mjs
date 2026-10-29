@@ -562,3 +562,12 @@ test('no prompt tells an agent to remove a worktree', () => {
     }
   }
 });
+
+test('the regression prompt counts only what reproduces on the branch tip', () => {
+  const s = stabiliseArgs({ kind: 'local' });
+  const p = lib.regressPrompt('f1', s);
+  assert.ok(p.includes(`The current tip of \`${s.branch}\` is what \`git rev-parse ${s.branch}\` prints when you start.`), p);
+  assert.ok(p.includes(`A regression counts only when it reproduces on the current tip of \`${s.branch}\` as well; give both reproductions.`), p);
+  assert.ok(p.includes(lib.throwawayText(s, 'regress:fix:f1')), p);
+  assert.match(p, /\n\nRun attempt 0\.$/);
+});
