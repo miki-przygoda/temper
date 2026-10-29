@@ -426,3 +426,32 @@ test('PUBLISH-11 the gate runs in a throwaway worktree under tmp/', async () => 
   assert.ok(text.includes('/r/.temper/worktrees/e/tmp/gate-1660eb12'), text);
   assert.ok(gate.prompt.includes(text), gate.prompt);
 });
+
+test('PUBLISH-12 a resume with attempt bumped gives docs, evidence and gate prompts that differ, each ending with the attempt line', async () => {
+  const respond = ({ label }) => {
+    if (label === 'docs') return { status: 'done', commit: 'd0c5d0c5', files: ['README.md'], summary: 'docs' };
+    if (label === 'evidence') return { status: 'done', script: 's.sh', checklist: 'c.md', commit: 'e7e7e7e7' };
+    if (label === 'gate') return { passed: true, exit_status: 0, log_path: 'full.log' };
+    throw new Error(`unexpected label ${label}`);
+  };
+  const promptOf = (calls, label) => {
+    const c = calls.find((x) => x.opts.label === label);
+    assert.ok(c, `no ${label} call`);
+    return c.prompt;
+  };
+  const missing = await runWorkflow(WF, { args: args('/r'), respond });
+  const first = await runWorkflow(WF, { args: args('/r', { attempt: 0 }), respond });
+  const second = await runWorkflow(WF, { args: args('/r', { attempt: 1 }), respond });
+  for (const label of ['docs', 'evidence', 'gate']) {
+    assert.equal(promptOf(missing.calls, label), promptOf(first.calls, label), `${label}: missing attempt means 0`);
+    assert.ok(promptOf(first.calls, label).endsWith('\n\nRun attempt 0.'), promptOf(first.calls, label));
+    assert.ok(promptOf(second.calls, label).endsWith('\n\nRun attempt 1.'), promptOf(second.calls, label));
+    assert.notEqual(promptOf(first.calls, label), promptOf(second.calls, label), label);
+  }
+});
+
+test('PUBLISH-12 the run skill bumps attempt on every publish resume and saves it', () => {
+  const s5 = STAGE5.replace(/\s+/g, ' ');
+  assert.match(s5, /`attempt`: `0` on the first launch of publish, and one more than the last launch's on every resume of it/);
+  assert.match(s5, /Save `attempt` in `args\.json`/);
+});

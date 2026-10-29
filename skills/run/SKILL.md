@@ -134,10 +134,10 @@ The `fix` return value:
 
 ## Stage 5, `temper:publish`
 
-Args: `epic`, `repo`, `branch`, `base`, `default_branch` (when `args.json` has it), `log`, `spec`, `host`, `gates`, `build_rule`, `flaky` (both as in stage 4) and `done`. When the result has `commits`, check them as in stage 3.
+Args: `epic`, `repo`, `branch`, `base`, `default_branch` (when `args.json` has it), `log`, `spec`, `host`, `gates`, `build_rule`, `flaky` (both as in stage 4), `done` and `attempt`: `0` on the first launch of publish, and one more than the last launch's on every resume of it, so the docs, evidence and gate agents run live instead of being replayed from the resume cache. Save `attempt` in `args.json` at each launch, so the next resume knows the last value. When the result has `commits`, check them as in stage 3.
 
 - `gate_failed`: don't push. Record the gate's exit status and log path in `log.md` and tell the user. Once the cause is fixed and committed on the epic branch, refresh `args.done` and launch publish again. `done_tasks.py` counts `docs` and `evidence` only while no other commit comes after theirs, so a relaunch after a gate fix writes the docs, the PR body and the evidence again, against the code that passes (SECOND-CONTROL-FLOW-9). Never add their trailers by hand.
-- `blocked`: resume once, as above.
+- `blocked`: resume once, as above, with `attempt` bumped.
 - `ready`: it carries `pr.title` and `pr.body_file`. Push and open the PR (amendment A5) only when all of these hold:
   - `status` is `ready` and `gate.passed` is true;
   - `may_push` is `yes` in `preferences.md`, or it is `ask` and the user says yes now. With `may_push: no`, or a value that is missing or not recognised, ask the user too (spec 8: otherwise it asks), and push only on a yes; without a yes, tell the user the branch is ready.

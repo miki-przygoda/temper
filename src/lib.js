@@ -195,14 +195,15 @@ function checkTask(t, i, errors) {
   return ok;
 }
 
-// The build's and stabilise's optional attempt counter: missing means 0.
+// The build's, stabilise's and publish's optional attempt counter: missing means 0.
 function checkAttempt(args, errors) {
   if (args.attempt !== undefined && !(Number.isInteger(args.attempt) && args.attempt >= 0)) {
     errors.push('attempt must be an integer >= 0');
   }
 }
 
-// The attempt line that ends the checkpoint and later phase prompts (and the regression prompt):
+// The attempt line that ends the checkpoint and later phase prompts, the publish prompts (and the
+// regression prompt):
 // bumping it on a resume changes those prompts, so the resume cache never replays an old result.
 function attemptText(args) {
   return `Run attempt ${args.attempt ?? 0}.`;
@@ -358,6 +359,7 @@ function validatePublishArgs(args) {
   if (!isObject(args)) return ['args must be an object'];
   checkCommon(args, errors);
   checkStrings(args, ['spec'], errors);
+  checkAttempt(args, errors);
   return errors;
 }
 
@@ -976,34 +978,34 @@ function regressPrompt(fixId, args) {
 }
 
 function docsPrompt(args) {
-  return withRules(args, [
+  return `${withRules(args, [
     `You write the docs for epic ${args.epic} on \`${args.branch}\`, against the final code (read the code; the spec ${args.spec} is background).`,
     `Update the docs the change touches, and write the PR body at \`${epicDir(args)}/pr-body.md\`: what changed, why, how it was tested, and the open items from ${args.log}.`,
     commitText(args.epic, 'docs'),
     epicCommitText(args),
     PHASE_BLOCKED,
     'Return the commit sha, the files you changed, and a one-line summary (it becomes the PR title).',
-  ]);
+  ])}\n\n${attemptText(args)}`;
 }
 
 function evidencePrompt(args) {
-  return withRules(args, [
+  return `${withRules(args, [
     `You collect the owner's evidence steps for epic ${args.epic} on \`${args.branch}\`.`,
     `Steps that need root, real accounts or real infrastructure go into \`${epicDir(args)}/owner-steps.sh\` and \`${epicDir(args)}/owner-checklist.md\`. Agents never run them: write them for the owner, and run none of them.`,
     commitText(args.epic, 'evidence'),
     epicCommitText(args),
     PHASE_BLOCKED,
     'Return the script path, the checklist path and the commit sha.',
-  ]);
+  ])}\n\n${attemptText(args)}`;
 }
 
 function gatePrompt(args) {
-  return withRules(args, [
+  return `${withRules(args, [
     `You run the full gate for epic ${args.epic} on \`${args.branch}\`: \`${args.gates.full}\`.`,
     `Run it in your throwaway worktree, detached at \`${args.branch}\`'s tip.`,
     throwawayText(args, 'gate'),
     'Change nothing and commit nothing. Save its whole output to a log file.',
     NO_RERUN,
     'Return its real exit status (passed is true only for exit status 0) and the log path.',
-  ]);
+  ])}\n\n${attemptText(args)}`;
 }

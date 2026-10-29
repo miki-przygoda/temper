@@ -98,7 +98,7 @@ test('HEAD-05 plan sizes waves to gate_slots', () => {
 test('HEAD-06 run passes build_rule and flaky to stabilise and publish, and sweeps to stabilise', () => {
   assert.match(STAGE4, /`sweeps` \(the `sweeps:` line of `project\.md`, `1` or `2`/);
   assert.match(STAGE4, /`build_rule` and `flaky` \(from `args\.json`/);
-  assert.match(STAGE5, /^## Stage 5, `temper:publish` Args: .*?`gates`, `build_rule`, `flaky` \(both as in stage 4\) and `done`/);
+  assert.match(STAGE5, /^## Stage 5, `temper:publish` Args: .*?`gates`, `build_rule`, `flaky` \(both as in stage 4\), `done` and `attempt`/);
 });
 
 test('HEAD-07 run uses gate_slots as the upper bound in the A13 step', () => {

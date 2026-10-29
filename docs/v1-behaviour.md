@@ -107,6 +107,7 @@ Stage 5, `/temper:publish` (`workflows/publish.js`), on the epic branch.
 - **PUBLISH-09** Given the docs and evidence agents report commit shas, when publish returns, then its result's `commits` holds `docs` and `evidence` with those shas, leaving out empty ones. (A14, v0.2 spec §3.1)
 - **PUBLISH-10** Given the docs or evidence agent returns `status: "blocked"` with a reason, when publish reads it, then publish returns `blocked` with that phase's id and reason, never `ready`, runs nothing after it, and still returns the commits reported before it. (A22, v0.3 spec, phase results)
 - **PUBLISH-11** Given publish runs its full gate, when the gate prompt is read, then it names a throwaway worktree under `<repo>/.temper/worktrees/<epic>/tmp/`, from the label `gate`. (A24, v0.3 spec, throwaway worktrees)
+- **PUBLISH-12** Given publish is resumed with `attempt` bumped, when its prompts are read, then the docs, evidence and gate prompts each end with `Run attempt <n>.` and differ from the first run's, so a phase that returned blocked runs live again instead of being replayed from the resume cache. (A23, v0.3 spec, the build's `attempt`)
 
 ## state
 

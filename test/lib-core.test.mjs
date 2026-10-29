@@ -500,9 +500,18 @@ test('attempt must be an integer >= 0', () => {
     assert.ok(matches(errors, /attempt must be an integer >= 0/), `${JSON.stringify(bad)}: ${errors.join('\n')}`);
   }
   for (const ok of [0, 4]) assert.deepEqual(lib.validateStabiliseArgs({ ...stabiliseArgs(), attempt: ok }), []);
-  // Build refuses it too; publish ignores it.
+  // Build and publish refuse it too.
   assert.ok(matches(lib.validateBuildArgs({ ...goodArgs(), attempt: -1 }), /attempt must be an integer >= 0/));
-  assert.ok(!matches(lib.validatePublishArgs({ ...publishArgs(), attempt: -1 }), /attempt/));
+  assert.ok(matches(lib.validatePublishArgs({ ...publishArgs(), attempt: -1 }), /attempt must be an integer >= 0/));
+});
+
+test('validatePublishArgs accepts an optional attempt', () => {
+  for (const bad of [-1, 1.5, '0']) {
+    const errors = lib.validatePublishArgs({ ...publishArgs(), attempt: bad });
+    assert.ok(matches(errors, /attempt must be an integer >= 0/), `${JSON.stringify(bad)}: ${errors.join('\n')}`);
+  }
+  for (const ok of [0, 4]) assert.deepEqual(lib.validatePublishArgs({ ...publishArgs(), attempt: ok }), []);
+  assert.deepEqual(lib.validatePublishArgs(publishArgs()), []);
 });
 
 test('validateBuildArgs accepts an optional attempt', () => {
