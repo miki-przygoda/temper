@@ -126,3 +126,18 @@
   - Every fix commit is on the branch.
   - The diff has no attribution lines or private names.
 - **Stage 4 is stable.** It ran one sweep, as `sweeps: 1` asks, so no second sweep is expected (`second_sweep: null`).
+
+## 29 Oct 2026: run skill check after the fix wave (head)
+
+- **Why.** The fix wave edited `skills/run/SKILL.md` (a07cc55, ef33554). Fix agents can't start subagents, so the head ran the scenario check afterwards (run wf_5cfd3562-a8f): one run on the skill before the fix wave (7b7dd24) and two on the new one, for each of three scenarios.
+- **P1: publish blocked at `docs`.**
+  - RED: the run resumed with `attempt: 1`, but only by inference. It flagged that stage 5's args don't list `attempt`.
+  - GREEN 2/2: it cited the stage 5 line and bumped `attempt`.
+- **R1: `regress:fix:<id>` blocked because the throwaway path isn't its own worktree.**
+  - RED: no rule covers it, so the run asks the user.
+  - GREEN 2/2: no answer, the path is left alone, and it resumes once with `attempt` bumped.
+- **C1: `check:<task>` blocked on a dirty throwaway.**
+  - RED: the id is unclassified, so the run asks the user.
+  - GREEN 2/2: the directory is never cleaned or removed, the answer is keyed by the task (`args.answers["auth"]`), and it resumes after the cause is gone.
+- **Observation, not a gap.** A resume of R1 while the path is still bad blocks again, and then the skill's "if the same id blocks again, stop and tell the user" applies.
+- **Open item.** `args.json` has one `attempt` field, but stages 3, 4b and 5 each say to save their own counter there. The counters only need to change between a stage's own launches, so sharing the field is harmless, but the skill doesn't say so. The head kept the stage 4 and 5 counters in its launch args.
