@@ -9,7 +9,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runWorkflow } from '../harness.mjs';
+import { loadLib, runWorkflow } from '../harness.mjs';
 import { ARGS_SCHEMA, namesField, schemaCases } from '../schema-cases.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -979,4 +979,18 @@ test('BUILD-42 a red checkpoint is told to commit nothing and return blocked', a
   const p = promptOf(calls, 'checkpoint');
   assert.ok(p.includes('4. Only when the full gate passed: append a checkpoint section to docs/temper/e/log.md with the gate result, the flows and the gaps, and commit it.'), p);
   assert.ok(p.includes('When the full gate failed: commit nothing, and return status "blocked" with the gate log in reason.'), p);
+});
+
+test("BUILD-43 the checker's prompt names its throwaway worktree under tmp/", async () => {
+  const lib = loadLib();
+  const a = buildArgs();
+  const { calls } = await run(a, { 'check:a': { pass: false, problems: ['first'] } });
+  const check = promptOf(calls, 'check:a');
+  const recheck = promptOf(calls, 'recheck:a');
+  const checkText = lib.throwawayText(a, 'check:a');
+  const recheckText = lib.throwawayText(a, 'recheck:a');
+  assert.ok(check.includes(checkText), check);
+  assert.ok(recheck.includes(recheckText), recheck);
+  assert.ok(checkText.includes('/r/.temper/worktrees/e/tmp/'), checkText);
+  assert.notEqual(checkText, recheckText);
 });

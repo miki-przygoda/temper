@@ -249,7 +249,9 @@ test('a finding id reaches the verify and fix prompts only inside the data block
   const block = lib.findingText(finding);
   for (const [name, p] of [['verify', local.verify], ['fix', local.fix]]) {
     assert.ok(p.includes(block), `${name}: the finding block`);
-    const outside = p.replace(block, '').replace('`Temper-Task: e/fix:security-01`', '');
+    // The verifier's throwaway path carries the id only sanitised to [a-z0-9-] (spec 8).
+    const outside = p.replace(block, '').replace('`Temper-Task: e/fix:security-01`', '')
+      .replace(lib.throwawayText(stabiliseArgs({ kind: 'local' }), 'verify:security-01'), '');
     assert.ok(!outside.includes('security-01'), `${name}: the id appears outside the data block`);
   }
   assert.ok(local.regress.includes('data'), 'the regress prompt marks its ids as data');
@@ -521,4 +523,42 @@ test('the checkpoint commits its log section only on a green gate', () => {
   assert.ok(p.includes('4. Only when the full gate passed:'), p);
   assert.ok(p.includes('When the full gate failed: commit nothing, and return status "blocked" with the gate log in reason.'), p);
   assert.ok(!p.includes('4. Append a checkpoint section'), p);
+});
+
+test('tmpLabel sanitises the label and appends its FNV-1a hash', () => {
+  assert.equal(lib.tmpLabel('a:b'), 'a-b-08bd8540');
+  assert.equal(lib.tmpLabel('a-b'), 'a-b-2a89df63');
+  assert.equal(lib.tmpLabel('check:t1'), 'check-t1-be2b7968');
+  assert.equal(lib.tmpLabel('gate'), 'gate-1660eb12');
+  assert.equal(lib.tmpLabel('review:failure paths and lifecycle'), 'review-failure-paths-and-lifecycle-20db6b18');
+  assert.equal(lib.tmpLabel('regress:fix:f1'), 'regress-fix-f1-57318b86');
+});
+
+test('tmpLabel never leaves tmp/', () => {
+  for (const label of ['../x', 'a/b', 'A B', 'é']) {
+    assert.match(lib.tmpLabel(label), /^[a-z0-9-]+-[0-9a-f]{8}$/, label);
+  }
+});
+
+test('throwawayText names the path, creates it detached or reuses it, and never removes it', () => {
+  const cases = [
+    [buildArgs(), '/r/.temper/worktrees/e/tmp/check-t1-be2b7968'],
+    [buildArgs({ kind: 'ssh', name: 'buildhost', root: '~/o', clone: '~/repo' }), '~/o/e/tmp/check-t1-be2b7968'],
+  ];
+  for (const [a, path] of cases) {
+    const t = lib.throwawayText(a, 'check:t1');
+    assert.ok(t.includes(`Your throwaway worktree is \`${path}\`.`), t);
+    assert.ok(t.includes(`\`git worktree add --detach ${path} `), t);
+    assert.ok(t.includes(`\`git -C ${path} checkout --detach `), t);
+    assert.ok(!t.includes('git worktree remove'), t);
+  }
+});
+
+test('no prompt tells an agent to remove a worktree', () => {
+  for (const prompts of [local, ssh]) {
+    for (const [name, text] of Object.entries(prompts)) {
+      assert.doesNotMatch(text, /git worktree remove/, name);
+      assert.ok(text.includes('never push, merge, or delete branches or worktrees'), name);
+    }
+  }
 });

@@ -10,7 +10,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runWorkflow } from '../harness.mjs';
+import { loadLib, runWorkflow } from '../harness.mjs';
 import { namesField, schemaCases } from '../schema-cases.mjs';
 
 // A hex sha for a fix id, as a fix agent reports one (spec 8: only hex shas reach commits).
@@ -950,4 +950,32 @@ test('STABILISE-30 second-sweep ids are put into the second: namespace by the sc
   assert.ok(ls.includes('fix:second:security-07'), ls.join(', '));
   assert.ok(!ls.includes('fix:security-07'), ls.join(', '));
   assert.deepEqual(result.second_sweep_findings.map((f) => f.id), ['second:security-07']);
+});
+
+test('STABILISE-32 reviewer, verifier and regression prompts name their throwaway worktree under tmp/', async () => {
+  const lib = loadLib();
+  const sweepArgs = args();
+  const sweep = await runWorkflow(WF, {
+    args: sweepArgs,
+    respond: responder({ reviews: { security: [finding('security-01', 'critical')] } }),
+  });
+  const fArgs = fixArgs({ selected: [finding('security-01', 'critical')] });
+  const fix = await runWorkflow(WF, {
+    args: fArgs,
+    respond: responder({ second: { security: [finding('second:security-02', 'critical')] } }),
+  });
+  const seen = new Set();
+  for (const [a, calls] of [[sweepArgs, sweep.calls], [fArgs, fix.calls]]) {
+    for (const c of calls) {
+      const label = c.opts.label;
+      const kind = label.match(/^(review|verify|second:review|second:verify|regress):/);
+      if (!kind) continue;
+      seen.add(kind[1]);
+      const text = lib.throwawayText(a, label);
+      assert.ok(text.includes(`/r/.temper/worktrees/e/tmp/${lib.tmpLabel(label)}`), text);
+      assert.ok(c.prompt.includes(text), `${label}: ${c.prompt}`);
+      assert.match(c.prompt, /throwaway worktree/i, label);
+    }
+  }
+  assert.deepEqual([...seen].sort(), ['regress', 'review', 'second:review', 'second:verify', 'verify']);
 });
