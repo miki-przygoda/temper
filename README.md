@@ -1,10 +1,27 @@
-<p align="center"><img src=".claude-plugin/icon.png" alt="temper" width="96"></p>
+<div align="center">
+
+<img src=".claude-plugin/icon.png" alt="temper logo" width="128" height="128">
 
 # temper
 
-**A Claude Code plugin that takes a piece of work from idea, to spec, to plan, to MVP, to stable, to PR, in one fixed order.**
+**From idea to a pull request you can trust, in one fixed order.**
 
-You do the thinking: what to build and why. temper turns that into a spec and a plan, then runs the build with agents, checks the result against tests written from the spec rather than from the code, fixes it to green, reviews it once, and opens the PR. It never merges, never deletes work that isn't on the remote, and never runs privileged commands.
+A Claude Code plugin that takes a piece of work from idea, to spec, to plan, to MVP, to stable, to PR.
+
+[![CI](https://github.com/miki-przygoda/temper/actions/workflows/ci.yml/badge.svg)](https://github.com/miki-przygoda/temper/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmiki-przygoda%2Ftemper%2Fmain%2F.claude-plugin%2Fplugin.json&query=%24.version&label=version&color=B0602A)](CHANGELOG.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-2F5DA8.svg)](LICENSE)
+[![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-D9A441.svg)](https://code.claude.com/docs/en/plugins)
+
+[Install](#install) · [Quick start](#quick-start) · [How it works](#how-it-works) · [Is it for you?](#is-it-for-you) · [Changelog](CHANGELOG.md)
+
+</div>
+
+---
+
+You do the thinking: what to build and why. temper turns that into a spec and a plan, then runs the build with agents. It checks the result against tests written from the spec rather than from the code, fixes it to green, reviews it once, and opens the PR.
+
+It never merges, never deletes work that isn't on the remote, and never runs privileged commands.
 
 ## Why
 
@@ -19,10 +36,20 @@ Asking agents to review and fix code over and over doesn't converge: each round 
 
 ```mermaid
 flowchart LR
-  G["1 ground<br/>idea to spec"] --> P["2 plan<br/>spec to tasks"]
-  P --> B["3 build<br/>MVP, behaviour spec,<br/>acceptance tests"]
-  B --> S["4 stabilise<br/>sweep, fixes,<br/>regression check"]
-  S --> U["5 publish<br/>docs, evidence,<br/>full gate, PR"]
+  G["<b>1 · ground</b><br/>idea → spec"] --> P["<b>2 · plan</b><br/>spec → tasks"]
+  P --> B["<b>3 · build</b><br/>MVP, behaviour spec,<br/>acceptance tests"]
+  B --> S["<b>4 · stabilise</b><br/>sweep, fixes,<br/>regression check"]
+  S --> U["<b>5 · publish</b><br/>docs, evidence,<br/>full gate, PR"]
+  classDef s1 fill:#EAD9A2,stroke:#1C1B1F,color:#1C1B1F
+  classDef s2 fill:#D9A441,stroke:#1C1B1F,color:#1C1B1F
+  classDef s3 fill:#B0602A,stroke:#1C1B1F,color:#FFFFFF
+  classDef s4 fill:#6E3F8F,stroke:#1C1B1F,color:#FFFFFF
+  classDef s5 fill:#2F5DA8,stroke:#1C1B1F,color:#FFFFFF
+  class G s1
+  class P s2
+  class B s3
+  class S s4
+  class U s5
 ```
 
 - **Every hand-off is a file** (`spec.md`, `plan.md`, `args.json`, `log.md`), so you can start at any stage with a file you wrote yourself.
@@ -163,6 +190,10 @@ Still open after v0.3 (`docs/v1-log.md` has the detail and the redo notes):
 - `args.json` has one `attempt` field, and stages 3, 4b and 5 each save their own counter there. Each counter only has to change between launches of its own stage, so the sharing is harmless, but the run skill doesn't say so.
 
 To change an answer or the done list, launch the same workflow with updated `args` and `resumeFromRunId`, never by editing a generated script.
+
+## Contributing
+
+Issues and pull requests are welcome. Before a PR, run `npm test`, `node scripts/bundle.mjs --check` and `claude plugin validate . --strict` (see [Development](#development)). temper is built with temper, so larger changes start as a spec under `docs/temper/`. To report a security problem, see [SECURITY.md](SECURITY.md).
 
 ## Licence
 
