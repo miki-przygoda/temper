@@ -500,9 +500,20 @@ test('attempt must be an integer >= 0', () => {
     assert.ok(matches(errors, /attempt must be an integer >= 0/), `${JSON.stringify(bad)}: ${errors.join('\n')}`);
   }
   for (const ok of [0, 4]) assert.deepEqual(lib.validateStabiliseArgs({ ...stabiliseArgs(), attempt: ok }), []);
-  // Only stabilise checks it.
-  assert.ok(!matches(lib.validateBuildArgs({ ...goodArgs(), attempt: -1 }), /attempt/));
+  // Build refuses it too; publish ignores it.
+  assert.ok(matches(lib.validateBuildArgs({ ...goodArgs(), attempt: -1 }), /attempt must be an integer >= 0/));
   assert.ok(!matches(lib.validatePublishArgs({ ...publishArgs(), attempt: -1 }), /attempt/));
+});
+
+test('validateBuildArgs accepts an optional attempt', () => {
+  for (const bad of [-1, 1.5, '0']) {
+    const errors = lib.validateBuildArgs({ ...goodArgs(), attempt: bad });
+    assert.ok(matches(errors, /attempt must be an integer >= 0/), `${JSON.stringify(bad)}: ${errors.join('\n')}`);
+  }
+  for (const ok of [0, 4]) assert.deepEqual(lib.validateBuildArgs({ ...goodArgs(), attempt: ok }), []);
+  const missing = goodArgs();
+  delete missing.attempt;
+  assert.deepEqual(lib.validateBuildArgs(missing), []);
 });
 
 test('gate_slots must be an integer >= 1 when given', () => {

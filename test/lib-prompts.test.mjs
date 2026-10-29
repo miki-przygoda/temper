@@ -489,3 +489,36 @@ test('every phase prompt says how to return blocked', () => {
     assert.ok(prompt.includes(lib.PHASE_BLOCKED), `${name} prompt lacks PHASE_BLOCKED`);
   }
 });
+
+test('the checkpoint and later phase prompts end with the attempt', () => {
+  const phases = (b) => ({
+    checkpoint: lib.checkpointPrompt(b),
+    behaviourSpec: lib.behaviourSpecPrompt(b),
+    acceptance: lib.acceptancePrompt(group, behaviours, b),
+    green: lib.greenPrompt(failing, 1, b),
+  });
+  for (const [name, prompt] of Object.entries(phases(buildArgs()))) {
+    assert.ok(prompt.endsWith('\n\nRun attempt 0.'), `${name}: ${JSON.stringify(prompt.slice(-40))}`);
+  }
+  for (const [name, prompt] of Object.entries(phases({ ...buildArgs(), attempt: 3 }))) {
+    assert.ok(prompt.endsWith('\n\nRun attempt 3.'), `${name}: ${JSON.stringify(prompt.slice(-40))}`);
+  }
+});
+
+test('task, checker and merge prompts carry no attempt', () => {
+  const b = { ...buildArgs(), attempt: 3 };
+  const prompts = {
+    implementer: lib.implementerPrompt(taskA, b),
+    implementerRetry: lib.implementerPrompt(taskA, b, 'missing test x'),
+    checker: lib.checkerPrompt(taskA, implResult, b),
+    merge: lib.mergePrompt([taskA, taskC], b),
+  };
+  for (const [name, prompt] of Object.entries(prompts)) assert.ok(!prompt.includes('Run attempt'), name);
+});
+
+test('the checkpoint commits its log section only on a green gate', () => {
+  const p = lib.checkpointPrompt(buildArgs());
+  assert.ok(p.includes('4. Only when the full gate passed:'), p);
+  assert.ok(p.includes('When the full gate failed: commit nothing, and return status "blocked" with the gate log in reason.'), p);
+  assert.ok(!p.includes('4. Append a checkpoint section'), p);
+});

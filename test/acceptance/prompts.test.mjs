@@ -270,9 +270,10 @@ test('PROMPTS-02 the order is parts, host text, build rule, gate wait, fixed rul
       assert.ok(iHost < iRule && iRule < iWait && iWait < iCommon, `${what}: order host ${iHost}, rule ${iRule}, wait ${iWait}, common ${iCommon}`);
       // The parts come first: the prompt opens with the agent's own text, not the shared tail.
       assert.ok(!prompt.startsWith(hostStart), `${what}: opens with the host text`);
-      // The fixed rules come last (a regression prompt adds only its attempt line after them).
+      // The fixed rules come last (a regression prompt and the checkpoint and later phase prompts
+      // add only their attempt line after them).
       const tail = prompt.slice(prompt.indexOf(RULES_COMMON_TAIL) + RULES_COMMON_TAIL.length);
-      if (label.startsWith('regress:')) assert.match(tail, /^\n\nRun attempt \d+\.$/, `${what}: tail ${JSON.stringify(tail)}`);
+      if (/^(regress:|checkpoint$|behaviour-spec$|acceptance:|green:)/.test(label)) assert.match(tail, /^\n\nRun attempt \d+\.$/, `${what}: tail ${JSON.stringify(tail)}`);
       else assert.equal(tail, '', `${what}: text after the fixed rules: ${JSON.stringify(tail)}`);
       // Each piece is its own paragraph.
       assert.ok(prompt.includes(`\n\n${RULE_FRAME}`), `${what}: rule not its own paragraph`);

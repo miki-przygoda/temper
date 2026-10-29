@@ -119,6 +119,7 @@ test('BUILD-01 invalid args.json is refused naming the problem, before any agent
   // once with an ssh host.
   const full = buildArgs({
     default_branch: 'main',
+    attempt: 0,
     done: ['x1'],
     answers: { a: 'an answer' },
     behaviour: [{ key: 'g1', behaviours: [{ id: 'G1-01', text: 'given x then y' }] }],
@@ -957,4 +958,25 @@ test('BUILD-40 a blocked phase without a reason is blocked with its status', asy
   const { result } = await run(buildArgs(), { 'behaviour-spec': { status: 'blocked' } });
   assert.equal(result.status, 'blocked');
   assert.deepEqual(result.blocked, [{ id: 'behaviour-spec', reason: 'phase returned status blocked' }]);
+});
+
+test('BUILD-41 a resume with attempt bumped gives a checkpoint prompt that differs, and identical task prompts', async () => {
+  const first = await run(buildArgs({ attempt: 0 }));
+  const second = await run(buildArgs({ attempt: 1 }));
+  const taskCalls = (calls) => calls.filter((c) => /^(impl|check|merge):/.test(c.opts.label));
+  const a = taskCalls(first.calls);
+  const b = taskCalls(second.calls);
+  assert.ok(a.length > 0, 'no task calls');
+  assert.deepEqual(labels(a), labels(b));
+  for (let i = 0; i < a.length; i++) assert.equal(a[i].prompt, b[i].prompt, a[i].opts.label);
+  assert.notEqual(promptOf(first.calls, 'checkpoint'), promptOf(second.calls, 'checkpoint'));
+});
+
+test('BUILD-42 a red checkpoint is told to commit nothing and return blocked', async () => {
+  const { calls } = await run(buildArgs(), {
+    checkpoint: { status: 'done', gate_passed: false, gate_log: 'g.log', flows: [], gaps: [] },
+  });
+  const p = promptOf(calls, 'checkpoint');
+  assert.ok(p.includes('4. Only when the full gate passed: append a checkpoint section to docs/temper/e/log.md with the gate result, the flows and the gaps, and commit it.'), p);
+  assert.ok(p.includes('When the full gate failed: commit nothing, and return status "blocked" with the gate log in reason.'), p);
 });
