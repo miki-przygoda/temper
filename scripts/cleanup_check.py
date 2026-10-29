@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
-"""Is a branch (and its worktree) safe to delete? (spec 8)
+"""Is a branch (and its worktree), or a detached worktree, safe to delete? (spec 8)
 
-Safe means the work is on the remote: the branch tip is reachable from the
-remote's default branch, or equals `<remote>/<branch>`; and the worktree, when
-given, is a worktree of the repo whose HEAD is on the remote too and has nothing
-uncommitted or untracked, and no ignored file except those matching a disposable pattern
-(amendment A10: `git worktree remove` deletes ignored files without asking).
+Branch mode: safe means the work is on the remote: the branch tip is reachable from the
+remote's default branch, or equals `<remote>/<branch>`; and the worktree, when given, is a
+worktree of the repo whose HEAD is on the remote too and has nothing uncommitted or untracked,
+and no ignored file except those matching a disposable pattern (amendment A10: `git worktree
+remove` deletes ignored files without asking).
 
-CLI: python3 scripts/cleanup_check.py <repo> <branch> [--worktree P] [--remote R] [--no-fetch]
-                                      [--disposable PATTERN]...
+Detached mode (`--detached --worktree P`, for the throwaway worktrees under
+`.temper/worktrees/<epic>/tmp/`): the worktree is a worktree of the repo, its HEAD is detached
+and reachable from the remote's default branch or any other `<remote>/*` branch, and its status
+is clean as above.
+
+The check deletes nothing. A usage error is exit 1 with a reason, never argparse's exit 2.
+
+CLI: python3 scripts/cleanup_check.py <repo> [<branch>] [--detached] [--worktree P]
+                                      [--remote R] [--no-fetch] [--disposable PATTERN]...
 Prints {"ok": bool, "reasons": [...]} and exits 0 when ok, 1 when not.
 """
 import argparse
@@ -87,16 +94,67 @@ def _disposable(path, patterns):
     return False
 
 
-def check(repo: str, branch: str, worktree=None, remote: str = 'origin', fetch: bool = True,
-          disposable=()):
-    """Return (ok, reasons). Every failed condition adds one reason."""
-    if fetch:
-        # --prune: a remote branch deleted unmerged must not leave a stale tracking ref
-        # that still equals the local tip (spec 8: never delete work not on the remote).
-        proc = _git(repo, 'fetch', '--quiet', '--prune', '--end-of-options', remote)
-        if proc.returncode != 0:
-            return (False, [f'could not fetch {remote}; not deleting'])
+def _worktree_of(repo, worktree):
+    """Is the path a worktree of <repo> itself?
 
+    Inside a plain directory, git status reports the enclosing repo, and a worktree of another
+    repo says nothing about <repo>'s work.
+    """
+    top = _git(worktree, 'rev-parse', '--show-toplevel')
+    common = _git(worktree, 'rev-parse', '--git-common-dir')
+    repo_common = _git(repo, 'rev-parse', '--git-common-dir')
+    return not (any(p.returncode != 0 for p in (top, common, repo_common))
+                or os.path.realpath(top.stdout.strip()) != os.path.realpath(worktree)
+                or os.path.realpath(os.path.join(worktree, common.stdout.strip()))
+                != os.path.realpath(os.path.join(repo, repo_common.stdout.strip())))
+
+
+def _status_reasons(worktree, disposable):
+    """Reasons from the worktree's status: uncommitted, untracked or non-disposable ignored."""
+    proc = _git(worktree, 'status', '--porcelain', '-z', '--ignored', '--untracked-files=all')
+    if proc.returncode != 0:
+        return [f'could not read the status of worktree {worktree}']
+    reasons = []
+    changed = untracked = 0
+    ignored = []
+    entries = iter(proc.stdout.split('\0'))
+    for entry in entries:
+        if not entry.strip():
+            continue
+        code, path = entry[:2], entry[3:]
+        if code == '??':
+            untracked += 1
+        elif code == '!!':
+            if not _disposable(path, disposable):
+                ignored.append(path)
+        else:
+            changed += 1
+            if code[0] in 'RC':
+                next(entries, None)  # a rename's or copy's source path
+    if changed or untracked:
+        reasons.append(
+            f'worktree {worktree} has {changed} uncommitted and '
+            f'{untracked} untracked file(s)'
+        )
+    if ignored:
+        shown = ', '.join(ignored[:5]) + (', ...' if len(ignored) > 5 else '')
+        reasons.append(
+            f'worktree {worktree} has {len(ignored)} ignored file(s) that match no '
+            f'disposable pattern: {shown}'
+        )
+    return reasons
+
+
+def _remote_branches(repo, remote):
+    """Every `refs/remotes/<remote>/*` ref except `<remote>/HEAD`."""
+    proc = _git(repo, 'for-each-ref', '--format=%(refname)', f'refs/remotes/{remote}/')
+    if proc.returncode != 0:
+        return []
+    return [ref for ref in proc.stdout.splitlines()
+            if ref and ref != f'refs/remotes/{remote}/HEAD']
+
+
+def _check_branch(repo, branch, worktree, remote, disposable):
     reasons = []
 
     tip = _rev(repo, f'refs/heads/{branch}')
@@ -117,15 +175,7 @@ def check(repo: str, branch: str, worktree=None, remote: str = 'origin', fetch: 
             )
 
     if worktree is not None:
-        # The path must be a worktree of <repo> itself: inside a plain directory, git status
-        # reports the enclosing repo, and a worktree of another repo says nothing about <branch>.
-        top = _git(worktree, 'rev-parse', '--show-toplevel')
-        common = _git(worktree, 'rev-parse', '--git-common-dir')
-        repo_common = _git(repo, 'rev-parse', '--git-common-dir')
-        if (any(p.returncode != 0 for p in (top, common, repo_common))
-                or os.path.realpath(top.stdout.strip()) != os.path.realpath(worktree)
-                or os.path.realpath(os.path.join(worktree, common.stdout.strip()))
-                != os.path.realpath(os.path.join(repo, repo_common.stdout.strip()))):
+        if not _worktree_of(repo, worktree):
             reasons.append(f'{worktree} is not a worktree of {repo}; not deleting')
         else:
             # The worktree's HEAD must be on the remote too: a detached HEAD (a stopped rebase,
@@ -143,57 +193,97 @@ def check(repo: str, branch: str, worktree=None, remote: str = 'origin', fetch: 
                     f'worktree {worktree} HEAD {shown} is not on {remote}: it is not reachable '
                     f'from {default or "its default branch"} or {remote}/{branch}'
                 )
-            proc = _git(worktree, 'status', '--porcelain', '-z', '--ignored',
-                        '--untracked-files=all')
-            if proc.returncode != 0:
-                reasons.append(f'could not read the status of worktree {worktree}')
-            else:
-                changed = untracked = 0
-                ignored = []
-                entries = iter(proc.stdout.split('\0'))
-                for entry in entries:
-                    if not entry.strip():
-                        continue
-                    code, path = entry[:2], entry[3:]
-                    if code == '??':
-                        untracked += 1
-                    elif code == '!!':
-                        if not _disposable(path, disposable):
-                            ignored.append(path)
-                    else:
-                        changed += 1
-                        if code[0] in 'RC':
-                            next(entries, None)  # a rename's or copy's source path
-                if changed or untracked:
-                    reasons.append(
-                        f'worktree {worktree} has {changed} uncommitted and '
-                        f'{untracked} untracked file(s)'
-                    )
-                if ignored:
-                    shown = ', '.join(ignored[:5]) + (', ...' if len(ignored) > 5 else '')
-                    reasons.append(
-                        f'worktree {worktree} has {len(ignored)} ignored file(s) that match no '
-                        f'disposable pattern: {shown}'
-                    )
+            reasons += _status_reasons(worktree, disposable)
 
+    return reasons
+
+
+def _check_detached(repo, worktree, remote, disposable):
+    if not _worktree_of(repo, worktree):
+        return [f'{worktree} is not a worktree of {repo}; not deleting']
+    reasons = []
+    sym = _git(worktree, 'symbolic-ref', '-q', 'HEAD')
+    if sym.returncode == 0:
+        ref = sym.stdout.strip()
+        reasons.append(f'worktree {worktree} is not detached: it has {ref} checked out')
+    head = _rev(worktree, 'HEAD')
+    default = _default_branch(repo, remote)
+    refs = [f'refs/remotes/{default}'] if default is not None else []
+    refs += [ref for ref in _remote_branches(repo, remote) if ref not in refs]
+    if head is None or not any(
+            _git(repo, 'merge-base', '--is-ancestor', head, ref).returncode == 0
+            for ref in refs):
+        shown = head[:12] if head else '(none)'
+        reasons.append(
+            f'worktree {worktree} HEAD {shown} is not on {remote}: it is not reachable '
+            f'from any {remote} branch'
+        )
+    return reasons + _status_reasons(worktree, disposable)
+
+
+def _usage_error(branch, worktree, detached):
+    """The usage reason, or None when the arguments are a valid combination."""
+    if detached and branch is not None:
+        return 'give either a branch or --detached, not both'
+    if not detached and branch is None:
+        return 'give either a branch or --detached'
+    if detached and worktree is None:
+        return '--detached needs --worktree'
+    return None
+
+
+def check(repo: str, branch=None, worktree=None, remote: str = 'origin', fetch: bool = True,
+          disposable=(), detached: bool = False):
+    """Return (ok, reasons). Every failed condition adds one reason. Deletes nothing."""
+    usage = _usage_error(branch, worktree, detached)
+    if usage is not None:
+        return (False, [usage])
+
+    if fetch:
+        # --prune: a remote branch deleted unmerged must not leave a stale tracking ref
+        # that still equals the local tip (spec 8: never delete work not on the remote).
+        proc = _git(repo, 'fetch', '--quiet', '--prune', '--end-of-options', remote)
+        if proc.returncode != 0:
+            return (False, [f'could not fetch {remote}; not deleting'])
+
+    if detached:
+        reasons = _check_detached(repo, worktree, remote, disposable)
+    else:
+        reasons = _check_branch(repo, branch, worktree, remote, disposable)
     return (not reasons, reasons)
 
 
+class _UsageError(Exception):
+    pass
+
+
+class _Parser(argparse.ArgumentParser):
+    def error(self, message):
+        raise _UsageError(message)
+
+
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description='Is a branch and its worktree safe to delete?')
+    parser = _Parser(description='Is a branch and its worktree, or a detached worktree, '
+                                 'safe to delete?')
     parser.add_argument('repo')
-    parser.add_argument('branch')
+    parser.add_argument('branch', nargs='?', default=None)
+    parser.add_argument('--detached', action='store_true',
+                        help='check the detached worktree given by --worktree; no branch')
     parser.add_argument('--worktree', default=None)
     parser.add_argument('--remote', default='origin')
     parser.add_argument('--no-fetch', dest='fetch', action='store_false')
     parser.add_argument('--disposable', action='append', default=[], metavar='PATTERN',
                         help='an ignored-file pattern safe to delete with the worktree '
                              '(repeatable; from the disposable line of .temper/project.md)')
-    opts = parser.parse_args(argv)
+    try:
+        opts = parser.parse_args(argv)
+    except _UsageError as exc:
+        print(json.dumps({'ok': False, 'reasons': [f'usage: {exc}']}))
+        return 1
     try:
         ok, reasons = check(opts.repo, opts.branch, worktree=opts.worktree,
                             remote=opts.remote, fetch=opts.fetch,
-                            disposable=opts.disposable)
+                            disposable=opts.disposable, detached=opts.detached)
     except Exception as exc:  # any surprise means "not safe"
         ok, reasons = False, [f'cleanup check failed: {exc}; not deleting']
     print(json.dumps({'ok': ok, 'reasons': reasons}))
