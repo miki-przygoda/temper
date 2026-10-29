@@ -77,3 +77,16 @@
   - The `checkpoint` bullet in the run skill's "Ids that aren't tasks" describes only a failed full gate. A checkpoint blocked for another reason (such as `HEAD detached`) is covered only by the general rule about the agent's reason just above it.
   - `claude plugin validate --strict` warns `ICON_MISSING`. It doesn't fail the gate.
 - **The runner.** This checkpoint ran under v0.2.0's committed `build.js`, whose prompt commits on every run. The gate was green, so this commit agrees with v0.3's rule as well.
+
+## 29 Oct 2026: build report (head)
+
+- **Result.** Run wf_eccdc93e-654 (v0.2.0's `build.js`, a fresh launch with `attempt: 1`) returned `mvp`. All 11 tasks are merged. This launch merged waves 3–10: `phase-status`, `build-attempt`, `throwaway`, `regress-tip`, `cleanup-detached`, `host-prune`, `ci-py310` and `docs-v03`. No task blocked and no questions came back.
+- **Checkpoint.** The full gate passed, and all six user flows were ok with no gaps.
+- **Acceptance.** 45 passing, none failing, none untestable. No to-green rounds were needed.
+- **The head's check at 9085d06.**
+  - `npm test`: 519/519 Node and 129/129 Python.
+  - The bundle check exits 0, and `claude plugin validate --strict` passes. The `ICON_MISSING` warning doesn't fail it.
+  - Every task and phase trailer is in `done_tasks.py`'s output.
+  - The diff from `v0.3` has no attribution lines, home paths, host names or private project names. The one match was the rule against attribution lines itself.
+  - The version is 0.3.0.
+- **Stage 4's runner.** It is this branch's own v0.3 `stabilise.js` (a snapshot at 9085d06), with `sweeps: 1` and `gate_slots: 1`. That gives one sweep, the owner's selected fixes, then the per-fix regression check. Its throwaway worktrees go under `.temper/worktrees/v0-3/tmp/`, and cleanup removes them.
