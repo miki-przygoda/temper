@@ -1,6 +1,6 @@
 {
   "name": "temper",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Takes a piece of work from idea, to spec, to plan, to MVP, to stable, to PR, in one fixed order.",
   "author": {
     "name": "miki-przygoda"
