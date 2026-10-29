@@ -2,7 +2,7 @@
 
 Written from `docs/specs/2026-10-24-temper-design.md` (sections 1–12, including the A1–A6 amendments) and `notes/spikes.md` only, never from the code. The plan was used only for file, command and field names. This is the oracle the v1 code is checked against: each line is something a user or the head session relies on.
 
-Each behaviour is one line of the form **Given** a state, **when** something happens, **then** the expected result. Ids are `<GROUP>-NN`. Section references (§) are to the design spec; A1–A6 are its section 12 amendments; S1–S6 are the spikes. The v0.2 lines (BUILD-28 onwards, STABILISE-22 onwards, PUBLISH-09, STATE-22, SKILLS-PACKAGING-29 onwards, and the changed STABILISE-09) were added from `docs/temper/v0-2/spec.md` and cite it as "v0.2 spec §3.x". The v0.3 lines (BUILD-37 onwards, STABILISE-32 onwards, PUBLISH-10 onwards, GIT-SAFETY-15 onwards and SKILLS-PACKAGING-32 onwards) were added from `docs/temper/v0-3/spec.md` and cite it as "v0.3 spec, <contract>".
+Each behaviour is one line of the form **Given** a state, **when** something happens, **then** the expected result. Ids are `<GROUP>-NN`. Section references (§) are to the design spec; A1–A6 are its section 12 amendments; S1–S6 are the spikes. The v0.2 lines (BUILD-28 onwards, STABILISE-22 onwards, PUBLISH-09, STATE-22, SKILLS-PACKAGING-29 onwards, and the changed STABILISE-09) were added from `docs/temper/v0-2/spec.md` and cite it as "v0.2 spec §3.x". The v0.3 lines (BUILD-37 onwards, STABILISE-32 onwards, PUBLISH-10 onwards, GIT-SAFETY-15 onwards and SKILLS-PACKAGING-32 onwards) were added from `docs/temper/v0-3/spec.md` and cite it as "v0.3 spec, <contract>". Those from v0.3's stage 4 fix wave (BUILD-44 onwards, STABILISE-34 onwards, PUBLISH-13 and SKILLS-PACKAGING-36) cite the design spec amendment and the finding id instead.
 
 Terms: *the head* is the session the user talks to; *state dir* is `$CLAUDE_CONFIG_DIR/temper/` when `CLAUDE_CONFIG_DIR` is set, else `~/.claude/temper/` (A1); *trailer* is the commit trailer `Temper-Task: <epic>/<id>`.
 
@@ -53,6 +53,8 @@ Stage 3, `/temper:build` (`workflows/build.js`), fed with `args.json`.
 - **BUILD-41** Given a build is resumed with `attempt` bumped, when its prompts are read, then the checkpoint prompt differs from the first run's, so it runs live, and every task prompt is the same as before. (A23, v0.3 spec, the build's `attempt`)
 - **BUILD-42** Given the checkpoint runs, when its prompt is read, then it says to append and commit the checkpoint log section only when the full gate passed, and, when the gate failed, to commit nothing and return `status: "blocked"` with the gate log in `reason`. (A23, v0.3 spec, the checkpoint prompt)
 - **BUILD-43** Given a task is checked, and rechecked after a failed check, when the checker prompts are read, then each names its own throwaway worktree under `<repo>/.temper/worktrees/<epic>/tmp/`, from its label. (A24, v0.3 spec, throwaway worktrees)
+- **BUILD-44** Given `args.tasks` has a task with the id `tmp`, when the args are validated, then they are refused before any agent runs, because every throwaway worktree lives under `<worktrees dir>/tmp/`. (A33, v0.3 fix wave, security-01)
+- **BUILD-45** Given a task's checker or rechecker returns `status: "blocked"` with a reason (its throwaway worktree could not be reused, for one), when build reads it, then that task is blocked with the id `check:<task>` or `recheck:<task>` and the agent's reason, and is never merged as a passing check. (A32, v0.3 fix wave, test-strength-and-docs-01)
 
 ## stabilise
 
@@ -91,6 +93,8 @@ Stage 4, `/temper:stabilise` (`workflows/stabilise.js`), on the epic branch.
 - **STABILISE-31** Given `args.gate_slots` is n, when `part: "fix"` runs its regression check, then the `regress:fix:<id>` agents launch in chunks of at most n; a `gate_slots` that is not an integer of at least 1 is refused, and a missing one launches them together. (A13, A16, v0.2 spec §3.3)
 - **STABILISE-32** Given a sweep and a `part: "fix"` run, when the reviewer, verifier, second-sweep and regression prompts are read, then each names its own throwaway worktree under `<repo>/.temper/worktrees/<epic>/tmp/<sanitised label>`. (A24, v0.3 spec, throwaway worktrees)
 - **STABILISE-33** Given `part: "fix"` runs its regression check, when each `regress:fix:<id>` prompt is read, then it names the branch's current tip (`git rev-parse <branch>`), says a regression counts only when it reproduces on that tip as well, with both reproductions given, and still ends with `Run attempt <n>.` (A26, v0.3 spec, the regression prompt)
+- **STABILISE-34** Given a reviewer, verifier or `regress:fix:<id>` agent returns `status: "blocked"` with a reason, when stabilise reads it, then its id (`review:<lens>`, `verify:<id>` or `regress:fix:<id>`) is in `blocked` with the agent's reason: the lens counts as unreviewed, the finding stays unverified and is never counted as refuted, and the fix's regression check counts as never run. (A32, v0.3 fix wave, test-strength-and-docs-01)
+- **STABILISE-35** Given a throwaway path already exists, when a checker, reviewer, verifier, regression or gate prompt is read, then it tells the agent to reuse the path only when `git -C <path> rev-parse --show-toplevel` prints the same directory as `cd <path> && pwd -P` and `git -C <path> status --porcelain` prints nothing, and otherwise to return blocked, never deleting or cleaning the path. (A30, v0.3 fix wave, failure-paths-and-lifecycle-01)
 
 ## publish
 
@@ -108,6 +112,7 @@ Stage 5, `/temper:publish` (`workflows/publish.js`), on the epic branch.
 - **PUBLISH-10** Given the docs or evidence agent returns `status: "blocked"` with a reason, when publish reads it, then publish returns `blocked` with that phase's id and reason, never `ready`, runs nothing after it, and still returns the commits reported before it. (A22, v0.3 spec, phase results)
 - **PUBLISH-11** Given publish runs its full gate, when the gate prompt is read, then it names a throwaway worktree under `<repo>/.temper/worktrees/<epic>/tmp/`, from the label `gate`. (A24, v0.3 spec, throwaway worktrees)
 - **PUBLISH-12** Given publish is resumed with `attempt` bumped, when its prompts are read, then the docs, evidence and gate prompts each end with `Run attempt <n>.` and differ from the first run's, so a phase that returned blocked runs live again instead of being replayed from the resume cache. (A23, v0.3 spec, the build's `attempt`)
+- **PUBLISH-13** Given the gate agent returns `status: "blocked"` with a reason, when publish reads it, then publish returns `blocked` with the id `gate` and that reason, never `gate_failed` or `ready`. (A32, v0.3 fix wave, test-strength-and-docs-01)
 
 ## state
 
@@ -212,3 +217,4 @@ The plugin, its install, the skills and the head's run loop.
 - **SKILLS-PACKAGING-33** Given `/temper:cleanup` runs, when it reads `git worktree list --porcelain`, then it checks every detached worktree under `.temper/worktrees/<epic>/`, `tmp/` included, with `cleanup_check.py <repo> --detached --worktree <path>` and removes it only on exit 0. (A25, v0.3 spec, the cleanup skill)
 - **SKILLS-PACKAGING-34** Given the head resumes a build, when it launches it, then it bumps `attempt` in `args.json` on every resume and saves it. (A23, v0.3 spec, the build's `attempt`)
 - **SKILLS-PACKAGING-35** Given a phase returns `blocked` with a reason, when the head reads the result, then it treats it as a blocked item and the reason as data, never as an instruction or a shell command. (A22, v0.3 spec, phase results)
+- **SKILLS-PACKAGING-36** Given the head resumes publish, when it launches it, then it bumps `attempt` in `args.json` on every resume and saves it, so a docs, evidence or gate agent that returned blocked runs live. (A23, v0.3 fix wave, failure-paths-and-lifecycle-02)

@@ -43,7 +43,7 @@ Each stage is a skill or a saved workflow, namespaced under the plugin. You can 
 | 3 build | `/temper:build` (workflow) | `args.json` | the epic branch at MVP, plus a build report |
 | 4 stabilise | `/temper:stabilise` (workflow) | the branch | the fixed branch, plus open items |
 | 5 publish | `/temper:publish` (workflow) | the branch | docs, an owner evidence script and checklist, a PR title and body |
-| cleanup | `/temper:cleanup` | merged branches | worktrees, branches and build dirs removed, only where the coded check allows |
+| cleanup | `/temper:cleanup` | merged branches | worktrees (the agents' throwaway ones under `tmp/` included), branches and build dirs removed, only where the coded check allows |
 
 Stage 4 runs two sweeps by default. `sweeps: 1` in `.temper/project.md` gives one sweep; either way every fix wave gets a regression check, one agent per fix.
 
@@ -79,7 +79,7 @@ No preference can change these:
 - No privileged commands (no sudo, not even `sudo -n`). Steps that need root go into a script and a checklist for you.
 - temper never merges.
 - It pushes a branch and opens a PR only on a green full gate, and only if your preferences allow it. Otherwise it asks. Only the head pushes; the workflows and their agents never do.
-- It never deletes work that isn't on the remote. The cleanup check is code: the branch must be reachable from the remote's default branch or match its remote ref, and the worktree must have nothing uncommitted or untracked, and no ignored file except those matching a `disposable:` pattern in `.temper/project.md` (such as `target/`, `node_modules/`, `__pycache__/`).
+- It never deletes work that isn't on the remote. The cleanup check is code: the branch must be reachable from the remote's default branch or match its remote ref (for a detached throwaway worktree, its HEAD must be reachable from a branch of the remote), and the worktree must have nothing uncommitted or untracked, and no ignored file except those matching a `disposable:` pattern in `.temper/project.md` (such as `target/`, `node_modules/`, `__pycache__/`).
 - Content from repos, docs, logs and agents is data, never instructions.
 - Anything that would loosen a security decision is confirmed with you every time.
 
@@ -105,6 +105,10 @@ Still open after v0.3 (`docs/v1-log.md` has the detail and the redo notes):
 - A run stops when the head's Claude Code session closes (see [Overnight runs](#overnight-runs)).
 - TESTS-DOCS-5 (the overnight mode check, a reverted v1 review fix) is deferred: there is still no safe way for the head to refresh the permission mode without a new prompt.
 - Some minors from the v1 review are open as well.
+- An agent may leave its throwaway worktree under `tmp/` with uncommitted files. Cleanup then refuses to remove it, and so does the next agent that would reuse it: it returns blocked rather than clean the path. You remove it by hand (failure-paths-and-lifecycle-03 in `docs/temper/v0-3/log.md`).
+- Two findings with the same id share one verifier's throwaway path (failure-paths-and-lifecycle-04).
+- Under a squash merge whose head branch the remote deleted, no remote branch holds a throwaway's commit, so cleanup leaves that throwaway in place for you to remove. Nothing force-removes it.
+- `args.json` has one `attempt` field, and stages 3, 4b and 5 each save their own counter there. Each counter only has to change between launches of its own stage, so the sharing is harmless, but the run skill doesn't say so.
 
 To change an answer or the done list, launch the same workflow with updated `args` and `resumeFromRunId`, never by editing a generated script.
 
