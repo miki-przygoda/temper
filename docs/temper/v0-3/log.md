@@ -102,3 +102,27 @@
   - failure-paths-and-lifecycle-03: agents may leave throwaways dirty, so cleanup refuses them.
   - failure-paths-and-lifecycle-04: two findings with one id share a verify path.
   - test-strength-and-docs-05 (kind `owner`): the spec's "whatever merge style" claim is false for squash merges whose head branch is deleted.
+
+## 29 Oct 2026: stage 4b, the fix wave (head)
+
+- **The owner's selection.** The owner chose all 7 important findings:
+  - failure-paths-and-lifecycle-01 and -02;
+  - security-01;
+  - test-strength-and-docs-01, -02, -03 and -04.
+
+  For test-strength-and-docs-05, the owner chose "spec wording only": no code change. Throwaways under a squash merge whose head branch was deleted are left to the owner, and are never force-removed.
+- **Open items** (not selected):
+  - failure-paths-and-lifecycle-03: throwaway agents may leave their worktree dirty, so cleanup refuses it.
+  - failure-paths-and-lifecycle-04: two findings with the same id share a verify path.
+- **Result.** Run wf_ccf4905f-34e (v0.3's `stabilise.js`, `part: "fix"`, `attempt: 0`, `sweeps: 1`) returned `stable`. All 8 are fixed, with none reverted, no contract items, nothing blocked and no regressions. Each fix's `regress:fix:<id>` agent returned `{regressions: []}`.
+  - 6e5acf5: a throwaway is reused only when it is its own clean worktree. Otherwise the agent returns blocked (failure-paths-and-lifecycle-01, test-strength-and-docs-02 and -03).
+  - ef33554: the check, findings, verdict, regress and gate results carry `status`, and a blocked one blocks its id. A blocked verifier leaves its finding unverified (test-strength-and-docs-01).
+  - a07cc55: publish has `attempt`, and the run skill bumps it on every publish resume (failure-paths-and-lifecycle-02, test-strength-and-docs-04).
+  - 8aa8722: `tmp` is a reserved task id (security-01).
+  - 827da7b: the spec and amendment wording on squash merges (test-strength-and-docs-05).
+- **The head's check.**
+  - `npm test`: 524/524 Node, and the Python suite passes.
+  - The bundle check and `validate --strict` pass.
+  - Every fix commit is on the branch.
+  - The diff has no attribution lines or private names.
+- **Stage 4 is stable.** It ran one sweep, as `sweeps: 1` asks, so no second sweep is expected (`second_sweep: null`).
