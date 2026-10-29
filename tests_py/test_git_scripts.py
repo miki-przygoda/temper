@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -267,6 +269,95 @@ class CleanupCheckTest(GitRepoCase):
                                 disposable=['target/', '.env']),
             (True, []),
         )
+
+    def detached_worktree(self, commit='main', name='wt'):
+        wt = self.tmp / name
+        self.git(self.repo, 'worktree', 'add', '--quiet', '--detach', str(wt), commit)
+        return wt
+
+    def test_detached_worktree_on_origin_main_is_ok(self):
+        wt = self.detached_worktree()
+        self.assertEqual(
+            cleanup_check.check(str(self.repo), worktree=str(wt), fetch=True, detached=True),
+            (True, []),
+        )
+
+    def test_detached_worktree_on_another_remote_branch_is_ok(self):
+        self.git(self.repo, 'checkout', '--quiet', '-b', 'temper/e/a')
+        self.commit('task work', 'Temper-Task: e/a')
+        self.git(self.repo, 'push', '--quiet', 'origin', 'temper/e/a')
+        self.git(self.repo, 'checkout', '--quiet', 'main')
+        wt = self.detached_worktree('temper/e/a')
+        self.assertEqual(
+            cleanup_check.check(str(self.repo), worktree=str(wt), fetch=True, detached=True),
+            (True, []),
+        )
+
+    def test_detached_worktree_on_no_remote_branch_is_refused(self):
+        wt = self.detached_worktree()
+        self.git(wt, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet',
+                 '--allow-empty', '-m', 'local only')
+        ok, reasons = cleanup_check.check(str(self.repo), worktree=str(wt), fetch=True,
+                                          detached=True)
+        self.assertFalse(ok)
+        self.assertEqual(len(reasons), 1, reasons)
+        self.assertIn('is not on origin', reasons[0])
+
+    def test_detached_worktree_with_an_uncommitted_change_is_refused(self):
+        (self.repo / 'a.txt').write_text('a\n', encoding='utf-8')
+        self.git(self.repo, 'add', 'a.txt')
+        self.commit('add a')
+        self.git(self.repo, 'push', '--quiet', 'origin', 'main')
+        wt = self.detached_worktree()
+        (wt / 'a.txt').write_text('changed\n', encoding='utf-8')
+        ok, reasons = cleanup_check.check(str(self.repo), worktree=str(wt), fetch=True,
+                                          detached=True)
+        self.assertFalse(ok)
+        self.assertTrue(any('uncommitted' in r for r in reasons), reasons)
+
+    def test_detached_worktree_with_only_disposable_ignored_files_is_ok(self):
+        (self.repo / '.gitignore').write_text('node_modules/\n', encoding='utf-8')
+        self.git(self.repo, 'add', '.gitignore')
+        self.commit('ignore node_modules')
+        self.git(self.repo, 'push', '--quiet', 'origin', 'main')
+        wt = self.detached_worktree()
+        (wt / 'node_modules').mkdir()
+        (wt / 'node_modules' / 'x').write_text('x', encoding='utf-8')
+        ok, reasons = cleanup_check.check(str(self.repo), worktree=str(wt), fetch=True,
+                                          detached=True)
+        self.assertFalse(ok)
+        self.assertTrue(any('ignored' in r for r in reasons), reasons)
+        self.assertEqual(
+            cleanup_check.check(str(self.repo), worktree=str(wt), fetch=True, detached=True,
+                                disposable=['node_modules/']),
+            (True, []),
+        )
+
+    def test_detached_on_a_worktree_with_a_branch_checked_out_is_refused(self):
+        self.git(self.repo, 'branch', 'feat')
+        self.git(self.repo, 'push', '--quiet', 'origin', 'feat')
+        wt = self.tmp / 'wt'
+        self.git(self.repo, 'worktree', 'add', '--quiet', str(wt), 'feat')
+        ok, reasons = cleanup_check.check(str(self.repo), worktree=str(wt), fetch=True,
+                                          detached=True)
+        self.assertFalse(ok)
+        self.assertTrue(any('is not detached' in r and 'refs/heads/feat' in r for r in reasons),
+                        reasons)
+
+    def test_detached_usage_errors(self):
+        wt = self.detached_worktree()
+        cases = [
+            ([str(self.repo), '--no-fetch'], 'give either a branch or --detached'),
+            ([str(self.repo), 'main', '--detached', '--worktree', str(wt), '--no-fetch'],
+             'give either a branch or --detached, not both'),
+            ([str(self.repo), '--detached', '--no-fetch'], '--detached needs --worktree'),
+        ]
+        for argv, reason in cases:
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = cleanup_check.main(argv)
+            self.assertEqual(code, 1, argv)
+            self.assertEqual(json.loads(out.getvalue()), {'ok': False, 'reasons': [reason]})
 
     def test_disposable_patterns_match_names_and_directories(self):
         match = cleanup_check._disposable
