@@ -57,10 +57,10 @@ function buildRespond({ label }) {
   if (label === 'check:a') return { pass: false, problems: ['missing test'] };
   if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
   if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
-  if (label === 'checkpoint') return { gate_passed: true, gate_log: 'l', flows: [], gaps: [] };
-  if (label === 'behaviour-spec') return { groups: GROUPS, commit: 'b0b0b0b1' };
-  if (label.startsWith('acceptance:')) return { group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'a0a0a0a1' };
-  if (label.startsWith('green:')) return { fixed: ['G1-01'], corrected: [], questions: [], still_failing: [] };
+  if (label === 'checkpoint') return { status: 'done', gate_passed: true, gate_log: 'l', flows: [], gaps: [] };
+  if (label === 'behaviour-spec') return { status: 'done', groups: GROUPS, commit: 'b0b0b0b1' };
+  if (label.startsWith('acceptance:')) return { status: 'done', group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'x' }], untestable: [], commit: 'a0a0a0a1' };
+  if (label.startsWith('green:')) return { status: 'done', fixed: ['G1-01'], corrected: [], questions: [], still_failing: [] };
   throw new Error(`unexpected label ${label}`);
 }
 
@@ -82,8 +82,8 @@ function stabiliseRespond({ label }) {
 
 function publishRespond({ label }) {
   return ({
-    docs: { commit: 'd0d0d0d1', files: ['README.md'], summary: 'Add a thing' },
-    evidence: { script: 'docs/temper/e/owner-steps.sh', checklist: 'docs/temper/e/owner-checklist.md', commit: 'e0e0e0e1' },
+    docs: { status: 'done', commit: 'd0d0d0d1', files: ['README.md'], summary: 'Add a thing' },
+    evidence: { status: 'done', script: 'docs/temper/e/owner-steps.sh', checklist: 'docs/temper/e/owner-checklist.md', commit: 'e0e0e0e1' },
     gate: { passed: true, exit_status: 0, log_path: '/l' },
   })[label];
 }

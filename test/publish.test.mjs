@@ -25,8 +25,8 @@ function args(extra = {}) {
 }
 
 const REPLIES = {
-  docs: { commit: 'd1d1d1d1', files: ['README.md', 'docs/temper/e/pr-body.md'], summary: 'Add the auth flow\nmore detail' },
-  evidence: { script: 'docs/temper/e/owner-steps.sh', checklist: 'docs/temper/e/owner-checklist.md', commit: 'e1e1e1e1' },
+  docs: { status: 'done', commit: 'd1d1d1d1', files: ['README.md', 'docs/temper/e/pr-body.md'], summary: 'Add the auth flow\nmore detail' },
+  evidence: { status: 'done', script: 'docs/temper/e/owner-steps.sh', checklist: 'docs/temper/e/owner-checklist.md', commit: 'e1e1e1e1' },
   gate: { passed: true, exit_status: 0, log_path: '/tmp/gate.log' },
 };
 

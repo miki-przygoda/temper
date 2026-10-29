@@ -93,10 +93,10 @@ function responder(overrides = {}) {
     if (label.startsWith('impl:') || label.startsWith('retry:')) return { status: 'done', branch: `temper/e/${id}`, commit: 'abcabc01', summary: `did ${id}` };
     if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
     if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
-    if (label === 'checkpoint') return { gate_passed: true, gate_log: 'full.log', flows: [{ flow: 'greet', result: 'ok', evidence: 'ran' }], gaps: [] };
-    if (label === 'behaviour-spec') return { groups: [{ key: 'g1', behaviours: [{ id: 'G1-01', text: 'given a name then a greeting' }] }], commit: 'bbbbbb02' };
-    if (label.startsWith('acceptance:')) return { group: id, passing: ['G1-01'], failing: [], untestable: [], commit: 'cccccc03' };
-    if (label.startsWith('green:')) return { fixed: [], corrected: [], questions: [], still_failing: [] };
+    if (label === 'checkpoint') return { status: 'done', gate_passed: true, gate_log: 'full.log', flows: [{ flow: 'greet', result: 'ok', evidence: 'ran' }], gaps: [] };
+    if (label === 'behaviour-spec') return { status: 'done', groups: [{ key: 'g1', behaviours: [{ id: 'G1-01', text: 'given a name then a greeting' }] }], commit: 'bbbbbb02' };
+    if (label.startsWith('acceptance:')) return { status: 'done', group: id, passing: ['G1-01'], failing: [], untestable: [], commit: 'cccccc03' };
+    if (label.startsWith('green:')) return { status: 'done', fixed: [], corrected: [], questions: [], still_failing: [] };
     return null;
   };
 }

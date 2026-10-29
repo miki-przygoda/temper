@@ -464,3 +464,28 @@ test('flakyRerunsOf labels each well-formed entry with the agent id and drops th
     [{ id: 'check:a', test: 't::a', gate: 'quick' }],
   );
 });
+
+test('phaseBlockedReason maps a result to its blocked reason', () => {
+  assert.equal(lib.phaseBlockedReason({ status: 'done' }), null);
+  assert.equal(lib.phaseBlockedReason({ status: 'blocked', reason: 'HEAD detached' }), 'HEAD detached');
+  assert.equal(lib.phaseBlockedReason({ status: 'blocked' }), 'phase returned status blocked');
+  assert.equal(lib.phaseBlockedReason({ status: 'blocked', reason: '' }), 'phase returned status blocked');
+  assert.equal(lib.phaseBlockedReason({}), 'phase returned status undefined');
+});
+
+test('every phase prompt says how to return blocked', () => {
+  const b = buildArgs();
+  const p = publishArgs();
+  const prompts = {
+    checkpoint: lib.checkpointPrompt(b),
+    behaviourSpec: lib.behaviourSpecPrompt(b),
+    acceptance: lib.acceptancePrompt({ key: 'g1', title: 'Group 1' }, [{ id: 'G1-01', text: 'x' }], b),
+    green: lib.greenPrompt([{ id: 'G1-01', observed: 'y' }], 1, b),
+    docs: lib.docsPrompt(p),
+    evidence: lib.evidencePrompt(p),
+  };
+  for (const [name, prompt] of Object.entries(prompts)) {
+    assert.ok(typeof lib.PHASE_BLOCKED === 'string' && lib.PHASE_BLOCKED.length > 0, 'PHASE_BLOCKED missing');
+    assert.ok(prompt.includes(lib.PHASE_BLOCKED), `${name} prompt lacks PHASE_BLOCKED`);
+  }
+});

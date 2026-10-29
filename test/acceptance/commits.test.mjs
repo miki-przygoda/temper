@@ -76,15 +76,15 @@ function buildResponder(over = {}) {
     if (label.startsWith('check:') || label.startsWith('recheck:')) return { pass: true, problems: [] };
     if (label.startsWith('merge:')) return { status: 'merged', merged: [], gate_passed: true };
     if (label === 'checkpoint') {
-      return { gate_passed: true, gate_log: 'full.log', flows: [{ flow: 'f', result: 'ok', evidence: 'ran' }], gaps: [], commit: SHAS.checkpoint };
+      return { status: 'done', gate_passed: true, gate_log: 'full.log', flows: [{ flow: 'f', result: 'ok', evidence: 'ran' }], gaps: [], commit: SHAS.checkpoint };
     }
-    if (label === 'behaviour-spec') return { groups: GROUPS, commit: SHAS['behaviour-spec'] };
+    if (label === 'behaviour-spec') return { status: 'done', groups: GROUPS, commit: SHAS['behaviour-spec'] };
     if (label === 'acceptance:g1') {
-      return { group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'wrong' }], untestable: [], commit: SHAS[label] };
+      return { status: 'done', group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'wrong' }], untestable: [], commit: SHAS[label] };
     }
-    if (label === 'acceptance:g2') return { group: 'g2', passing: ['G2-01'], failing: [], untestable: [], commit: SHAS[label] };
+    if (label === 'acceptance:g2') return { status: 'done', group: 'g2', passing: ['G2-01'], failing: [], untestable: [], commit: SHAS[label] };
     if (label.startsWith('green:')) {
-      return { fixed: ['G1-01'], corrected: [], questions: [], still_failing: [], commit: SHAS[label] ?? '' };
+      return { status: 'done', fixed: ['G1-01'], corrected: [], questions: [], still_failing: [], commit: SHAS[label] ?? '' };
     }
     return null;
   };
@@ -153,8 +153,8 @@ function publishArgs(extra = {}) {
 }
 
 const publishResponder = ({ label }) => ({
-  docs: { commit: 'd0c50001', files: ['README.md'], summary: 'docs' },
-  evidence: { script: 'evidence.sh', checklist: 'checklist.md', commit: 'e71d0002' },
+  docs: { status: 'done', commit: 'd0c50001', files: ['README.md'], summary: 'docs' },
+  evidence: { status: 'done', script: 'evidence.sh', checklist: 'checklist.md', commit: 'e71d0002' },
   gate: { passed: true, exit_status: 0, log_path: '/l' },
 })[label];
 
@@ -330,9 +330,9 @@ test('COMMITS-08 the checkpoint and green schemas have a commit field that may b
 
 test('COMMITS-09 an empty reported sha is left out of commits', async () => {
   const over = {
-    checkpoint: { gate_passed: true, gate_log: 'full.log', flows: [], gaps: [], commit: '' },
-    'acceptance:g2': { group: 'g2', passing: ['G2-01'], failing: [], untestable: [], commit: '' },
-    'green:1': { fixed: ['G1-01'], corrected: [], questions: [], still_failing: [], commit: '' },
+    checkpoint: { status: 'done', gate_passed: true, gate_log: 'full.log', flows: [], gaps: [], commit: '' },
+    'acceptance:g2': { status: 'done', group: 'g2', passing: ['G2-01'], failing: [], untestable: [], commit: '' },
+    'green:1': { status: 'done', fixed: ['G1-01'], corrected: [], questions: [], still_failing: [], commit: '' },
   };
   const { result } = await runBuild(buildArgs(), over);
   assert.ok(result.commits, 'no commits');
@@ -348,7 +348,7 @@ test('COMMITS-09 an empty reported sha is left out of commits', async () => {
   assert.deepEqual(s.result.commits, { 'fix:f1': 'aa11bb22' });
   const p = await runWorkflow('workflows/publish.js', {
     args: publishArgs(),
-    respond: (q) => (q.label === 'docs' ? { commit: '', files: [], summary: 'nothing' } : publishResponder(q)),
+    respond: (q) => (q.label === 'docs' ? { status: 'done', commit: '', files: [], summary: 'nothing' } : publishResponder(q)),
   });
   assert.deepEqual(p.result.commits, { evidence: 'e71d0002' });
 });
@@ -360,12 +360,12 @@ test('COMMITS-10 every build result after validation carries commits', async () 
     { name: 'implementer blocked', over: { 'impl:a': { status: 'blocked', question: 'q?' } } },
     { name: 'implementer returned nothing', over: { 'impl:a': null } },
     { name: 'merge blocked', over: { 'merge:wave0': { status: 'blocked', merged: [], gate_passed: false } } },
-    { name: 'checkpoint gate failed', over: { checkpoint: { gate_passed: false, gate_log: 'l', flows: [], gaps: [], commit: '' } } },
+    { name: 'checkpoint gate failed', over: { checkpoint: { status: 'done', gate_passed: false, gate_log: 'l', flows: [], gaps: [], commit: '' } } },
     { name: 'checkpoint returned nothing', over: { checkpoint: null } },
     { name: 'behaviour-spec returned nothing', over: { 'behaviour-spec': null } },
     { name: 'acceptance returned nothing', over: { 'acceptance:g2': null } },
     { name: 'green returned nothing', over: { 'green:1': null } },
-    { name: 'green questions', over: { 'green:1': { fixed: [], corrected: [], questions: [{ id: 'G1-01', question: 'q' }], still_failing: [] } } },
+    { name: 'green questions', over: { 'green:1': { status: 'done', fixed: [], corrected: [], questions: [{ id: 'G1-01', question: 'q' }], still_failing: [] } } },
     { name: 'resumed with everything done', args: { done: doneAll, behaviour: GROUPS } },
   ];
   for (const s of scenarios) {
@@ -396,13 +396,13 @@ test('COMMITS-13 a reported commit that is not a hex sha is left out of commits 
   for (const bad of NOT_SHAS) {
     // build: the phase that reported it blocks, and what came before it stays.
     const b = await runBuild(buildArgs(), {
-      'acceptance:g1': { group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'wrong' }], untestable: [], commit: bad },
+      'acceptance:g1': { status: 'done', group: 'g1', passing: [], failing: [{ id: 'G1-01', observed: 'wrong' }], untestable: [], commit: bad },
     });
     assert.equal(b.result.status, 'blocked', `build ${bad}: ${JSON.stringify(b.result)}`);
     assert.deepEqual(b.result.blocked, [{ id: 'acceptance:g1', reason: 'commit is not a sha' }], bad);
     assert.deepEqual(b.result.commits, { checkpoint: SHAS.checkpoint, 'behaviour-spec': SHAS['behaviour-spec'] }, bad);
     const cp = await runBuild(buildArgs(), {
-      checkpoint: { gate_passed: true, gate_log: 'full.log', flows: [], gaps: [], commit: bad },
+      checkpoint: { status: 'done', gate_passed: true, gate_log: 'full.log', flows: [], gaps: [], commit: bad },
     });
     assert.equal(cp.result.status, 'blocked', bad);
     assert.deepEqual(cp.result.blocked, [{ id: 'checkpoint', reason: 'commit is not a sha' }], bad);
@@ -438,7 +438,7 @@ const NOT_SHAS_BY_FORM = ['ABCDEF12', SHA256.toUpperCase(), 'abcdef', 'a'.repeat
 test('COMMITS-13 a 64-character SHA-256 sha goes into commits in build, stabilise and publish', async () => {
   assert.equal(SHA256.length, 64);
   const b = await runBuild(buildArgs(), {
-    checkpoint: { gate_passed: true, gate_log: 'full.log', flows: [], gaps: [], commit: SHA256 },
+    checkpoint: { status: 'done', gate_passed: true, gate_log: 'full.log', flows: [], gaps: [], commit: SHA256 },
   });
   assert.equal(b.result.commits.checkpoint, SHA256, JSON.stringify(b.result));
   assert.ok(!(b.result.blocked || []).some((x) => x.id === 'checkpoint'), JSON.stringify(b.result));
@@ -457,7 +457,7 @@ test('COMMITS-13 a 64-character SHA-256 sha goes into commits in build, stabilis
 test('COMMITS-13 an uppercase, 6-character or 65-character sha is left out of commits and blocked', async () => {
   for (const bad of NOT_SHAS_BY_FORM) {
     const cp = await runBuild(buildArgs(), {
-      checkpoint: { gate_passed: true, gate_log: 'full.log', flows: [], gaps: [], commit: bad },
+      checkpoint: { status: 'done', gate_passed: true, gate_log: 'full.log', flows: [], gaps: [], commit: bad },
     });
     assert.equal(cp.result.status, 'blocked', bad);
     assert.deepEqual(cp.result.blocked, [{ id: 'checkpoint', reason: 'commit is not a sha' }], bad);

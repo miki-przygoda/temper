@@ -457,6 +457,14 @@ function listOf(properties) {
 // spec 3.6: the listed flaky tests an agent reran once and saw pass, optional in every quick-gate schema.
 const FLAKY_RERUNS = listOf({ test: STR, gate: STR });
 
+// spec "Phase results": every phase agent (checkpoint, behaviour spec, acceptance, green, docs,
+// evidence) says whether it finished. A blocked one sends its other required fields empty.
+const PHASE_STATUS = { status: { type: 'string', enum: ['done', 'blocked'] }, reason: STR };
+
+function phaseSchema(properties, required) {
+  return objectSchema({ ...PHASE_STATUS, ...properties }, ['status', ...required]);
+}
+
 const IMPL_SCHEMA = objectSchema(
   {
     status: { type: 'string', enum: ['done', 'blocked'] },
@@ -485,7 +493,7 @@ const MERGE_SCHEMA = objectSchema(
   ['status', 'merged', 'gate_passed'],
 );
 
-const CHECKPOINT_SCHEMA = objectSchema(
+const CHECKPOINT_SCHEMA = phaseSchema(
   {
     gate_passed: { type: 'boolean' },
     gate_log: STR,
@@ -496,12 +504,12 @@ const CHECKPOINT_SCHEMA = objectSchema(
   ['gate_passed', 'gate_log', 'flows', 'gaps'],
 );
 
-const BEHAVIOUR_SCHEMA = objectSchema(
+const BEHAVIOUR_SCHEMA = phaseSchema(
   { groups: listOf({ key: STR, behaviours: listOf({ id: STR, text: STR }) }), commit: STR },
   ['groups', 'commit'],
 );
 
-const ACCEPTANCE_SCHEMA = objectSchema(
+const ACCEPTANCE_SCHEMA = phaseSchema(
   {
     group: STR,
     passing: STRS,
@@ -512,7 +520,7 @@ const ACCEPTANCE_SCHEMA = objectSchema(
   ['group', 'passing', 'failing', 'untestable', 'commit'],
 );
 
-const GREEN_SCHEMA = objectSchema(
+const GREEN_SCHEMA = phaseSchema(
   {
     fixed: STRS,
     corrected: STRS,
@@ -564,9 +572,9 @@ const GATE_SCHEMA = objectSchema(
   ['passed', 'exit_status', 'log_path'],
 );
 
-const DOCS_SCHEMA = objectSchema({ commit: STR, files: STRS, summary: STR }, ['commit', 'files', 'summary']);
+const DOCS_SCHEMA = phaseSchema({ commit: STR, files: STRS, summary: STR }, ['commit', 'files', 'summary']);
 
-const EVIDENCE_SCHEMA = objectSchema({ script: STR, checklist: STR, commit: STR }, ['script', 'checklist', 'commit']);
+const EVIDENCE_SCHEMA = phaseSchema({ script: STR, checklist: STR, commit: STR }, ['script', 'checklist', 'commit']);
 
 // ---- prompt builders ----
 // Every prompt carries the host text, the build rule, GATE_WAIT and RULES_COMMON. Text quoted from the spec is marked "verbatim".
@@ -637,6 +645,16 @@ function recordSha(commits, id, result) {
     return false;
   }
   return true;
+}
+
+// spec "Phase results": the paragraph every phase prompt carries just before its Return line.
+const PHASE_BLOCKED = 'If you cannot finish, return status "blocked" with the reason in reason, and send every other required field empty ("" or []). Otherwise return status "done".';
+
+// The reason a phase result r (never null) blocks its id, or null when it is done. The reason is
+// agent text: data for blocked and the log, never a command.
+function phaseBlockedReason(r) {
+  if (r.status === 'done') return null;
+  return isNonEmptyString(r.reason) ? r.reason : 'phase returned status ' + r.status;
 }
 
 // The epic's folder in the specs directory: the folder that holds its log (spec 3.3, specs_dir).
@@ -792,6 +810,7 @@ function checkpointPrompt(args) {
     '3. Record gaps; fix nothing. Change no product code and no tests.',
     `4. Append a checkpoint section to ${args.log} with the gate result, the flows and the gaps. ${commitText(args.epic, 'checkpoint')}`,
     epicCommitText(args),
+    PHASE_BLOCKED,
     'Return the gate result, its log, the flows, the gaps, and the commit sha.',
   ]);
 }
@@ -806,6 +825,7 @@ function behaviourSpecPrompt(args) {
     'Each behaviour is given/when/then lines and has an id `<GROUPKEY>-NN`: the group key in capitals and a two-digit number. Write only what the spec states or clearly implies.',
     `${commitText(args.epic, 'behaviour-spec')} Commit on \`${args.branch}\`.`,
     epicCommitText(args),
+    PHASE_BLOCKED,
     'Return the groups with their behaviours (id and text) and the commit sha.',
   ]);
 }
@@ -820,6 +840,7 @@ function acceptancePrompt(group, behaviours, args) {
     "- A test that fails because of the product stays, marked ignored with `acceptance-failing: <id>` in the language's way.",
     `Run the tests. ${commitText(args.epic, `acceptance:${group.key}`)}`,
     epicCommitText(args),
+    PHASE_BLOCKED,
     'Return the group key, the passing ids, the failing ids with what you observed, the untestable ids with the reason, and the commit sha.',
   ]);
 }
@@ -843,6 +864,7 @@ function greenPrompt(failing, round, args, markedToo = false) {
     flakyText(args),
     `Unmark the \`acceptance-failing\` marker of each test that now passes. ${commitText(args.epic, `green:${round}`)}`,
     epicCommitText(args),
+    PHASE_BLOCKED,
     'Return the ids you fixed (product), corrected (test), the questions (id and question), the ids still failing, and the commit sha (empty when you committed nothing).',
   ]);
 }
@@ -916,6 +938,7 @@ function docsPrompt(args) {
     `Update the docs the change touches, and write the PR body at \`${epicDir(args)}/pr-body.md\`: what changed, why, how it was tested, and the open items from ${args.log}.`,
     commitText(args.epic, 'docs'),
     epicCommitText(args),
+    PHASE_BLOCKED,
     'Return the commit sha, the files you changed, and a one-line summary (it becomes the PR title).',
   ]);
 }
@@ -926,6 +949,7 @@ function evidencePrompt(args) {
     `Steps that need root, real accounts or real infrastructure go into \`${epicDir(args)}/owner-steps.sh\` and \`${epicDir(args)}/owner-checklist.md\`. Agents never run them: write them for the owner, and run none of them.`,
     commitText(args.epic, 'evidence'),
     epicCommitText(args),
+    PHASE_BLOCKED,
     'Return the script path, the checklist path and the commit sha.',
   ]);
 }
