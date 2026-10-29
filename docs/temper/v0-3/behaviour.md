@@ -123,7 +123,7 @@ Throwaway worktrees are named under `tmp/` and removed, `cleanup_check.py --deta
 ### WORKTREES-08
 - Given: a throwaway path that already exists (left by an agent that died, or an earlier run with the same label).
 - When: a prompt using `throwawayText` is read.
-- Then: it tells the agent to reuse the path with `git -C <path> checkout --detach <the branch or commit it checks>`, never to remove it, and to return blocked with the reason if that fails (uncommitted changes, or not a worktree).
+- Then: it tells the agent to reuse the path with `git -C <path> checkout --detach <the branch or commit it checks>`, never to remove it, and to return blocked with the reason if that fails (uncommitted changes, or not a worktree). Before the checkout, it checks that `git -C <path> rev-parse --show-toplevel` prints the same directory as `cd <path> && pwd -P` and that `git -C <path> status --porcelain` prints nothing, and returns blocked, never deleting or cleaning the path, if either fails (A30).
 
 ### WORKTREES-09
 - Given: a clean detached worktree of `<repo>` whose HEAD is on `origin/main`.

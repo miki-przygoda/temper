@@ -178,7 +178,14 @@ test('WORKTREES-08 an existing throwaway is reused with checkout --detach, never
       const path = `${dir}${lib.tmpLabel(label)}`;
       assert.match(c.prompt, /If it already exists[^\n]*reuse it/, label);
       assert.ok(c.prompt.includes(`\`git -C ${path} checkout --detach <the branch or commit you check>\``), `${label}: ${c.prompt}`);
-      assert.match(c.prompt, /if that fails, stop and report the reason in your result as blocked/, label);
+      // failure-paths-and-lifecycle-01: checkout --detach keeps a dead agent's dirty files, and a plain
+      // directory at the path is inside the main checkout, so both are checked before the checkout.
+      const top = c.prompt.indexOf(`\`git -C ${path} rev-parse --show-toplevel\` prints the same directory as \`cd ${path} && pwd -P\``);
+      const clean = c.prompt.indexOf(`\`git -C ${path} status --porcelain\` prints nothing`);
+      const co = c.prompt.indexOf(`\`git -C ${path} checkout --detach `);
+      assert.ok(top >= 0 && clean >= 0 && top < co && clean < co, `${label}: ${c.prompt}`);
+      assert.match(c.prompt, /never delete or clean the path/, label);
+      assert.match(c.prompt, /If either check or the checkout fails, stop and report the reason in your result as blocked/, label);
       assert.match(c.prompt, /you never delete a worktree/, label);
     }
   }

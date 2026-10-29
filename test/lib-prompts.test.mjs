@@ -550,6 +550,9 @@ test('throwawayText names the path, creates it detached or reuses it, and never 
     assert.ok(t.includes(`Your throwaway worktree is \`${path}\`.`), t);
     assert.ok(t.includes(`\`git worktree add --detach ${path} `), t);
     assert.ok(t.includes(`\`git -C ${path} checkout --detach `), t);
+    assert.ok(t.includes(`\`git -C ${path} rev-parse --show-toplevel\` prints the same directory as \`cd ${path} && pwd -P\``), t);
+    assert.ok(t.includes(`\`git -C ${path} status --porcelain\` prints nothing`), t);
+    assert.ok(t.includes('never delete or clean the path'), t);
     assert.ok(!t.includes('git worktree remove'), t);
   }
 });

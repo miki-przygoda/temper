@@ -643,11 +643,13 @@ function tmpLabel(label) {
 
 // The throwaway worktree an agent labelled `label` works in: under tmp/, detached, reused when an
 // earlier agent left it, and never removed by the agent (a fixed rule): temper's cleanup removes it.
+// Reuse needs a worktree of its own with a clean status: `checkout --detach` keeps uncommitted and
+// untracked files, and a plain directory would act on the enclosing checkout (A24, owner, 29 Oct).
 function throwawayText(args, label) {
   const path = `${worktreesDir(args)}/tmp/${tmpLabel(label)}`;
   return [
     `Your throwaway worktree is \`${path}\`.`,
-    `If that path does not exist, create it detached: \`git worktree add --detach ${path} <the branch or commit you check>\`. If it already exists (an earlier agent left it), reuse it: \`git -C ${path} checkout --detach <the branch or commit you check>\`; if that fails, stop and report the reason in your result as blocked.`,
+    `If that path does not exist, create it detached: \`git worktree add --detach ${path} <the branch or commit you check>\`. If it already exists (an earlier agent left it), reuse it only when \`git -C ${path} rev-parse --show-toplevel\` prints the same directory as \`cd ${path} && pwd -P\` (a worktree of its own, never the enclosing checkout) and \`git -C ${path} status --porcelain\` prints nothing (an earlier agent's changes would stay through a checkout); then \`git -C ${path} checkout --detach <the branch or commit you check>\`. If either check or the checkout fails, stop and report the reason in your result as blocked; never delete or clean the path.`,
     "Change nothing on any branch and commit nothing. Leave the worktree in place when you finish: you never delete a worktree (a fixed rule); temper's cleanup removes it.",
   ].join('\n');
 }
