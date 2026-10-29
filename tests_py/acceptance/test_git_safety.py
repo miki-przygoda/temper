@@ -746,8 +746,14 @@ class TestGitSafety(GitSandbox):
 
     def test_SECOND_SAFETY_7_the_host_cleanup_check_runs_isolated_from_the_login_directory(self):
         lines = [l.strip() for l in CLEANUP_SKILL.splitlines() if l.strip().startswith('ssh <host> python3')]
-        self.assertEqual(len(lines), 1, 'the cleanup skill gives one ssh form of the check')
-        cmd = lines[0]
+        # One ssh form for a branch, and one for a detached worktree (`--detached`); both isolated.
+        branch_lines = [l for l in lines if '--detached' not in l]
+        detached_lines = [l for l in lines if '--detached' in l]
+        self.assertEqual(len(branch_lines), 1, 'the cleanup skill gives one ssh form of the branch check')
+        self.assertEqual(len(detached_lines), 1, 'the cleanup skill gives one ssh form of the detached check')
+        for l in lines:
+            self.assertTrue(l.startswith('ssh <host> python3 -I - '), l)
+        cmd = branch_lines[0]
         repo, _origin = self.remote()
         wt = self.tmp / 'wt'
         self.git(repo, 'worktree', 'add', '-q', '-b', 'temper/e/a', str(wt), 'main')

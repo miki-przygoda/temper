@@ -34,7 +34,8 @@ def flat(text):
 def epic_dir_command(skill, epic_dir):
     """The command the cleanup skill runs over ssh to remove the per-epic build directory, with
     <root>/<epic> filled in, as an argv run locally (no shell)."""
-    m = re.search(r"ssh <host> '([^']*<root>/<epic>[^']*)'", skill)
+    # The command ends at <root>/<epic>: the `rmdir <root>/<epic>/tmp` before it is not this one.
+    m = re.search(r"ssh <host> '([^']*<root>/<epic>)'", skill)
     if not m:
         raise AssertionError('the cleanup skill names no ssh command for <root>/<epic>')
     return shlex.split(m.group(1).replace('<root>/<epic>', str(epic_dir)))
