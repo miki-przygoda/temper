@@ -40,9 +40,9 @@ test('the README requires Python 3.10', () => {
   assert.match(ci, /Node 20 with Python 3\.10/);
 });
 
-test('plugin.json and the README say 0.3.0', () => {
-  assert.equal(JSON.parse(read('.claude-plugin/plugin.json')).version, '0.3.0');
-  assert.match(README, /^Status: v0\.3\.0\b/m);
+test('plugin.json and the README say 0.3.1', () => {
+  assert.equal(JSON.parse(read('.claude-plugin/plugin.json')).version, '0.3.1');
+  assert.match(README, /^v0\.3\.1, early\./m);
 });
 
 test('the design spec has amendments A22 to A29, each citing the v0.3 spec', () => {

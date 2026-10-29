@@ -190,53 +190,41 @@ test('SKILLS-PACKAGING-01 plugin.json is named temper and depends on superpowers
   assert.ok(plugin.dependencies.includes('superpowers@anthropic-plugin-directory'), JSON.stringify(plugin.dependencies));
 });
 
-test('SKILLS-PACKAGING-02 temper fails to load until superpowers is installed, and the README and setup say to install it first', async (t) => {
-  // The README's install steps put superpowers first, and say why.
+test('SKILLS-PACKAGING-02 installing temper from this marketplace installs superpowers with it, and setup still checks for it', async (t) => {
+  // The root marketplace allowlists the Anthropic directory, so the dependency is installed with temper (A34).
+  const market = readJson('.claude-plugin/marketplace.json');
+  assert.deepEqual(market.allowCrossMarketplaceDependenciesOn, ['anthropic-plugin-directory']);
   const install = section(README, '## Install', '\n## ');
-  const cmds = install.split('\n').filter((l) => l.startsWith('claude plugin'));
-  assert.equal(cmds[0], 'claude plugin install superpowers@anthropic-plugin-directory');
-  assert.match(flat(install), /Install superpowers first/);
-  assert.match(flat(install), /doesn't load until superpowers is installed/);
-  // /temper:setup checks it first and tells the user to install it before anything else.
+  assert.match(flat(install), /installs superpowers with it/);
+  // /temper:setup still checks it first, for an install where the dependency didn't come along.
   const setup = flat(section(SKILL.setup, '## 1. Superpowers first', '## 2.'));
   assert.ok(SKILL.setup.indexOf('## 1. Superpowers first') < SKILL.setup.indexOf('## 3. The interview'));
-  assert.match(setup, /fails to load until it is/);
+  assert.match(setup, /installed with temper/);
   assert.match(setup, /tell the user to install superpowers first/);
   assert.match(setup, /claude plugin install superpowers@anthropic-plugin-directory/);
   assert.match(setup, /Do nothing else until it is installed/);
 
-  // The real CLI: install temper without superpowers, and it reports the dependency and doesn't load.
-  if (!hasClaude) {
-    t.diagnostic('claude is not on PATH: the CLI part was not run');
+  if (!hasClaude || !NETWORK) {
+    t.diagnostic('claude is not on PATH or TEMPER_ACCEPTANCE_NETWORK is not 1: the live install was not run');
     return;
   }
+  // The real CLI: install temper alone, and superpowers comes with it; both are enabled and temper loads.
   const sb = claudeSandbox(t);
   assert.equal(sb.claude('plugin', 'marketplace', 'add', ROOT).code, 0, 'marketplace add');
   assert.equal(sb.claude('plugin', 'install', 'temper@temper').code, 0, 'install temper');
-  let list = JSON.parse(sb.claude('plugin', 'list', '--json').out);
-  let temper = list.find((p) => p.id === 'temper@temper');
-  assert.ok(temper, 'temper is installed');
-  assert.ok(Array.isArray(temper.errors) && temper.errors.some((e) => e.includes('superpowers@anthropic-plugin-directory')), JSON.stringify(temper));
-  assert.ok((temper.errorDetails ?? []).some((d) => d.type === 'dependency-unsatisfied' && d.dependency === 'superpowers@anthropic-plugin-directory'));
-  assert.match(sb.claude('plugin', 'list').out, /temper@temper[\s\S]*failed to load/);
-
-  if (!NETWORK) {
-    t.diagnostic('TEMPER_ACCEPTANCE_NETWORK is not 1: installing superpowers was not run');
-    return;
-  }
-  // Then installing superpowers makes it load.
-  assert.equal(sb.claude('plugin', 'install', 'superpowers@anthropic-plugin-directory').code, 0, 'install superpowers');
-  list = JSON.parse(sb.claude('plugin', 'list', '--json').out);
-  temper = list.find((p) => p.id === 'temper@temper');
+  const list = JSON.parse(sb.claude('plugin', 'list', '--json').out);
+  const temper = list.find((p) => p.id === 'temper@temper');
+  const sp = list.find((p) => p.id === 'superpowers@anthropic-plugin-directory');
+  assert.ok(temper && sp, JSON.stringify(list));
   assert.equal(temper.enabled, true);
+  assert.equal(sp.enabled, true);
   assert.ok(!temper.errors || temper.errors.length === 0, JSON.stringify(temper.errors));
 });
 
-test('SKILLS-PACKAGING-03 the README installs superpowers, then the marketplace, then temper@temper, which ends up enabled', (t) => {
+test('SKILLS-PACKAGING-03 the README adds the marketplace, then installs temper@temper, which ends up enabled with superpowers', (t) => {
   const install = section(README, '## Install', '\n## ');
   const cmds = install.split('\n').filter((l) => l.startsWith('claude plugin'));
   assert.deepEqual(cmds, [
-    'claude plugin install superpowers@anthropic-plugin-directory',
     'claude plugin marketplace add miki-przygoda/temper',
     'claude plugin install temper@temper',
   ]);
@@ -249,10 +237,8 @@ test('SKILLS-PACKAGING-03 the README installs superpowers, then the marketplace,
     t.diagnostic('claude is not on PATH or TEMPER_ACCEPTANCE_NETWORK is not 1: the live install was not run');
     return;
   }
-  // The README's steps in the README's order, with this checkout as the marketplace (the repo is
-  // private), in a throwaway config. Then `claude plugin list` shows temper@temper enabled.
+  // The README's steps, with this checkout as the marketplace, in a throwaway config.
   const sb = claudeSandbox(t);
-  assert.equal(sb.claude('plugin', 'install', 'superpowers@anthropic-plugin-directory').code, 0, 'install superpowers');
   assert.equal(sb.claude('plugin', 'marketplace', 'add', ROOT).code, 0, 'marketplace add');
   assert.equal(sb.claude('plugin', 'install', 'temper@temper').code, 0, 'install temper');
   const list = JSON.parse(sb.claude('plugin', 'list', '--json').out);
@@ -265,6 +251,22 @@ test('SKILLS-PACKAGING-03 the README installs superpowers, then the marketplace,
   const smoke = spawnSync('sh', [join(ROOT, 'scripts', 'install_smoke.sh')], { cwd: sb.work, env: sb.env, encoding: 'utf8', timeout: 240000 });
   assert.equal(smoke.status, 0, smoke.stderr);
   assert.match(smoke.stdout, /temper@temper enabled/);
+  assert.match(smoke.stdout, /superpowers@anthropic-plugin-directory enabled/);
+});
+
+test('SKILLS-PACKAGING-37 plugin.json carries the directory listing fields and a square PNG icon of 512 to 2048 px', () => {
+  const plugin = readJson('.claude-plugin/plugin.json');
+  assert.equal(plugin.homepage, 'https://github.com/miki-przygoda/temper');
+  assert.equal(plugin.repository, 'https://github.com/miki-przygoda/temper');
+  assert.equal(plugin.license, 'MIT');
+  assert.ok(Array.isArray(plugin.keywords) && plugin.keywords.length > 0, JSON.stringify(plugin.keywords));
+  assert.equal(plugin.icon, './.claude-plugin/icon.png');
+  const png = readFileSync(join(ROOT, '.claude-plugin', 'icon.png'));
+  assert.equal(png.subarray(1, 4).toString('latin1'), 'PNG');
+  const w = png.readUInt32BE(16), h = png.readUInt32BE(20);
+  assert.equal(w, h, 'square');
+  assert.ok(w >= 512 && w <= 2048, `${w} px`);
+  assert.ok(png.length < 2 * 1024 * 1024, `${png.length} bytes`);
 });
 
 // A LICENSE (or `license` field) is the owner's choice before sharing, not a v1 check: spec 10.2 asks

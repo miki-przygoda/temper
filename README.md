@@ -1,33 +1,85 @@
+<p align="center"><img src=".claude-plugin/icon.png" alt="temper" width="96"></p>
+
 # temper
 
-## What it is
+**A Claude Code plugin that takes a piece of work from idea, to spec, to plan, to MVP, to stable, to PR, in one fixed order.**
 
-temper is a Claude Code plugin that takes a piece of work from idea, to spec, to plan, to MVP, to stable, to PR, in one fixed order. You do the problem solving, in discovery and spec writing. The session you talk to (the head) directs the work by the spec, and execution agents follow instructions without improvising.
+You do the thinking: what to build and why. temper turns that into a spec and a plan, then runs the build with agents, checks the result against tests written from the spec rather than from the code, fixes it to green, reviews it once, and opens the PR. It never merges, never deletes work that isn't on the remote, and never runs privileged commands.
 
-It exists because repeated review-and-fix sweeps don't converge: fixes create new bugs. So temper builds an MVP first, checks it against an independent behaviour spec and acceptance tests, fixes to green in at most two rounds, then runs one review sweep, one careful fix wave and one final sweep with a hard stop. The run stages are saved, tested workflows that the head feeds with plan data; the head never writes control flow.
+## Why
 
-Every hand-off is a file, so any stage can start from a file a person wrote. Finished work is read from `Temper-Task` commit trailers, so a run survives blocked questions and usage-limit resets without redoing anything.
+Asking agents to review and fix code over and over doesn't converge: each round of fixes brings new bugs, because no fixed oracle says what "correct" means. temper puts the oracle first and the review last:
 
-Status: v0.3.0, early. It has done one real job: a 29-task epic in a Rust project, built on an ssh build host from plan to a merged PR. v0.2 removed the hand work that run's head had to do (`docs/temper/v0-2/spec.md`), and v0.3 closes what v0.2 still left to the head: phases that can say they're blocked, a checkpoint that commits only on a green gate, throwaway worktrees that cleanup removes, a regression check on the branch tip, pruned private host refs, and plans whose tasks own the tests they break (`docs/temper/v0-3/spec.md`). What is still open is under [Known issues](#known-issues). The design is `docs/specs/2026-10-24-temper-design.md` and the build plan is `docs/plans/2026-10-24-temper-v1.md`.
+1. Build an MVP, task by task, with only a quick check per task.
+2. Write a behaviour spec from the documents, not the code, and acceptance tests from that.
+3. Fix to green in at most two rounds.
+4. Then one review sweep, one careful fix wave with a regression check per fix, and a hard stop.
+
+## How it works
+
+```mermaid
+flowchart LR
+  G["1 ground<br/>idea to spec"] --> P["2 plan<br/>spec to tasks"]
+  P --> B["3 build<br/>MVP, behaviour spec,<br/>acceptance tests"]
+  B --> S["4 stabilise<br/>sweep, fixes,<br/>regression check"]
+  S --> U["5 publish<br/>docs, evidence,<br/>full gate, PR"]
+```
+
+- **Every hand-off is a file** (`spec.md`, `plan.md`, `args.json`, `log.md`), so you can start at any stage with a file you wrote yourself.
+- **The session you talk to directs the work, and agents follow instructions.** Stages 3 to 5 are saved, tested workflows that the session feeds with plan data. It never writes the control flow itself.
+- **Finished work is read from `Temper-Task` commit trailers,** so a run survives blocked questions, usage-limit resets and restarts without redoing anything.
+- **Tasks run in their own git worktrees,** locally or on an ssh build host.
+
+## Is it for you?
+
+It fits work of several tasks in a repo that has tests and a command that runs them: a feature, a hardening pass, a refactor with a clear end state. You want a branch you can trust, and you're willing to answer questions about the spec.
+
+It isn't for a one-line fix, a repo with no tests to gate on, or exploratory work with no end state. A plain Claude Code session is faster and cheaper for those.
+
+## What it costs
+
+temper runs many agents, and that costs tokens. For scale, temper's own v0.3 epic had 11 tasks:
+- the build of its 8 code tasks, with the checkpoint and acceptance tests, used about 1.6 million subagent tokens;
+- the review sweep, fix wave and publish used about 1.8 million more.
+
+Stage 4 can run one sweep instead of two (`sweeps: 1`) to save tokens.
 
 ## Requirements
 
-- Claude Code with saved workflows (the Workflow tool), and auto mode for overnight runs.
-- The superpowers plugin (below).
-- Node 20 or later and Python 3.10 or later, for its scripts; no npm or pip packages.
-- git. A build host over ssh is optional: without one, everything runs locally.
+- **Claude Code with workflows.** Workflows are available on all paid plans and through the API and cloud providers. On Pro, turn them on in the "Dynamic workflows" row of `/config`.
+- **Auto mode,** for overnight runs.
+- **The superpowers plugin.** It's installed with temper (below).
+- **Node 20 or later and Python 3.10 or later,** for its scripts. No npm or pip packages are needed.
+- **git.** A build host over ssh is optional: without one, everything runs locally.
 
 ## Install
 
-Install superpowers first. temper depends on `superpowers@anthropic-plugin-directory`, and Claude Code doesn't install a dependency from another marketplace automatically: temper reports the missing dependency and doesn't load until superpowers is installed.
-
 ```
-claude plugin install superpowers@anthropic-plugin-directory
 claude plugin marketplace add miki-przygoda/temper
 claude plugin install temper@temper
 ```
 
-Then restart Claude Code and run `/temper:setup`.
+This installs superpowers with it, from the Anthropic plugin directory. Then restart Claude Code and run `/temper:setup` in your project: a short interview that sets your preferences and writes `.temper/project.md`, which holds your test commands.
+
+## Quick start
+
+In your project, after `/temper:setup`:
+
+1. `/temper:ground`: describe what you want. temper asks questions and writes `docs/temper/<epic>/spec.md`. Read it and approve it.
+2. `/temper:plan`: it turns the spec into tasks, `plan.md` and `args.json`. Review the plan.
+3. `/temper:run`: it builds, stabilises and publishes. It stops to ask you when the spec doesn't decide something, and it asks before it pushes or opens a PR.
+
+`/temper:temper` looks at the files on disk and tells you which stage comes next.
+
+## Status
+
+v0.3.1, early. temper has done real jobs:
+- a 29-task epic in a Rust project, built on an ssh build host from plan to a merged PR;
+- its own v0.2 and v0.3.
+
+The logs of those last two runs are in `docs/temper/`. What's still open is under [Known issues](#known-issues), and the [changelog](CHANGELOG.md) lists each release.
+
+The design is `docs/specs/2026-10-24-temper-design.md`.
 
 ## The stages
 
@@ -97,7 +149,7 @@ sh scripts/install_smoke.sh           # install into a throwaway config (needs n
 
 CI (`.github/workflows/ci.yml`) runs the bundle check and `npm test` on every PR and push to `main`, on Node 20 with Python 3.10 and on Node 24 with Python 3.13, both on `ubuntu-latest`.
 
-Run them with `CLAUDE_CONFIG_DIR` set to a temporary directory, so nothing touches your own config. `scripts/install_smoke.sh` makes its own: it adds this checkout as a local marketplace in a temporary `CLAUDE_CONFIG_DIR`, installs superpowers and then temper, checks that `temper@temper` is enabled, and deletes the directory either way.
+Run them with `CLAUDE_CONFIG_DIR` set to a temporary directory, so nothing touches your own config. `scripts/install_smoke.sh` makes its own: it adds this checkout as a local marketplace in a temporary `CLAUDE_CONFIG_DIR`, installs temper alone, checks that `temper@temper` and the `superpowers` it brings with it are both enabled, and deletes the directory either way.
 
 ## Known issues
 

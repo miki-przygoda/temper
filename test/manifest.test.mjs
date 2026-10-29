@@ -7,10 +7,10 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const readJson = (p) => JSON.parse(readFileSync(join(root, p), 'utf8'));
 
-test('plugin.json names temper 0.3.0 by miki-przygoda', () => {
+test('plugin.json names temper 0.3.1 by miki-przygoda', () => {
   const plugin = readJson('.claude-plugin/plugin.json');
   assert.equal(plugin.name, 'temper');
-  assert.equal(plugin.version, '0.3.0');
+  assert.equal(plugin.version, '0.3.1');
   assert.equal(plugin.author.name, 'miki-przygoda');
 });
 
@@ -27,6 +27,8 @@ test('marketplace.json lists temper from this repo', () => {
   assert.deepEqual(market.plugins, [
     { name: 'temper', source: './', description: market.plugins[0].description },
   ]);
+  // A34: the root marketplace allowlists the directory, so installing temper installs superpowers.
+  assert.deepEqual(market.allowCrossMarketplaceDependenciesOn, ['anthropic-plugin-directory']);
 });
 
 test('README has at least 40 words and mentions superpowers', () => {

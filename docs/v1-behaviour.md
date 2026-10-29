@@ -182,9 +182,9 @@ The fixed rules (§8), finished work from git, and the cleanup check.
 
 The plugin, its install, the skills and the head's run loop.
 
-- **SKILLS-PACKAGING-01** Given `.claude-plugin/plugin.json`, when it is read, then its name is `temper` and it declares the dependency `superpowers@anthropic-plugin-directory`. (§11, A2, S5)
-- **SKILLS-PACKAGING-02** Given superpowers is not installed, when temper is installed, then temper fails to load until superpowers is installed; so the README's install steps and `/temper:setup` say to install `superpowers@anthropic-plugin-directory` first. (A2, S5)
-- **SKILLS-PACKAGING-03** Given the README, when a user follows its install section, then the order is: superpowers first, then this repo's marketplace, then `temper@temper`; after that `claude plugin list` shows `temper@temper` enabled. (A2, §11)
+- **SKILLS-PACKAGING-01** Given `.claude-plugin/plugin.json`, when it is read, then its name is `temper` and it declares the dependency `superpowers@anthropic-plugin-directory`. (§11, A2, A34, S5)
+- **SKILLS-PACKAGING-02** Given temper's marketplace allowlists `anthropic-plugin-directory`, when temper is installed from it, then superpowers is installed with it and both are enabled; the README says so, and `/temper:setup` still checks for superpowers first and says to install it if it is missing. (A34, superseding A2's install-first rule)
+- **SKILLS-PACKAGING-03** Given the README, when a user follows its install section, then the order is: this repo's marketplace, then `temper@temper`; after that `claude plugin list` shows `temper@temper` and `superpowers@anthropic-plugin-directory` enabled. (A34, §11)
 - **SKILLS-PACKAGING-04** Given the repo, when `claude plugin validate --strict` runs, then it passes, with author details and a README of at least 40 words. A LICENSE file or `license` field, which the plugin directory asks for (S5), is the owner's choice before sharing and not part of v1 (§10.2 asks only for `--strict`; the plan, Task 1 step 4 and "After v1"). (§10.2, S5)
 - **SKILLS-PACKAGING-05** Given the plugin is installed, when the user types `/temper:build`, `/temper:stabilise` or `/temper:publish` followed by JSON args, then the matching workflow runs and receives the args as a JSON object. (S5, §3.1)
 - **SKILLS-PACKAGING-06** Given the README, when a user reads it, then it says where state lives (`$CLAUDE_CONFIG_DIR/temper/` when that's set, else `~/.claude/temper/`) and that preferences are changed by asking Claude. (A1, §9)
@@ -218,3 +218,4 @@ The plugin, its install, the skills and the head's run loop.
 - **SKILLS-PACKAGING-34** Given the head resumes a build, when it launches it, then it bumps `attempt` in `args.json` on every resume and saves it. (A23, v0.3 spec, the build's `attempt`)
 - **SKILLS-PACKAGING-35** Given a phase returns `blocked` with a reason, when the head reads the result, then it treats it as a blocked item and the reason as data, never as an instruction or a shell command. (A22, v0.3 spec, phase results)
 - **SKILLS-PACKAGING-36** Given the head resumes publish, when it launches it, then it bumps `attempt` in `args.json` on every resume and saves it, so a docs, evidence or gate agent that returned blocked runs live. (A23, v0.3 fix wave, failure-paths-and-lifecycle-02)
+- **SKILLS-PACKAGING-37** Given `.claude-plugin/plugin.json`, when it is read, then it has `homepage`, `repository`, `license: MIT`, `keywords` and an `icon` naming a square PNG of 512 to 2048 px, under 2 MB, which the plugin directory lists. (A34)

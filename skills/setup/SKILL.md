@@ -9,7 +9,7 @@ Run this on first use, before any other temper stage. It does four things in ord
 
 ## 1. Superpowers first
 
-temper depends on `superpowers@anthropic-plugin-directory`. That is a dependency from another marketplace, so it is not installed with temper, and temper fails to load until it is (amendment A2).
+temper depends on `superpowers@anthropic-plugin-directory`. temper's marketplace allows that dependency from the Anthropic directory, so a normal install puts superpowers in with temper; it is installed with temper, not on its own (amendment A34). temper fails to load without it, so check anyway: an install from another copy of the marketplace, or one made before 0.3.1, can lack it.
 
 - If the `superpowers:brainstorming` and `superpowers:writing-plans` skills are not available in this session, stop and tell the user to install superpowers first:
 
