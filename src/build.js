@@ -133,6 +133,19 @@ function phaseBlocked(id, reason, doneNow) {
   return { status: 'blocked', blocked: [blockedEntry(id, reason)], done_now: doneNow, commits, flaky_reruns };
 }
 
+// spec "Phase results", the order of checks for a non-null phase result r: the agent's own blocked
+// status (its sha commit still recorded, and no second not-a-sha entry), then a reported non-sha
+// commit. Returns the blocked build result, or null to go on.
+function phaseIssue(id, r, doneNow) {
+  const reason = phaseBlockedReason(r);
+  if (reason !== null) {
+    recordCommit(id, r);
+    return phaseBlocked(id, reason, doneNow);
+  }
+  if (recordCommit(id, r)) return phaseBlocked(id, NOT_A_SHA, doneNow);
+  return null;
+}
+
 // Returns {blocked} or {checkpoint}; checkpoint is null when it was done in an earlier run.
 async function runCheckpoint(doneNow) {
   if (isDone('checkpoint')) {
@@ -142,7 +155,8 @@ async function runCheckpoint(doneNow) {
   phase('Checkpoint');
   const cp = await agent(checkpointPrompt(args), { schema: CHECKPOINT_SCHEMA, label: 'checkpoint', phase: 'Checkpoint' });
   if (cp === null || cp === undefined) return { blocked: phaseBlocked('checkpoint', NOTHING, doneNow) };
-  if (recordCommit('checkpoint', cp)) return { blocked: phaseBlocked('checkpoint', NOT_A_SHA, doneNow) };
+  const cpIssue = phaseIssue('checkpoint', cp, doneNow);
+  if (cpIssue) return { blocked: cpIssue };
   if (cp.gate_passed !== true) return { blocked: phaseBlocked('checkpoint', 'full gate failed: ' + cp.gate_log, doneNow) };
   return { checkpoint: cp };
 }
@@ -159,7 +173,8 @@ async function runBehaviourSpec(doneNow) {
   phase('Behaviour');
   const b = await agent(behaviourSpecPrompt(args), { schema: BEHAVIOUR_SCHEMA, label: 'behaviour-spec', phase: 'Behaviour' });
   if (b === null || b === undefined) return { blocked: phaseBlocked('behaviour-spec', NOTHING, doneNow) };
-  if (recordCommit('behaviour-spec', b)) return { blocked: phaseBlocked('behaviour-spec', NOT_A_SHA, doneNow) };
+  const bIssue = phaseIssue('behaviour-spec', b, doneNow);
+  if (bIssue) return { blocked: bIssue };
   return { groups: arr(b.groups) };
 }
 
@@ -178,7 +193,8 @@ async function runAcceptance(groups, doneNow) {
     const behaviours = spec ? arr(spec.behaviours) : [];
     const r = await agent(acceptancePrompt(group, behaviours, args), { schema: ACCEPTANCE_SCHEMA, label: id, phase: 'Behaviour' });
     if (r === null || r === undefined) return { blocked: phaseBlocked(id, NOTHING, doneNow) };
-    if (recordCommit(id, r)) return { blocked: phaseBlocked(id, NOT_A_SHA, doneNow) };
+    const issue = phaseIssue(id, r, doneNow);
+    if (issue) return { blocked: issue };
     out.passing += arr(r.passing).length;
     out.failing.push(...arr(r.failing));
     out.untestable.push(...arr(r.untestable));
@@ -203,7 +219,8 @@ async function runGreen(failing, markedToo, doneNow) {
     const g = await agent(greenPrompt(left, r, args, markedToo), { schema: GREEN_SCHEMA, label: id, phase: 'Green' });
     if (g === null || g === undefined) return { blocked: phaseBlocked(id, NOTHING, doneNow) };
     recordReruns(id, g);
-    if (recordCommit(id, g)) return { blocked: phaseBlocked(id, NOT_A_SHA, doneNow) };
+    const issue = phaseIssue(id, g, doneNow);
+    if (issue) return { blocked: issue };
     markedToo = false;
     out.rounds = r;
     out.fixed.push(...arr(g.fixed));

@@ -512,3 +512,13 @@ test('gate_slots must be an integer >= 1 when given', () => {
   }
   for (const ok of [1, 3]) assert.deepEqual(lib.validateStabiliseArgs({ ...stabiliseArgs(), gate_slots: ok }), []);
 });
+
+test('phase schemas require status done or blocked and allow a reason', () => {
+  for (const n of ['CHECKPOINT_SCHEMA', 'BEHAVIOUR_SCHEMA', 'ACCEPTANCE_SCHEMA', 'GREEN_SCHEMA', 'DOCS_SCHEMA', 'EVIDENCE_SCHEMA']) {
+    const s = lib[n];
+    assert.ok(s.required.includes('status'), `${n}.required lacks status`);
+    assert.ok(!s.required.includes('reason'), `${n}.required has reason`);
+    assert.deepEqual(s.properties.status.enum, ['done', 'blocked'], n);
+    assert.deepEqual(s.properties.reason, { type: 'string' }, n);
+  }
+});
