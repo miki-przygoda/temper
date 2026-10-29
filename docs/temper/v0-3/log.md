@@ -38,3 +38,9 @@
 - **The build launch.** `done` is `["cleanup-skill", "plan-skill", "run-skill"]`. The runner is v0.2.0's committed `workflows/build.js` (16c11c8), from a scratch copy.
   - **Known limit of that runner:** its checkpoint commits even on a red gate, so after a checkpoint block the head relaunches without `resumeFromRunId`.
   - **The host.** This Mac has 16 CPUs and the build runs one task per wave (`gate_slots` is unset, so 1).
+
+## 29 Oct 2026, 02:41: the build resumed after the owner's pause (head)
+
+- **The pause.** The owner paused the build at 00:18. The head stopped run wf_fce0c7e8-830 as wave 3 (`phase-status`) began; no task branch or commit came from it.
+- **The resume.** It ran at 02:41, as the owner scheduled. `done` is `["cleanup-skill", "plan-skill", "run-skill"]` (unchanged) and `attempt` is 1.
+- **The relaunch.** A fresh launch of v0.2.0's `build.js` (the scratch copy, the same as 16c11c8), not a resume, since the stopped run ended mid-wave.
