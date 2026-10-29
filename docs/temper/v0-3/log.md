@@ -141,3 +141,15 @@
   - GREEN 2/2: the directory is never cleaned or removed, the answer is keyed by the task (`args.answers["auth"]`), and it resumes after the cause is gone.
 - **Observation, not a gap.** A resume of R1 while the path is still bad blocks again, and then the skill's "if the same id blocks again, stop and tell the user" applies.
 - **Open item.** `args.json` has one `attempt` field, but stages 3, 4b and 5 each say to save their own counter there. The counters only need to change between a stage's own launches, so sharing the field is harmless, but the skill doesn't say so. The head kept the stage 4 and 5 counters in its launch args.
+
+## 29 Oct 2026: stage 5 (head)
+
+- **Result.** Run wf_c7788ee8-b58 (v0.3's `publish.js`, `attempt: 0`) returned `ready`.
+  - The docs went in at e6932a6: README, amendments, behaviour lines, known issues and `pr-body.md`.
+  - The evidence went in at fd84a4f: `owner-steps.sh` and `owner-checklist.md`.
+  - The full gate passed at fd84a4f (exit 0), in a throwaway under `tmp/`.
+- **The head's check.**
+  - Both commits are on the branch.
+  - `pr-body.md` and the diff from `v0.3` have no attribution lines, home paths, host names or private project names.
+  - This log entry is the only commit after the gated tip.
+- **Push.** It waits for the owner's yes: push `epic/v0-3`, then open the PR into `v0.3`, never merging it.
