@@ -8,13 +8,13 @@ It exists because repeated review-and-fix sweeps don't converge: fixes create ne
 
 Every hand-off is a file, so any stage can start from a file a person wrote. Finished work is read from `Temper-Task` commit trailers, so a run survives blocked questions and usage-limit resets without redoing anything.
 
-Status: v0.2.0, early. It has done one real job: a 29-task epic in a Rust project, built on an ssh build host from plan to a merged PR. v0.2 removes the hand work that run's head had to do (`docs/temper/v0-2/spec.md`); what is still open is under [Known issues](#known-issues). The design is `docs/specs/2026-10-24-temper-design.md` and the build plan is `docs/plans/2026-10-24-temper-v1.md`.
+Status: v0.3.0, early. It has done one real job: a 29-task epic in a Rust project, built on an ssh build host from plan to a merged PR. v0.2 removed the hand work that run's head had to do (`docs/temper/v0-2/spec.md`), and v0.3 closes what v0.2 still left to the head: phases that can say they're blocked, a checkpoint that commits only on a green gate, throwaway worktrees that cleanup removes, a regression check on the branch tip, pruned private host refs, and plans whose tasks own the tests they break (`docs/temper/v0-3/spec.md`). What is still open is under [Known issues](#known-issues). The design is `docs/specs/2026-10-24-temper-design.md` and the build plan is `docs/plans/2026-10-24-temper-v1.md`.
 
 ## Requirements
 
 - Claude Code with saved workflows (the Workflow tool), and auto mode for overnight runs.
 - The superpowers plugin (below).
-- Node 20 or later and Python 3.9 or later, for its scripts; no npm or pip packages.
+- Node 20 or later and Python 3.10 or later, for its scripts; no npm or pip packages.
 - git. A build host over ssh is optional: without one, everything runs locally.
 
 ## Install
@@ -85,7 +85,7 @@ No preference can change these:
 
 ## Development
 
-The workflows are bundled from `src/` (a shared `lib.js` plus one body per stage) into `workflows/*.js`, which are generated and committed. The Python scripts are stdlib only (Python 3.9 or later). The tests need Node 20 or later and no npm packages.
+The workflows are bundled from `src/` (a shared `lib.js` plus one body per stage) into `workflows/*.js`, which are generated and committed. The Python scripts are stdlib only (Python 3.10 or later). The tests need Node 20 or later and no npm packages.
 
 ```
 npm test                              # node --test, then the Python unittests
@@ -95,19 +95,16 @@ claude plugin validate . --strict     # the plugin manifest, skills and hooks
 sh scripts/install_smoke.sh           # install into a throwaway config (needs network)
 ```
 
-CI (`.github/workflows/ci.yml`) runs the bundle check and `npm test` on every PR and push to `main`, on Node 20 with Python 3.9 and on Node 24 with Python 3.13.
+CI (`.github/workflows/ci.yml`) runs the bundle check and `npm test` on every PR and push to `main`, on Node 20 with Python 3.10 and on Node 24 with Python 3.13, both on `ubuntu-latest`.
 
 Run them with `CLAUDE_CONFIG_DIR` set to a temporary directory, so nothing touches your own config. `scripts/install_smoke.sh` makes its own: it adds this checkout as a local marketplace in a temporary `CLAUDE_CONFIG_DIR`, installs superpowers and then temper, checks that `temper@temper` is enabled, and deletes the directory either way.
 
 ## Known issues
 
-Still open after v0.2 (`docs/v1-log.md` has the detail and the redo notes):
+Still open after v0.3 (`docs/v1-log.md` has the detail and the redo notes):
 - A run stops when the head's Claude Code session closes (see [Overnight runs](#overnight-runs)).
-- Two reverted v1 review fixes are not redone yet: CONTROL-FLOW-6 (a failed checkpoint can come back from the resume cache) and TESTS-DOCS-5 (the overnight mode check). Some minors are open as well.
-- The private fetch refs under `refs/temper/host/` are never pruned, so a host branch that was rewritten needs a manual `git update-ref -d` (stale-private-ref in `docs/v1-log.md`).
-- Phase, docs and evidence agents have no `blocked` status in their result schemas, so when one of them fails its branch check the workflow doesn't see it; the head's check that each reported sha is on the branch is what catches it (`docs/temper/v0-2/log.md`).
-- Each per-fix regression agent checks its fix against that fix's parent, not the branch HEAD, so a regression that was already fixed forward is reported again on every rerun of the check.
-- The plan skill doesn't make a task own the existing tests its change will break, so such a task blocks at its quick gate until the plan is fixed.
+- TESTS-DOCS-5 (the overnight mode check, a reverted v1 review fix) is deferred: there is still no safe way for the head to refresh the permission mode without a new prompt.
+- Some minors from the v1 review are open as well.
 
 To change an answer or the done list, launch the same workflow with updated `args` and `resumeFromRunId`, never by editing a generated script.
 

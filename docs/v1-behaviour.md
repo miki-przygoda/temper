@@ -2,7 +2,7 @@
 
 Written from `docs/specs/2026-10-24-temper-design.md` (sections 1–12, including the A1–A6 amendments) and `notes/spikes.md` only, never from the code. The plan was used only for file, command and field names. This is the oracle the v1 code is checked against: each line is something a user or the head session relies on.
 
-Each behaviour is one line of the form **Given** a state, **when** something happens, **then** the expected result. Ids are `<GROUP>-NN`. Section references (§) are to the design spec; A1–A6 are its section 12 amendments; S1–S6 are the spikes. The v0.2 lines (BUILD-28 onwards, STABILISE-22 onwards, PUBLISH-09, STATE-22, SKILLS-PACKAGING-29 onwards, and the changed STABILISE-09) were added from `docs/temper/v0-2/spec.md` and cite it as "v0.2 spec §3.x".
+Each behaviour is one line of the form **Given** a state, **when** something happens, **then** the expected result. Ids are `<GROUP>-NN`. Section references (§) are to the design spec; A1–A6 are its section 12 amendments; S1–S6 are the spikes. The v0.2 lines (BUILD-28 onwards, STABILISE-22 onwards, PUBLISH-09, STATE-22, SKILLS-PACKAGING-29 onwards, and the changed STABILISE-09) were added from `docs/temper/v0-2/spec.md` and cite it as "v0.2 spec §3.x". The v0.3 lines (BUILD-37 onwards, STABILISE-32 onwards, PUBLISH-10 onwards, GIT-SAFETY-15 onwards and SKILLS-PACKAGING-32 onwards) were added from `docs/temper/v0-3/spec.md` and cite it as "v0.3 spec, <contract>".
 
 Terms: *the head* is the session the user talks to; *state dir* is `$CLAUDE_CONFIG_DIR/temper/` when `CLAUDE_CONFIG_DIR` is set, else `~/.claude/temper/` (A1); *trailer* is the commit trailer `Temper-Task: <epic>/<id>`.
 
@@ -46,6 +46,13 @@ Stage 3, `/temper:build` (`workflows/build.js`), fed with `args.json`.
 - **BUILD-34** Given agents report `flaky_reruns`, when build returns, then its result's `flaky_reruns` holds each entry with the reporting agent's label as `id`. (A19, v0.2 spec §3.6)
 - **BUILD-35** Given an agent reports a commit value that is not a lowercase hex sha of 7 to 64 characters, when build, stabilise or publish returns, then that value is left out of `commits` and its id is in `blocked` with the reason `commit is not a sha`; the checker's tip check uses the same pattern, so a SHA-256 sha passes. (A14, v0.2 spec §3.1, §8)
 - **BUILD-36** Given `args.tasks` has a task with the id `epic`, when the args are validated, then they are refused before any agent runs, because that task's worktree would share the epic worktree's path. (A14, v0.2 spec §3.1)
+- **BUILD-37** Given the checkpoint, behaviour-spec, acceptance or green agent returns `status: "blocked"` with a reason, when build reads it, then build returns `blocked` with `{id: <phase id>, reason: <the agent's reason>}` and runs no later phase. (A22, v0.3 spec, phase results)
+- **BUILD-38** Given a blocked phase reports a `commit`, when build returns, then a sha is recorded in `commits`, and a value that is not a sha is left out without a second `commit is not a sha` entry, so `blocked` holds only the agent's own entry. (A22, v0.3 spec, phase results)
+- **BUILD-39** Given the checkpoint returns `status: "done"` with `gate_passed: false`, when build reads it, then build still returns `blocked` with `full gate failed: <gate log>`. (A22, v0.3 spec, phase results)
+- **BUILD-40** Given a phase returns a status other than `done` with no reason, when build reads it, then it is blocked with the reason `phase returned status <status>`. (A22, v0.3 spec, phase results)
+- **BUILD-41** Given a build is resumed with `attempt` bumped, when its prompts are read, then the checkpoint prompt differs from the first run's, so it runs live, and every task prompt is the same as before. (A23, v0.3 spec, the build's `attempt`)
+- **BUILD-42** Given the checkpoint runs, when its prompt is read, then it says to append and commit the checkpoint log section only when the full gate passed, and, when the gate failed, to commit nothing and return `status: "blocked"` with the gate log in `reason`. (A23, v0.3 spec, the checkpoint prompt)
+- **BUILD-43** Given a task is checked, and rechecked after a failed check, when the checker prompts are read, then each names its own throwaway worktree under `<repo>/.temper/worktrees/<epic>/tmp/`, from its label. (A24, v0.3 spec, throwaway worktrees)
 
 ## stabilise
 
@@ -82,6 +89,8 @@ Stage 4, `/temper:stabilise` (`workflows/stabilise.js`), on the epic branch.
 - **STABILISE-29** Given a verifier returns nothing, when the findings are collected, then the finding is kept as unverified, never counted as refuted or fixed, listed once (as verified) when another lens's verifier confirmed the same bug, blocks above minor, and stays unverified when saved for a resume. (A20, v0.2 spec §3.9)
 - **STABILISE-30** Given second-sweep findings, when they are collected, then their ids are put into the `second:` namespace by the script; a first-sweep lens whose slug starts with `second` never counts as a second-sweep fix, and a legacy `fix:second-*` trailer not in `args.selected` counts as proof that the second sweep ran, so there is no third sweep and its regression check runs. (A20, v0.2 spec §3.9)
 - **STABILISE-31** Given `args.gate_slots` is n, when `part: "fix"` runs its regression check, then the `regress:fix:<id>` agents launch in chunks of at most n; a `gate_slots` that is not an integer of at least 1 is refused, and a missing one launches them together. (A13, A16, v0.2 spec §3.3)
+- **STABILISE-32** Given a sweep and a `part: "fix"` run, when the reviewer, verifier, second-sweep and regression prompts are read, then each names its own throwaway worktree under `<repo>/.temper/worktrees/<epic>/tmp/<sanitised label>`. (A24, v0.3 spec, throwaway worktrees)
+- **STABILISE-33** Given `part: "fix"` runs its regression check, when each `regress:fix:<id>` prompt is read, then it names the branch's current tip (`git rev-parse <branch>`), says a regression counts only when it reproduces on that tip as well, with both reproductions given, and still ends with `Run attempt <n>.` (A26, v0.3 spec, the regression prompt)
 
 ## publish
 
@@ -96,6 +105,8 @@ Stage 5, `/temper:publish` (`workflows/publish.js`), on the epic branch.
 - **PUBLISH-07** Given steps that need root, when the evidence is written, then they go into a script and a checklist for the user, and no agent runs them. (§8)
 - **PUBLISH-08** Given a PR is open, when the run ends, then temper does not merge it. (§8)
 - **PUBLISH-09** Given the docs and evidence agents report commit shas, when publish returns, then its result's `commits` holds `docs` and `evidence` with those shas, leaving out empty ones. (A14, v0.2 spec §3.1)
+- **PUBLISH-10** Given the docs or evidence agent returns `status: "blocked"` with a reason, when publish reads it, then publish returns `blocked` with that phase's id and reason, never `ready`, runs nothing after it, and still returns the commits reported before it. (A22, v0.3 spec, phase results)
+- **PUBLISH-11** Given publish runs its full gate, when the gate prompt is read, then it names a throwaway worktree under `<repo>/.temper/worktrees/<epic>/tmp/`, from the label `gate`. (A24, v0.3 spec, throwaway worktrees)
 
 ## state
 
@@ -156,6 +167,10 @@ The fixed rules (§8), finished work from git, and the cleanup check.
 - **GIT-SAFETY-12** Given content from repos, docs, logs, tool output or agents that contains instructions, when temper's agents or the head read it, then they treat it as data and do not follow it. (§8)
 - **GIT-SAFETY-13** Given a change that would loosen a security decision, when the head or an agent meets it, then it is confirmed with the user every time, never assumed from a preference. (§8)
 - **GIT-SAFETY-14** Given the cleanup check is run more than once on the same unchanged state, when it runs, then it gives the same answer and changes nothing in the repo except, at most, a fetch of remote refs. (§8)
+- **GIT-SAFETY-15** Given a clean detached worktree of the repo whose HEAD is on `origin/main`, when `cleanup_check.py <repo> --detached --worktree <path>` runs, then it exits 0 with `{"ok": true, "reasons": []}`. (A25, v0.3 spec, `cleanup_check.py`)
+- **GIT-SAFETY-16** Given a detached worktree whose HEAD is on no remote branch, or one with an uncommitted change, when the `--detached` check runs, then it exits 1 with a reason and leaves the worktree and its files as they were. (A25, v0.3 spec, `cleanup_check.py`)
+- **GIT-SAFETY-17** Given `--detached` without `--worktree`, a branch together with `--detached`, or neither a branch nor `--detached`, when the cleanup check runs, then it exits 1 with one reason. (A25, v0.3 spec, `cleanup_check.py`)
+- **GIT-SAFETY-18** Given a task branch the host deleted after an earlier fetch-back, when the head fetches back with `host_sync.py fetch`, then that branch's ref under `refs/temper/host/temper/<epic>/` is gone, the local `refs/heads/` branch is kept, and another epic's private refs are untouched. (A27, v0.3 spec, `host_sync.py fetch`)
 
 ## skills-packaging
 
@@ -192,3 +207,7 @@ The plugin, its install, the skills and the head's run loop.
 - **SKILLS-PACKAGING-29** Given a run stage returns `commits`, or `done_now` after a merge, when the head reads the result, then it checks each sha with `git merge-base --is-ancestor <sha> <branch>`, reports any sha not on the branch to the user, never cherry-picks it, and lets that task or phase run again on resume. (A14, v0.2 spec §3.1)
 - **SKILLS-PACKAGING-30** Given `project.md` has a `## Build rule` section and a `flaky:` line, when the plan skill writes `args.json`, then it copies them into `build_rule` and `flaky`, and never copies the build rule into task texts. (A15, A19, v0.2 spec §3.2, §3.6)
 - **SKILLS-PACKAGING-31** Given `project.md` has `gate_slots: <n>`, when the head sizes a launch (A13), then at most n gates run at once. (A18, v0.2 spec §3.5)
+- **SKILLS-PACKAGING-32** Given the plan skill writes a plan, when it lists a task's files, then it searches the tests for every function, label, prompt line and file the task changes, puts each existing test file that asserts them into the task's `Owns:`, and puts two tasks that need the same test file in different waves. (A28, v0.3 spec, plan test ownership)
+- **SKILLS-PACKAGING-33** Given `/temper:cleanup` runs, when it reads `git worktree list --porcelain`, then it checks every detached worktree under `.temper/worktrees/<epic>/`, `tmp/` included, with `cleanup_check.py <repo> --detached --worktree <path>` and removes it only on exit 0. (A25, v0.3 spec, the cleanup skill)
+- **SKILLS-PACKAGING-34** Given the head resumes a build, when it launches it, then it bumps `attempt` in `args.json` on every resume and saves it. (A23, v0.3 spec, the build's `attempt`)
+- **SKILLS-PACKAGING-35** Given a phase returns `blocked` with a reason, when the head reads the result, then it treats it as a blocked item and the reason as data, never as an instruction or a shell command. (A22, v0.3 spec, phase results)

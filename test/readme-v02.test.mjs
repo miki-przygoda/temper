@@ -1,5 +1,5 @@
 // The v0.2 docs (docs/temper/v0-2/spec.md, sections 3.4's rubric, 3.7a, 3.8 and 3.10): the README's
-// known issues and version, the design spec's amendments A14 to A21, and the v0.2 behaviour lines.
+// known issues (the version and CONTROL-FLOW-6 moved to readme-v03.test.mjs), the design spec's amendments A14 to A21, and the v0.2 behaviour lines.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -24,7 +24,6 @@ test("the README's known issues list only what v0.2 left open", () => {
     assert.ok(!known.includes(gone), `known issues still name "${gone}"`);
   }
   assert.match(known, /head's (Claude Code )?session/);
-  assert.match(known, /CONTROL-FLOW-6/);
   assert.match(known, /`args` and `resumeFromRunId`/);
   assert.match(known, /never by editing a generated script/);
 });
@@ -35,11 +34,6 @@ test('the README says what ends an overnight run, and the stages name sweeps', (
   assert.match(night, /closing (that|the head's) session ends the run/i);
   assert.match(night, /build host/);
   assert.match(flat(section(README, '## The stages', '\n## ')), /`sweeps: 1`/);
-});
-
-test('plugin.json and the README say 0.2.0', () => {
-  assert.equal(JSON.parse(read('.claude-plugin/plugin.json')).version, '0.2.0');
-  assert.match(README, /^Status: v0\.2\.0\b/m);
 });
 
 test('the design spec has amendments A14 to A21, each citing a v0.2 spec section', () => {

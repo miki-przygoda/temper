@@ -129,6 +129,8 @@ Five regressions were proven. Each was reproduced a second time with an independ
 
   Until then, recover by hand with `git update-ref -d` on the stale refs/temper/host/ ref.
 
+  Update: closed in v0.3 by `--prune` on the private fetch (the `+` refspecs follow a rewritten host branch, and `--prune` drops the copy of one the host deleted; docs/temper/v0-3/spec.md, `host_sync.py fetch`).
+
 ### Gate and smoke at 99382ae
 
 - `npm test`: 282 of 282 Node tests and 106 of 106 Python tests passed, rc 0. The counts dropped from 287 and 114 at 234db26 because the reverts took their tests with them.
@@ -142,6 +144,8 @@ Five regressions were proven. Each was reproduced a second time with an independ
 - SECOND-CONTROL-FLOW-5, SECOND-CONTROL-FLOW-6, SECOND-TESTS-DOCS-2, SECOND-CONTROL-FLOW-7 and SECOND-TESTS-DOCS-5 are open again, in their 24 Oct form.
 - SECOND-CONTROL-FLOW-1 is fixed but carries the open stale-private-ref regression.
 - SECOND-CONTROL-FLOW-5, SECOND-TESTS-DOCS-2 and SECOND-CONTROL-FLOW-7 are redone in v0.2 (docs/temper/v0-2/spec.md §3.9).
+- SECOND-CONTROL-FLOW-6 is redone in v0.3 (docs/temper/v0-3/spec.md, the build's attempt and the checkpoint prompt).
+- SECOND-TESTS-DOCS-5 stays open, deferred in v0.3: there is still no safe way for the head to refresh the permission mode without a new prompt.
 
 ### Second-sweep findings this run did not touch (minors, left for the owner)
 

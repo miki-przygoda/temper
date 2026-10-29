@@ -7,10 +7,10 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const readJson = (p) => JSON.parse(readFileSync(join(root, p), 'utf8'));
 
-test('plugin.json names temper 0.2.0 by miki-przygoda', () => {
+test('plugin.json names temper 0.3.0 by miki-przygoda', () => {
   const plugin = readJson('.claude-plugin/plugin.json');
   assert.equal(plugin.name, 'temper');
-  assert.equal(plugin.version, '0.2.0');
+  assert.equal(plugin.version, '0.3.0');
   assert.equal(plugin.author.name, 'miki-przygoda');
 });
 
