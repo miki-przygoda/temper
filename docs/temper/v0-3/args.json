@@ -290,6 +290,10 @@
       "title": "the plan, cleanup and run skills carry the head's side (spec, user flow 6)"
     }
   ],
-  "done": [],
+  "done": [
+    "cleanup-skill",
+    "plan-skill",
+    "run-skill"
+  ],
   "answers": {}
 }

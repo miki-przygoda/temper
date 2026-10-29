@@ -28,3 +28,13 @@
 - **Plan wording fixed by the head.**
   - `build-attempt` changes the existing `lib-core` test that pins "build ignores attempt", and adds `attempt: 0` to BUILD-01's base so the generated cases cover it.
   - `cleanup-skill` edits SECOND_SAFETY_7 and `epic_dir_command()` to accept its new lines.
+
+## 29 Oct 2026: skill tasks (head)
+
+- **The run.** The skill-edit workflow (wf_822135f7-8a8): writing-skills RED/GREEN around temper's implementer, checker, one retry and merge.
+  - `plan-skill`: RED failed P1 3/3 (the bundled `workflows/*.js` left out of owns), P2 1/3 and P3 3/3. GREEN failed 0/3 on each. Merged at 7466b04.
+  - `cleanup-skill`: RED failed C1 and C2 3/3; C3 0/3 needed no change. GREEN failed 0/3. Merged at 6dd1849.
+  - `run-skill`: RED failed R1 and R2 3/3; R3 and R4 0/3 needed no change. GREEN failed 0/3. Merged at 695ef14.
+- **The build launch.** `done` is `["cleanup-skill", "plan-skill", "run-skill"]`. The runner is v0.2.0's committed `workflows/build.js` (16c11c8), from a scratch copy.
+  - **Known limit of that runner:** its checkpoint commits even on a red gate, so after a checkpoint block the head relaunches without `resumeFromRunId`.
+  - **The host.** This Mac has 16 CPUs and the build runs one task per wave (`gate_slots` is unset, so 1).
