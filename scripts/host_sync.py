@@ -7,9 +7,10 @@ copies of the host's, refs/temper/host/, which follow a host branch that was rew
 
 fetch: bring the epic branch and the task branches temper/<epic>/* back from the host clone
 (amendment A7). They land first in a private namespace, refs/temper/host/<branch>, never
-straight in refs/heads/ (SECOND-CONTROL-FLOW-1). Each local branch then moves only by a fast
-forward: with `git merge --ff-only` in the worktree where it is checked out, if it is, so no
-worktree is left with its branch moved under it; otherwise with `git update-ref`, which checks
+straight in refs/heads/ (SECOND-CONTROL-FLOW-1). The fetch prunes: a branch deleted on the
+host loses its private copy, and the local refs/heads/ branch is kept. Each local branch then
+moves only by a fast forward: with `git merge --ff-only` in the worktree where it is checked
+out, if it is, so no worktree is left with its branch moved under it; otherwise with `git update-ref`, which checks
 the old value. A local branch that is missing is created. A local branch already ahead of the
 host's copy (the head's own commits, which `push` then brings to the host) is left as it is
 (A7-REGRESSION). When any branch has commits on both sides, nothing local is changed and it
@@ -85,13 +86,15 @@ def _fetch_private(repo, url, branch, epic):
     """Fetch the host's branches into refs/temper/host/; return {local ref: host sha}.
 
     The private refs are a copy of the host's, so they follow a host branch that was
-    rewritten or recreated (the '+'); only refs/heads/ is guarded, by fetch() below.
+    rewritten or recreated (the '+'), and --prune drops the copy of a branch the host deleted.
+    The refspecs bound --prune to refs/temper/host/<branch> and refs/temper/host/temper/<epic>/;
+    refs/heads/ is never pruned, and is guarded by fetch() below.
     """
     specs = [
         f'+refs/heads/{branch}:{PRIVATE}{branch}',
         f'+refs/heads/temper/{epic}/*:{PRIVATE}temper/{epic}/*',
     ]
-    proc = _git(repo, 'fetch', '--no-tags', '--no-write-fetch-head', url, *specs)
+    proc = _git(repo, 'fetch', '--prune', '--no-tags', '--no-write-fetch-head', url, *specs)
     if proc.returncode != 0:
         raise SyncError(f'fetch from {url} failed (nothing local changed): {proc.stderr.strip()}')
     proc = _git(repo, 'for-each-ref', '--format=%(refname) %(objectname)',

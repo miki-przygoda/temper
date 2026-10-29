@@ -659,6 +659,37 @@ class TestGitSafety(GitSandbox):
         self.assertEqual(self.git(repo, 'rev-parse', 'refs/temper/host/temper/e/a'), rewritten)
         self.assertEqual(self.git(repo, 'rev-parse', 'temper/e/a'), rewritten)
 
+    def test_GIT_SAFETY_18_a_task_branch_deleted_on_the_host_leaves_no_private_ref(self):
+        cmd = self._fetch_back_cmd()
+        repo, origin = self.remote()
+        self.git(repo, 'branch', '--no-track', 'epic/e', 'main')
+        host_clone = self.tmp / 'host' / 'repo'
+        self.git(self.tmp, 'clone', '-q', str(origin), str(host_clone))
+        self.git(host_clone, 'branch', '--no-track', 'epic/e', 'origin/main')
+        env, _log = self._stub_ssh()
+        # Another epic's private ref, which this epic's fetch must never touch.
+        other = self.git(repo, 'rev-parse', 'main')
+        self.git(repo, 'update-ref', 'refs/temper/host/temper/other/x', other)
+        # Two task branches on the host, fetched back once.
+        for task in ('a', 'b'):
+            self.git(host_clone, 'checkout', '-q', '-b', f'temper/e/{task}', 'epic/e')
+            self.commit(host_clone, f'feat: {task}\n\nTemper-Task: e/{task}', name=f'{task}.txt')
+        self.git(host_clone, 'checkout', '-q', '--detach')
+        proc = self._run_skill_cmd(cmd, env, repo, host_clone)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        b = self.git(repo, 'rev-parse', 'refs/heads/temper/e/b')
+        # The host deletes temper/e/b; the next fetch-back drops its private copy only.
+        self.git(host_clone, 'branch', '-D', 'temper/e/b')
+        proc = self._run_skill_cmd(cmd, env, repo, host_clone)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        listed = self.git(repo, 'for-each-ref', '--format=%(refname)',
+                          'refs/temper/host/temper/e/').split()
+        self.assertEqual(listed, ['refs/temper/host/temper/e/a'])
+        self.assertEqual(self.git(repo, 'rev-parse', 'refs/heads/temper/e/b'), b,
+                         'a local branch is never deleted')
+        self.assertEqual(self.git(repo, 'rev-parse', 'refs/temper/host/temper/other/x'), other,
+                         "another epic's private ref survives")
+
     # ---- SECOND-TESTS-DOCS-1: the epic branch, with the spec and plan, reaches the host clone ----
 
     def _push_cmd(self, section_start, section_end):
