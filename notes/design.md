@@ -26,7 +26,7 @@ plan    → plan.md: tasks, contracts, dependency waves, behaviour groups
 /temper:publish    branch → docs, gate, PR (the user merges)
 ```
 
-Every arrow is a file. Any stage can start from a file a person wrote by hand, and Cairn can later pass a spec from one session to another.
+Every arrow is a file. Any stage can start from a file a person wrote by hand, and a multi-session tool can later pass a spec from one session to another.
 
 ### Checkpoints
 

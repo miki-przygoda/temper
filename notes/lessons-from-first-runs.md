@@ -1,6 +1,6 @@
-# Lessons from running milestones as workflows (Cairn, Oct 2026)
+# Lessons from running milestones as workflows (a Rust project, Oct 2026)
 
-These come from two real runs on a Rust workspace with a remote build host. R3 was 19 tasks with a review after each task, then a whole-branch review and a fix wave. R3b was 12 tasks run in the lifecycle shape below. They are written without Cairn specifics, so they carry over to other projects.
+These come from two real runs on a Rust workspace with a remote build host. Run 1 was 19 tasks with a review after each task, then a whole-branch review and a fix wave. Run 2 was 12 tasks run in the lifecycle shape below. They are written without project specifics, so they carry over to other projects.
 
 ## The problem
 
@@ -9,11 +9,11 @@ Reviewing each task, then sweeping the whole branch, then fixing whatever came u
 - no fixed oracle says what "correct" means, so every reviewer judges against its own reading of the code;
 - review rounds on single tasks spend effort on code that later tasks change anyway.
 
-## The lifecycle that worked (R3b)
+## The lifecycle that worked (run 2)
 
 1. **MVP, task by task, with no review rounds.** Each task ends with a cheap quick check (format, lint, the affected crates' tests) and commits. The full gate runs only at checkpoints.
-2. **MVP checkpoint.** The full CI gate, plus a manual end-to-end run of the real binary, flow by flow (setup, each command, failure paths, teardown). It records gaps but fixes nothing. In R3b: 18 of 18 gate steps passed, 14 of 14 flows ran, and 5 small gaps were noted for later.
-3. **A behaviour spec written from the documents, not the code.** It's given/when/then lines with ids, in groups. This is the independent oracle. R3b's had 93 behaviours in 7 groups.
+2. **MVP checkpoint.** The full CI gate, plus a manual end-to-end run of the real binary, flow by flow (setup, each command, failure paths, teardown). It records gaps but fixes nothing. In run 2: 18 of 18 gate steps passed, 14 of 14 flows ran, and 5 small gaps were noted for later.
+3. **A behaviour spec written from the documents, not the code.** It's given/when/then lines with ids, in groups. This is the independent oracle. Run 2's had 93 behaviours in 7 groups.
 4. **Acceptance tests, one group at a time, written without touching product code.**
    - They drive the real binary end to end, as a person would.
    - A test that fails because the product misbehaves stays in, marked ignored with its id (`#[ignore = "acceptance-failing: <id>"]`), so the branch stays green and the failure is recorded.
@@ -31,12 +31,12 @@ Reviewing each task, then sweeping the whole branch, then fixing whatever came u
 
 ## Engine lessons (things the script had to work around)
 
-- **Editing a prompt invalidates every cached result after it.** Resume replays only the longest unchanged prefix. To change a late phase's prompt without rerunning finished tasks, R3b's script took `args.precommitted = { taskN: {status, commit} }` and skipped those tasks. A reusable version should have explicit checkpoints instead.
+- **Editing a prompt invalidates every cached result after it.** Resume replays only the longest unchanged prefix. To change a late phase's prompt without rerunning finished tasks, run 2's script took `args.precommitted = { taskN: {status, commit} }` and skipped those tasks. A reusable version should have explicit checkpoints instead.
 - **Gates go through the shell inside agent prompts.** The agent runs the gate command itself (over ssh to the build host). The script can't run commands, so a gate's result is only as trustworthy as the agent's report of it. Have the agent return the exact log path and exit status in its schema, and spot-check them.
 - **Long gates need detaching.** A gate that runs longer than an agent's tool timeout has to be started detached (`setsid nohup ...`) and polled. Write a done-marker file plus a summary JSON.
 - **Locks between workflows.** When two workflows share a build host, one lock-holder at a time runs the full gate (a flock-holding helper and a `.held` marker).
-- **Disk is a real constraint.** Build caches grow with every task: R3 went from 76 GB free to 28 GB in one night. The gate wiped caches automatically below a free-space floor, and agents ran a cache clean on their own target dir before checkpoints.
-- **Sequential groups cost wall-clock time.** R3b ran its acceptance groups one at a time to avoid build-dir contention. With a separate target dir per group, they could run in a pipeline.
+- **Disk is a real constraint.** Build caches grow with every task: run 1 went from 76 GB free to 28 GB in one night. The gate wiped caches automatically below a free-space floor, and agents ran a cache clean on their own target dir before checkpoints.
+- **Sequential groups cost wall-clock time.** Run 2 ran its acceptance groups one at a time to avoid build-dir contention. With a separate target dir per group, they could run in a pipeline.
 - **Read the journal, not the narration.** For a status check, read `journal.jsonl` for each agent's real return value, then peek at the running agent's transcript. Don't trust a summary of a summary.
 
 ## Standing rules that kept runs safe
