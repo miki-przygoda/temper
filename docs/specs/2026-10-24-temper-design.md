@@ -1,6 +1,6 @@
 # temper: design spec
 
-Date: 24 Oct 2026. Status: written from design sections 1–6, all approved by the owner. Sources: `notes/discovery.md` (the owner's idea and answers), `notes/design.md` (the approved sections), `notes/official-workflows.md` (Claude Code facts, with doc links), `notes/lessons-from-cairn.md`.
+Date: 24 Oct 2026. Status: written from design sections 1–6, all approved by the owner. Sources: `notes/discovery.md` (the owner's idea and answers), `notes/design.md` (the approved sections), `notes/official-workflows.md` (Claude Code facts, with doc links), `notes/lessons-from-first-runs.md`.
 
 ## 1. Goal
 
@@ -15,11 +15,11 @@ It exists because repeated review-and-fix sweeps don't converge: fixes create ne
 - A run survives blocked questions and usage-limit resets without redoing finished work.
 - The stop rules hold: at most 2 to-green rounds in stage 3, and at most 2 sweeps in stage 4.
 - Nothing is pushed, merged or deleted against the fixed rules (section 8).
-- The first real run, Cairn's hardening branch, meets the criteria in section 10.
+- The first real run, a hardening branch of a Rust project, meets the criteria in section 10.
 
 ## 2. Non-goals for v1
 
-- **Coordinating several head sessions.** Multi-developer and multi-session hand-offs belong to Cairn's team layer. temper has one head session (decision A). Its file-based hand-offs are what Cairn will build on.
+- **Coordinating several head sessions.** Multi-developer and multi-session hand-offs belong to a separate multi-session layer. temper has one head session (decision A). Its file-based hand-offs are what such a layer can build on.
 - **VMs and containers.** Tasks run in git worktrees on the user's machine, or on an ssh build host. VMs get their own spec later, behind the "where tasks run" layer (section 3.4).
 - **Replacing Claude Code's Workflow tool or ultracode.** temper uses the Workflow tool and ships its own workflows.
 - **Writing a board as the source of truth.** Jira or GitHub Projects can only mirror `epics.md`.
@@ -302,10 +302,10 @@ A failed spike changes this spec before planning, not during it.
 - **`claude plugin validate --strict`** on every change.
 - **Skills** are proven by use.
 
-### 10.3 First real run: Cairn's hardening branch (H-1..H-5)
+### 10.3 First real run: a Rust project's hardening branch
 
-- **Scope:** it starts at stage 2, with a plan written from Cairn's `docs/BACKLOG.md`, then runs stages 3–5.
-- **Setup:** the ssh build host, with `ci/local/run.sh` as the full gate.
+- **Scope:** it starts at stage 2, with a plan written from that project's backlog, then runs stages 3–5.
+- **Setup:** the ssh build host, with the project's local CI script as the full gate.
 - **It passes when:**
   - the run finishes with the gate green;
   - no finished task runs twice;
@@ -354,7 +354,7 @@ Installing from the private repo works through the user's git credentials. Shari
 
 ### A13. Size launches to the build host (owner, 25 Oct 2026)
 
-From the first real run (Cairn hardening on a 4-CPU host): a 16-task wave queued 16 gates on one cargo lock, agents worked around the wait with private build directories until the shared disk was nearly full, and their gates never finished. Before each launch the head checks what the build host has free (CPUs, memory, disk, what else runs there), estimates one gate's cost, and launches in chunks the host can take, most critical first, checking the host again between chunks. The plan sizes waves the same way. Parallel gates don't share scratch space.
+From the first real run (a Rust project's hardening branch, on a 4-CPU host): a 16-task wave queued 16 gates on one cargo lock, agents worked around the wait with private build directories until the shared disk was nearly full, and their gates never finished. Before each launch the head checks what the build host has free (CPUs, memory, disk, what else runs there), estimates one gate's cost, and launches in chunks the host can take, most critical first, checking the host again between chunks. The plan sizes waves the same way. Parallel gates don't share scratch space.
 
 ### Amendments from v0.2 (28 Oct 2026, `docs/temper/v0-2/spec.md`)
 

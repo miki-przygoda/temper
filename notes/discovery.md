@@ -1,6 +1,6 @@
 # Discovery: the owner's idea and the answers so far
 
-Working name was **hypercode**; the name is **temper** (sixth round). The directory is ~/Projects/GitHub-Projects/temper.
+Working name was **hypercode**; the name is **temper** (sixth round). The repository is `temper`.
 
 ## The idea (owner, 24 Oct 2026)
 
@@ -55,9 +55,9 @@ Working name was **hypercode**; the name is **temper** (sixth round). The direct
 - **Dependency list.** Created in stage 1 or 2, so agents are never left to make that choice.
 - **Isolation.** The process includes running worktrees in several VMs, on one machine or another, to keep things clean. Once the work is on master or the remote, its worktrees and the work it created are cleaned off the machine.
 - **Coordination: A.** One head session runs everything. hypercode is for a solo developer.
-- **Larger work belongs to Cairn.** One session does stages 1–2. The spec goes to a separate sub-head session, which launches its own larger workflow (for example stage 3 only). Then the main session, or the two working together, merge everything into one MVP or stable build, and then into the remote's master. That covers several developers following these practices, and large automated agent work.
+- **Larger work belongs to a separate multi-session tool.** One session does stages 1–2. The spec goes to a separate sub-head session, which launches its own larger workflow (for example stage 3 only). Then the main session, or the two working together, merge everything into one MVP or stable build, and then into the remote's master. That covers several developers following these practices, and large automated agent work.
 
-**Consequence.** Every stage's input and output is a plain file in a fixed format, so Cairn can hand a spec from one session to another. hypercode has to work standalone without Cairn.
+**Consequence.** Every stage's input and output is a plain file in a fixed format, so such a tool can hand a spec from one session to another. hypercode has to work standalone, without it.
 
 ## Fourth round (owner, 24 Oct 2026)
 
@@ -85,7 +85,7 @@ Working name was **hypercode**; the name is **temper** (sixth round). The direct
 ## Sixth round (owner, 24 Oct 2026, questionnaire)
 
 - **Overnight contact for severe items.** No default; each user picks it in the setup interview.
-- **Dogfooding.** Straight on Cairn: the first real run is a Cairn milestone, probably the hardening branch H-1..H-5 after R3b.
+- **Dogfooding.** Straight on a real project: the first real run is a milestone of a Rust project, probably its hardening branch.
 - **Severity.** hypercode ships a default, language-neutral rubric (a security issue or backdoor is severe, then Critical, Important, Minor). The per-project file adds language-specific notes.
 - **Name.** Not "hypercode", which echoes Anthropic's "ultracode". A different name, to be picked.
 - **Name: temper.**
