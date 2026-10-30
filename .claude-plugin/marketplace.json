@@ -2,8 +2,12 @@
   "name": "temper",
   "description": "temper, a Claude Code plugin for the whole lifecycle of a piece of work.",
   "owner": {
-    "name": "miki-przygoda"
+    "name": "miki-przygoda",
+    "url": "https://github.com/miki-przygoda"
   },
+  "allowCrossMarketplaceDependenciesOn": [
+    "anthropic-plugin-directory"
+  ],
   "plugins": [
     {
       "name": "temper",
