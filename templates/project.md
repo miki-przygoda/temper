@@ -22,6 +22,9 @@ lenses:
 sweeps: 2
 # How many gates the project's scripts run at once (see templates/gate-slots.md); empty means 1.
 gate_slots:
+# Per-task checks in stage 3: each (a checker after every task, with one retry) or none (each task's own
+# quick gate and the merge's gate only; review happens once, in stage 4's sweep). Empty means each.
+task_checks:
 # Known flaky tests, comma-separated, named as the test runner prints them; a quick gate that fails only on these is rerun once.
 flaky:
 ---

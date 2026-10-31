@@ -174,6 +174,12 @@ function checkCommon(args, errors) {
   }
   checkHost(args.host, args.epic, errors);
   checkGates(args.gates, errors);
+  // task_checks: 'each' (the default) runs a checker after every implementer,
+  // with one retry; 'none' skips them for an MVP build, each task still running its quick gate and
+  // each wave's merge running it again, so review happens once, in stabilise's sweep.
+  if (args.task_checks !== undefined && args.task_checks !== 'each' && args.task_checks !== 'none') {
+    errors.push("task_checks must be 'each' or 'none'");
+  }
   checkDone(args.done, errors);
   // v0.2 fields, all optional (spec §8).
   if (args.build_rule !== undefined && typeof args.build_rule !== 'string') errors.push('build_rule must be a string');
@@ -1141,7 +1147,8 @@ async function runWaves(doneNow) {
       continue;
     }
     log(`wave ${wave}: ${todo.map((t) => t.id).join(', ')}`);
-    const states = await pipeline(todo, implStage, checkStage, retryStage);
+    const stages = args.task_checks === 'none' ? [implStage] : [implStage, checkStage, retryStage];
+    const states = await pipeline(todo, ...stages);
     const blocked = [];
     const passed = [];
     states.forEach((s, i) => {

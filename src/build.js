@@ -111,7 +111,8 @@ async function runWaves(doneNow) {
       continue;
     }
     log(`wave ${wave}: ${todo.map((t) => t.id).join(', ')}`);
-    const states = await pipeline(todo, implStage, checkStage, retryStage);
+    const stages = args.task_checks === 'none' ? [implStage] : [implStage, checkStage, retryStage];
+    const states = await pipeline(todo, ...stages);
     const blocked = [];
     const passed = [];
     states.forEach((s, i) => {
