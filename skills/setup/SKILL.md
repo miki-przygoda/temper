@@ -100,6 +100,7 @@ When the session is in a git repository:
    - `flaky`: the tests known to flake, comma-separated, named as the test runner prints them; empty when there are none;
    - `sweeps`: `2` (default: a second review sweep after the fixes) or `1` (one sweep, then a regression check);
    - `gate_slots`: how many gates the project's scripts run at once; empty means 1.
+   - `task_checks`: `each` (default: a checker after every task in stage 3, with one retry) or `none` (each task's quick gate and the merge's only, with review once in stage 4's sweep).
 
    When a gate takes more than a few minutes, or its build tool holds one lock for the whole build (cargo's, for one), point the user to `${CLAUDE_PLUGIN_ROOT}/templates/gate-slots.md`, which shows how to run several gates at once, and ask for `gate_slots` again once their scripts have slots. Leave `specs_dir: docs/temper`, `board: off` and `lenses:` empty unless the user says otherwise. Never write a credential into it.
 3. If `.gitignore` doesn't already ignore `.temper/worktrees/`, add the line `.temper/worktrees/`.

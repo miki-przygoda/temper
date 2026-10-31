@@ -234,3 +234,25 @@ test('a wave whose tasks are all done runs no merge', async () => {
   assert.deepEqual(ls.slice(0, ls.indexOf('merge:wave1') + 1), ['impl:b', 'check:b', 'merge:wave1']);
   assert.ok(!ls.some((l) => /^(impl|check|retry|recheck):(a|c)$/.test(l) || l === 'merge:wave0'), 'no wave-0 label');
 });
+
+test('task_checks none skips the per-task check and retry; each task still implements (with its quick gate) and each wave merges (with its quick gate)', async () => {
+  const { result, calls } = await runWorkflow(WF, { args: buildArgs({ task_checks: 'none' }), respond: responder() });
+  const ls = labels(calls);
+  assert.ok(!ls.some((l) => l.startsWith('check:') || l.startsWith('recheck:') || l.startsWith('retry:')), `no check agents: ${ls.join(', ')}`);
+  for (const l of ['impl:a', 'impl:c', 'merge:wave0', 'impl:b', 'merge:wave1']) assert.ok(ls.includes(l), `${l} ran: ${ls.join(', ')}`);
+  assert.ok(ls.indexOf('merge:wave0') < ls.indexOf('impl:b'), 'wave 0 merges before wave 1 starts');
+  assert.notEqual(result.status, 'invalid');
+});
+
+test('task_checks each (the default) keeps the check after every implementer', async () => {
+  const { calls } = await runWorkflow(WF, { args: buildArgs({ task_checks: 'each' }), respond: responder() });
+  const ls = labels(calls);
+  for (const l of ['check:a', 'check:c', 'check:b']) assert.ok(ls.includes(l), `${l} ran: ${ls.join(', ')}`);
+});
+
+test('an unknown task_checks value is refused before any agent runs', async () => {
+  const { result, calls } = await runWorkflow(WF, { args: buildArgs({ task_checks: 'sometimes' }), respond: responder() });
+  assert.equal(result.status, 'invalid');
+  assert.ok(result.errors.some((e) => e.includes('task_checks')), result.errors.join('; '));
+  assert.equal(calls.length, 0);
+});

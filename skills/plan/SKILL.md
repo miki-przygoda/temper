@@ -51,6 +51,7 @@ Write `<specs_dir>/<epic>/args.json`, following `${CLAUDE_PLUGIN_ROOT}/schemas/a
 - `gates`: `{"quick": gate_quick, "full": gate_full}`;
 - `build_rule`: the text of `project.md`'s `## Build rule` section without its HTML comment, trimmed, or `""` when it is empty or missing;
 - `flaky`: the `flaky:` line of `project.md`, split on commas and each name trimmed, empty names left out, or `[]` when the line is empty or missing. Write both fields every time, without asking the user: an empty value is a valid value;
+- `task_checks`: the `task_checks:` line of `project.md`, `each` or `none`; leave the field out when the line is missing or empty (the build then checks each task);
 - `tasks`: one entry per task, with `id`, `title`, `wave`, `owns`, `uses`, `provides` and `text` (the task's full section text);
 - `behaviour_groups`: `[{"key": …, "title": …}]` from the list;
 - `done`: `[]` for a new epic (the `run` skill refills it from the branch's trailers before every launch);
