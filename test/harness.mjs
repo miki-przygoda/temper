@@ -15,6 +15,8 @@ export async function runWorkflow(filePath, { args, respond } = {}) {
   const phases = [];
   // The labels of the agents each parallel() call ran, one array per call, in call order.
   const batches = [];
+  // The number of items each pipeline() call got, one number per call, in call order.
+  const pipelines = [];
 
   const agent = async (prompt, opts) => {
     calls.push({ prompt, opts });
@@ -37,6 +39,7 @@ export async function runWorkflow(filePath, { args, respond } = {}) {
   };
 
   const pipeline = async (items, ...stages) => {
+    pipelines.push(items.length);
     const out = [];
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -59,7 +62,7 @@ export async function runWorkflow(filePath, { args, respond } = {}) {
   const names = Object.keys(globals);
   const run = new AsyncFunction(...names, source);
   const result = await run(...names.map((n) => globals[n]));
-  return { result, calls, logs, phases, batches };
+  return { result, calls, logs, phases, batches, pipelines };
 }
 
 export function loadLib(libPath = 'src/lib.js') {
