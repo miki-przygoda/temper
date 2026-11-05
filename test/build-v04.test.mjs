@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -427,8 +427,7 @@ test('a grant widens the task in memory, logs it, runs widen:<id>, and the check
 test('the merge agent checks a widened branch with git: symlinks in its tree, its diff against the widened owns', async () => {
   const { calls } = await run(widenArgs(), { 'impl:a': ask('src/deep/x.rs') });
   const merge = calls.find((c) => c.opts.label === 'merge:wave0');
-  assert.ok(merge.prompt.includes("git ls-tree temper/e/a -- 'src' 'src/deep' 'src/deep/x.rs'"), merge.prompt);
-  assert.ok(merge.prompt.includes("git ls-tree epic/e -- 'src' 'src/deep' 'src/deep/x.rs'"));
+  assert.ok(merge.prompt.includes(`for p in 'src' 'src/deep' 'src/deep/x.rs'; do git ls-tree temper/e/a -- "$p"; git ls-tree epic/e -- "$p"; done`), merge.prompt);
   assert.ok(merge.prompt.includes('120000'));
   assert.ok(merge.prompt.includes('git diff --name-only --no-renames epic/e...temper/e/a'));
   assert.ok(merge.prompt.includes('- src/deep/x.rs'));
@@ -579,9 +578,10 @@ test('with task_checks none, a widen still reaches the merge check', async () =>
 });
 
 test('a task widened in an earlier launch still gets the merge check', async () => {
-  const { calls } = await run(widenArgs({ owns_widened: [{ id: 'a', paths: ['src/x.rs'] }] }));
+  const tasks = [task('a', 0, { owns: ['src/a.rs', 'src/x.rs'] }), task('c', 0), task('b', 1)];
+  const { calls } = await run(widenArgs({ tasks, owns_widened: [{ id: 'a', paths: ['src/x.rs'] }] }));
   const merge = calls.find((c) => c.opts.label === 'merge:wave0');
-  assert.ok(merge.prompt.includes("git ls-tree temper/e/a -- 'src' 'src/x.rs'"));
+  assert.ok(merge.prompt.includes(`for p in 'src' 'src/x.rs'; do git ls-tree temper/e/a -- "$p"`));
 });
 
 test('a dead widen run blocks with cause nothing', async () => {
@@ -664,4 +664,161 @@ test('the changelog has an Unreleased section that lists task_checks and every n
   assert.ok(i > 0);
   const section = text.slice(i, text.indexOf('## 0.3.1'));
   for (const k of ['task_checks', 'stop_after', 'gate_slots', 'run_script.py', 'blocks_report.py', 'cause', 'baseline', 'owns_widen']) assert.ok(section.includes(k), k);
+});
+
+// ---- the fix wave's findings: the merge's git checks run against a real repo ----
+
+// A repo in a scratch dir whose branches temper/e/a and epic/e hold what `files` says: a string is a
+// file, {link} a symlink. Returns what a prompt's command prints there.
+function inRepo(files, command) {
+  const dir = mkdtempSync(join(tmpdir(), 'temper-widen-'));
+  try {
+    const git = (...a) => spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...a], { cwd: dir, encoding: 'utf8' });
+    git('init', '-q');
+    for (const [path, content] of Object.entries(files)) {
+      mkdirSync(dirname(join(dir, path)), { recursive: true });
+      if (typeof content === 'string') writeFileSync(join(dir, path), content);
+      else symlinkSync(content.link, join(dir, path));
+    }
+    git('add', '-A');
+    git('commit', '-qm', 'x');
+    git('branch', 'temper/e/a');
+    git('branch', 'epic/e');
+    const r = spawnSync('sh', ['-c', command], { cwd: dir, encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+    return r.stdout;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const mergeOf = async (...paths) => (await run(widenArgs(), { 'impl:a': ask(...paths) })).calls.find((c) => c.opts.label === 'merge:wave0').prompt;
+const commandAfter = (prompt, n) => {
+  const line = prompt.split('\n').find((l) => l.startsWith(`${n}. `));
+  assert.ok(line, `check ${n}:\n${prompt}`);
+  return line.match(/`([^`]+)`/)[1];
+};
+
+test('the symlink check lists only the checked path and what is above it, never a symlink beside them', async () => {
+  const cmd = commandAfter(await mergeOf('src/deep/x.rs'), 1);
+  const beside = inRepo({ 'src/deep/x.rs': 'a', 'src/deep/y.rs': 'b', 'src/real': 'c', 'src/unrelated-link': { link: 'real' }, 'src/deep/near-link': { link: 'y.rs' } }, cmd);
+  assert.ok(!beside.includes('120000'), beside);
+  assert.ok(beside.includes('src/deep/x.rs'), beside);
+});
+
+test('the symlink check still finds a symlink at the path or above it', async () => {
+  const cmd = commandAfter(await mergeOf('src/deep/x.rs'), 1);
+  assert.match(inRepo({ 'src/deep/x.rs': { link: '../real' }, 'src/real': 'a' }, cmd), /^120000 .*src\/deep\/x\.rs$/m);
+  assert.match(inRepo({ 'src/deep': { link: 'other' }, 'src/other/x.rs': 'a' }, cmd), /^120000 .*src\/deep$/m);
+});
+
+test('the merge refuses a widened path that is a directory on the branch', async () => {
+  const prompt = await mergeOf('crates/foo/tests');
+  const cmd = commandAfter(prompt, 2);
+  assert.ok(cmd.includes('temper/e/a'));
+  assert.ok(prompt.includes('040000'), prompt);
+  assert.match(inRepo({ 'crates/foo/tests/test_hooks.rs': 'a' }, cmd), /^040000 .*crates\/foo\/tests$/m);
+  const file = inRepo({ 'crates/foo/tests': 'a', 'crates/foo/other': 'b' }, cmd);
+  assert.match(file, /^100644 /);
+  assert.equal(file.trim().split('\n').length, 1, file);
+  assert.equal(inRepo({ 'other.rs': 'a' }, cmd), '', 'a file not made yet prints nothing');
+});
+
+test('the diff check takes a file outside the planned owns only as an exact widened path, and names the protected globs', async () => {
+  const prompt = await mergeOf('x/hooks.rs');
+  const line = prompt.split('\n').find((l) => l.startsWith('3. '));
+  assert.ok(line.includes('git diff --name-only --no-renames epic/e...temper/e/a'), prompt);
+  assert.match(line, /exactly one of its widened paths/);
+  assert.match(line, /file beneath a widened path/);
+  assert.match(prompt, /planned owns:\n- src\/a\.rs\n/i);
+  for (const g of ['**/keyring*', '.github/**', 'schema/**']) assert.ok(prompt.includes(`- ${g}`), g);
+});
+
+test('a later launch: the widened path in owns is not read as planned, and the implementer gets the on-disk check back', async () => {
+  const tasks = [task('a', 0, { owns: ['src/a.rs', 'src/x.rs'] }), task('c', 0), task('b', 1)];
+  const { calls } = await run(widenArgs({ tasks, owns_widened: [{ id: 'a', paths: ['src/x.rs'], why: ['w'] }] }));
+  const impl = calls.find((c) => c.opts.label === 'impl:a').prompt;
+  assert.match(impl, /before you change anything/i);
+  assert.ok(impl.includes('realpath'));
+  assert.match(impl, /now include:\n- src\/x\.rs/);
+  assert.match(impl, /name each widened path/i);
+  assert.ok(!calls.find((c) => c.opts.label === 'impl:c').prompt.match(/before you change anything/i), 'only the task that widened');
+  const merge = calls.find((c) => c.opts.label === 'merge:wave0').prompt;
+  assert.match(merge, /planned owns:\n- src\/a\.rs\n/i);
+  assert.match(merge, /Widened paths:\n- src\/x\.rs/);
+});
+
+test('a retry after a grant in the same run keeps the on-disk check', async () => {
+  const { calls } = await run(widenArgs(), {
+    'impl:a': ask('src/x.rs'),
+    'check:a': { status: 'done', pass: false, problems: ['no'] },
+  });
+  const retry = calls.find((c) => c.opts.label === 'retry:a').prompt;
+  assert.match(retry, /before you change anything/i);
+  assert.match(retry, /now include:\n- src\/x\.rs/);
+});
+
+test('an implementer without a widening gets no on-disk check text', async () => {
+  const { calls } = await run(widenArgs());
+  assert.ok(!/before you change anything/i.test(calls[0].prompt));
+});
+
+test('a widening refused for a symlink is marked refused on the result, by the widen run or the merge', async () => {
+  const symlink = { status: 'blocked', branch: '', summary: '', question: 'owns symlink: src/link/x' };
+  const atWiden = await run(widenArgs(), { 'impl:a': ask('src/link/x'), 'widen:a': symlink });
+  assert.deepEqual(atWiden.result.owns_widened, [{ id: 'a', paths: ['src/link/x'], why: ['for src/link/x'], refused: true }]);
+  const atRetry = await run(widenArgs(), { 'impl:a': ask('src/link/x'), 'check:a': { status: 'done', pass: false, problems: ['no'] }, 'retry:a': symlink });
+  assert.equal(atRetry.result.owns_widened[0].refused, true);
+  const atMerge = await run(widenArgs(), {
+    'impl:a': ask('src/x.rs'),
+    'merge:wave0': { status: 'blocked', merged: [], gate_passed: false, owns_refused: [{ task: 'a', path: 'src/x.rs', why: 'mode 120000' }] },
+  });
+  assert.equal(atMerge.result.owns_widened[0].refused, true);
+  const gateFail = await run(widenArgs(), { 'impl:a': ask('src/x.rs'), 'widen:a': { status: 'blocked', branch: '', summary: '', question: 'how?' } });
+  assert.ok(!('refused' in gateFail.result.owns_widened[0]), 'any other block is no refusal');
+});
+
+test('a refused entry stays out of the later launch: no grant in the prompts, no second ask, the diff still checked', async () => {
+  const entry = { id: 'a', paths: ['src/link/x'], why: ['w'], refused: true };
+  const { calls } = await run(widenArgs({ owns_widened: [entry] }));
+  const impl = calls.find((c) => c.opts.label === 'impl:a').prompt;
+  assert.ok(!impl.includes('src/link/x'), 'the implementer is not told it owns the path');
+  const merge = calls.find((c) => c.opts.label === 'merge:wave0').prompt;
+  assert.ok(!merge.includes('src/link/x'), 'nothing to check on disk, and nothing granted');
+  assert.ok(merge.includes('git diff --name-only --no-renames epic/e...temper/e/a'), 'its diff is still held to its owns');
+  assert.ok(!merge.includes('ls-tree temper/e/a'));
+  const again = await run(widenArgs({ owns_widened: [entry] }), { 'impl:a': ask('src/link/x') });
+  assert.deepEqual(again.result.blocked.map((b) => [b.id, b.cause]), [['a', 'owns']]);
+});
+
+test('args take a refused entry, and the schema names the field', () => {
+  accepts({ owns_widened: [{ id: 'a', paths: ['p'], why: ['w'], refused: true }] });
+  assert.ok(JSON.parse(read('schemas/args.schema.json')).properties.owns_widened.items.properties.refused);
+});
+
+test('the run skill keeps a refused widening out of Owns, says how to revoke one, and routes a baseline with no cause', () => {
+  const s = flat(read('skills/run/SKILL.md'));
+  assert.match(s, /`refused: true`[^.]*stay out of `plan\.md`'s `Owns:` line and `args\.json`'s `owns`/);
+  assert.match(s, /`refused: true`[^.]*`args\.owns_widened`[^.]*\. /);
+  assert.match(s, /take its paths out of the `Owns:` line and `owns`/);
+  assert.match(s, /With no cause, [^.]*throwaway/);
+  assert.match(s, /With no cause, .*?bump `baseline_attempt`/);
+  assert.match(s, /a directory/);
+});
+
+test('the baseline saves its log outside its worktree, and earlier untracked output does not stop a relaunch', async () => {
+  const { prompt } = (await run(launch())).calls[0];
+  assert.ok(prompt.includes('`/r/.temper/worktrees/e.baseline.log`'), prompt);
+  assert.ok(prompt.includes('status --porcelain --untracked-files=no'), prompt);
+  assert.match(prompt, /untracked files/i);
+  const host = { kind: 'ssh', name: 'h', clone: '/c', root: '/w/' };
+  assert.ok((await run(launch({ host }))).calls[0].prompt.includes('`/w/e.baseline.log`'));
+  const { calls } = await run(buildArgs());
+  const check = calls.find((c) => c.opts.label === 'check:a').prompt;
+  assert.ok(check.includes('status --porcelain` prints nothing'), 'every other throwaway stays as strict');
+  assert.ok(!check.includes('--untracked-files=no'));
+});
+
+test('cleanup removes the baseline log, which lies outside the epic directory', () => {
+  assert.ok(flat(read('skills/cleanup/SKILL.md')).includes('<epic>.baseline.log'));
 });

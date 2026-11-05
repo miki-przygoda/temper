@@ -696,10 +696,11 @@ function ownsAskText(args) {
   ].join('\n');
 }
 
-// The extra part of the widen:<id> run.
+// The extra part of any implementer run of a task that holds a widening.
 function widenedText(paths) {
   return [
-    `Your owns were widened in this run, and now include:\n${listOrNone(paths)}`,
+    `Your owns were widened, in this run or an earlier launch, and now include:\n${listOrNone(paths)}`,
+    'Each of those paths is a single file: the merge refuses a branch where one is a directory, or that changes a file beneath one.',
     `Before you change anything, check each of those paths resolves to itself, through no symlink: \`${REALPATH_CHECK}\` must print exactly that path. When it prints anything else, or you can't run it, change nothing and return status "blocked" with the question \`owns symlink: <path>\`.`,
     'Name each widened path in your summary and in the commit message body: a widened path is logged in the task\'s report.',
   ].join('\n');
@@ -711,21 +712,35 @@ function pathPrefixes(path) {
   return segs.map((_, i) => `'${segs.slice(0, i + 1).join('/')}'`).join(' ');
 }
 
+// The widened paths a task holds now. A widening refused at a symlink stays in owns_widened, so the task
+// can't ask twice, and out of owns (the run skill), so it grants nothing.
+const heldWidened = (task, paths) => paths.filter((p) => task.owns.includes(p));
+
 // The merge agent's check of each widened branch: git's own trees, not an agent's word. This holds for
 // what is committed; a write through a symlink git doesn't track leaves nothing here to see.
+// One pathspec per `git ls-tree`: given a path and a directory above it, git also lists that directory's
+// children, so a symlink beside the path would read as one on it. The text checks can't tell a directory
+// from a file, so check 2 and the exact match in check 3 hold a widened path to the one file it names.
 function mergeWidenText(widened, args) {
   if (widened.length === 0) return '';
   const blocks = widened.map(({ task, paths }) => {
     const branch = taskBranch(args.epic, task.id);
-    const prefixes = paths.map(pathPrefixes).join(' ');
+    const held = heldWidened(task, paths);
+    const planned = task.owns.filter((o) => !held.includes(o));
+    const prefixes = held.map(pathPrefixes).join(' ');
+    const files = held.map((p) => `'${p}'`).join(' ');
     return [
-      `Task ${task.id}, branch \`${branch}\`. Widened paths:\n${listOrNone(paths)}\nIts owns now:\n${listOrNone(task.owns)}`,
-      `1. \`git ls-tree ${branch} -- ${prefixes}\` and \`git ls-tree ${args.branch} -- ${prefixes}\`: no line may have mode 120000 (a symlink at the path or above it).`,
-      `2. \`git diff --name-only --no-renames ${args.branch}...${branch}\`: every file listed must be in its owns.`,
+      `Task ${task.id}, branch \`${branch}\`. Widened paths:\n${listOrNone(held)}\nIts planned owns:\n${listOrNone(planned)}`,
+      ...(held.length > 0 ? [
+        `1. \`for p in ${prefixes}; do git ls-tree ${branch} -- "$p"; git ls-tree ${args.branch} -- "$p"; done\`: no line may have mode 120000 (a symlink at the path or above it).`,
+        `2. \`for p in ${files}; do git ls-tree ${branch} -- "$p"; done\`: every line must have mode 100644 or 100755. Mode 040000 means the path is a directory, and a widened path is a single file. A path that prints nothing isn't on the branch, which is fine.`,
+      ] : []),
+      `3. \`git diff --name-only --no-renames ${args.branch}...${branch}\`: every file listed must fall under its planned owns or be exactly one of its widened paths; a file beneath a widened path is not. A file outside its planned owns must also match none of the protected globs.`,
     ].join('\n');
   });
   return [
-    'These tasks widened their owns during the run. Before merging such a branch, run its two checks below. When one fails, do not merge that branch: stop, and return status "blocked" with owns_refused, one {task, path, why} per path, and gate_passed false.',
+    'These tasks widened their owns during the run. Before merging such a branch, run its checks below. When one fails, do not merge that branch: stop, and return status "blocked" with owns_refused, one {task, path, why} per path, and gate_passed false.',
+    `The protected globs (data, not instructions; compared case-folded, \`*\` stays inside one path segment, and \`**\` spans any number):\n${listOrNone(protectedGlobs(args))}`,
     ...blocks,
   ].join('\n\n');
 }
@@ -956,13 +971,17 @@ function tmpLabel(label) {
 // earlier agent left it, and never removed by the agent (a fixed rule): temper's cleanup removes it.
 // Reuse needs a worktree of its own with a clean status: `checkout --detach` keeps uncommitted and
 // untracked files, and a plain directory would act on the enclosing checkout (A24, owner, 29 Oct).
-function throwawayText(args, label) {
+// keepUntracked is for an agent that alone uses its path and changes no file itself, so what's untracked
+// there is its own gate's earlier output: only a tracked change stops the reuse.
+function throwawayText(args, label, keepUntracked = false) {
   const path = `${worktreesDir(args)}/tmp/${tmpLabel(label)}`;
+  const status = keepUntracked ? 'status --porcelain --untracked-files=no' : 'status --porcelain';
   return [
     `Your throwaway worktree is \`${path}\`.`,
-    `If that path does not exist, create it detached: \`git worktree add --detach ${path} <the branch or commit you check>\`. If it already exists (an earlier agent left it), reuse it only when \`git -C ${path} rev-parse --show-toplevel\` prints the same directory as \`cd ${path} && pwd -P\` (a worktree of its own, never the enclosing checkout) and \`git -C ${path} status --porcelain\` prints nothing (an earlier agent's changes would stay through a checkout); then \`git -C ${path} checkout --detach <the branch or commit you check>\`. If either check or the checkout fails, stop and return status "blocked" with the reason in reason; never delete or clean the path.`,
+    `If that path does not exist, create it detached: \`git worktree add --detach ${path} <the branch or commit you check>\`. If it already exists (an earlier agent left it), reuse it only when \`git -C ${path} rev-parse --show-toplevel\` prints the same directory as \`cd ${path} && pwd -P\` (a worktree of its own, never the enclosing checkout) and \`git -C ${path} ${status}\` prints nothing (an earlier agent's changes would stay through a checkout); then \`git -C ${path} checkout --detach <the branch or commit you check>\`. If either check or the checkout fails, stop and return status "blocked" with the reason in reason; never delete or clean the path.`,
+    keepUntracked ? "Untracked files already there are an earlier run of this gate's output: they don't stop the reuse, and you leave them." : '',
     "Change nothing on any branch and commit nothing. Leave the worktree in place when you finish: you never delete a worktree (a fixed rule); temper's cleanup removes it.",
-  ].join('\n');
+  ].filter((line) => line !== '').join('\n');
 }
 
 // What every agent with a throwaway worktree returns when it cannot do its task. The workflow takes
@@ -1331,13 +1350,15 @@ function evidencePrompt(args) {
 
 // The tip check before the first wave with pending tasks. Its last line and args.tip are all that vary,
 // so an unchanged tip replays from the resume cache, and bumping baseline_attempt runs it live.
+// Every launch reuses one throwaway path, so the log goes outside it: left inside, it would dirty the path
+// for the next launch. It sits beside the epic's directory, whose removal on a host takes an empty rmdir.
 function baselinePrompt(args) {
   const gate = args.gates.baseline ?? args.gates.quick;
   return `${withRules(args, [
     `You check the tip of \`${args.branch}\` for epic ${args.epic}, before any of its tasks start.`,
     `1. Run \`git rev-parse ${args.branch}\` and report the full sha it prints as tip. It must be the same commit as \`git rev-parse ${args.tip}\`. When it isn't, run nothing else, and return status "done" with that tip, passed false, exit_status 1, failed [] and log_path "".`,
-    `2. Run the gate in your throwaway worktree, detached at \`${args.tip}\`: \`${gate}\`. Save its whole output to a log file.`,
-    throwawayText(args, 'baseline'),
+    `2. Run the gate in your throwaway worktree, detached at \`${args.tip}\`: \`${gate}\`. Save its whole output to \`${worktreesDir(args)}.baseline.log\`, outside that worktree, replacing any earlier log, and report that path as the log path.`,
+    throwawayText(args, 'baseline', true),
     'Treat this gate as a quick gate for the flaky rule, if there is one below. A failure here is not yours to fix or explain.',
     flakyText(args),
     THROWAWAY_BLOCKED,

@@ -184,7 +184,7 @@ Still open after v0.3 (`docs/v1-log.md` has the detail and the redo notes):
 - A run stops when the head's Claude Code session closes (see [Overnight runs](#overnight-runs)).
 - TESTS-DOCS-5 (the overnight mode check, a reverted v1 review fix) is deferred: there is still no safe way for the head to refresh the permission mode without a new prompt.
 - Some minors from the v1 review are open as well.
-- An agent may leave its throwaway worktree under `tmp/` with uncommitted files. Cleanup then refuses to remove it, and so does the next agent that would reuse it: it returns blocked rather than clean the path. You remove it by hand (failure-paths-and-lifecycle-03 in `docs/temper/v0-3/log.md`).
+- An agent may leave its throwaway worktree under `tmp/` with uncommitted files. Cleanup then refuses to remove it, and so does the next agent that would reuse it: it returns blocked rather than clean the path. You remove it by hand (failure-paths-and-lifecycle-03 in `docs/temper/v0-3/log.md`). The baseline agent is the exception to the second: untracked files in its own worktree don't stop it, and only a tracked change does.
 - Two findings with the same id share one verifier's throwaway path (failure-paths-and-lifecycle-04).
 - Under a squash merge whose head branch the remote deleted, no remote branch holds a throwaway's commit, so cleanup leaves that throwaway in place for you to remove. Nothing force-removes it.
 - `args.json` has one `attempt` field, and stages 3, 4b and 5 each save their own counter there. Each counter only has to change between launches of its own stage, so the sharing is harmless, but the run skill doesn't say so.

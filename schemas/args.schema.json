@@ -33,14 +33,15 @@
     },
     "owns_widened": {
       "type": "array",
-      "description": "Optional. What earlier launches widened: the run skill appends each result's owns_widened entries, so a relaunch can't widen a task twice and the merge still checks its paths.",
+      "description": "Optional. What earlier launches widened: the run skill appends each result's owns_widened entries, so a relaunch can't widen a task twice and the merge still checks its paths. An entry with refused true was refused at a symlink: its paths are not in the task's owns and grant nothing.",
       "items": {
         "type": "object",
         "required": ["id", "paths"],
         "properties": {
           "id": { "type": "string" },
           "paths": { "type": "array", "items": { "type": "string" } },
-          "why": { "type": "array", "items": { "type": "string" } }
+          "why": { "type": "array", "items": { "type": "string" } },
+          "refused": { "type": "boolean" }
         }
       }
     },

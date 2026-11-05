@@ -24,6 +24,14 @@ const widened = new Map();
 const owns_widened = [];
 const widenExtra = () => (isWidenOn(args) ? { owns_widened } : {});
 
+// A grant the implementer or the merge then refused at a symlink. It stays listed, so the task can't ask
+// again, and marked, so the run skill keeps its paths out of owns. An agent's task id only ever matches here.
+function markRefused(id) {
+  for (const entry of owns_widened) {
+    if (entry.id === id) entry.refused = true;
+  }
+}
+
 // An implementer's own cause only under impl_cause, and only a listed one: agent text is data. `owns
 // symlink:` is the fixed question the widening prompts make it send when a path doesn't resolve to itself.
 function implCause(impl) {
@@ -36,14 +44,18 @@ function implCause(impl) {
 function implBlocked(task, impl) {
   if (impl === null || impl === undefined) return nothingEntry(task.id);
   if (impl.status !== 'done') {
-    return blockedEntry(task.id, typeof impl.question === 'string' && impl.question !== '' ? impl.question : `implementer returned status ${impl.status}`, implCause(impl));
+    const cause = implCause(impl);
+    if (cause === 'owns-refused') markRefused(task.id);
+    return blockedEntry(task.id, typeof impl.question === 'string' && impl.question !== '' ? impl.question : `implementer returned status ${impl.status}`, cause);
   }
   return null;
 }
 
 async function implement(task, retryReport) {
   const label = retryReport === undefined ? `impl:${task.id}` : `retry:${task.id}`;
-  const r = await agent(implementerPrompt(task, args, retryReport), { schema: implSchemaOf(args), label, phase: 'Waves' });
+  // A later launch or a retry keeps a held widening's on-disk check, as the widen:<id> run has it.
+  const held = heldWidened(task, widened.get(task.id) ?? []);
+  const r = await agent(implementerPrompt(task, args, retryReport, held.length > 0 ? held : undefined), { schema: implSchemaOf(args), label, phase: 'Waves' });
   recordReruns(label, r);
   return r;
 }
@@ -128,6 +140,7 @@ function mergeBlocked(id, merge) {
   if (merge === null || merge === undefined) return nothingEntry(id);
   const refused = Array.isArray(merge.owns_refused) ? merge.owns_refused.filter(isObject) : [];
   if (refused.length > 0) {
+    for (const r of refused) markRefused(r.task);
     return blockedEntry(id, `widened path refused at merge: ${refused.map((r) => `task ${r.task}: ${r.path}: ${r.why}`).join('; ')}`, 'owns-refused');
   }
   if (merge.status !== 'merged') {
