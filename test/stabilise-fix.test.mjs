@@ -198,7 +198,7 @@ test('a second-sweep review that returns nothing is blocked, and the stage is no
   assert.equal(result.status, 'handover');
   assert.deepEqual(
     result.blocked,
-    lib.DEFAULT_LENSES.map((l) => ({ id: `second:review:${l}`, reason: 'agent returned nothing' })),
+    lib.DEFAULT_LENSES.map((l) => ({ id: `second:review:${l}`, reason: 'agent returned nothing', cause: 'nothing' })),
   );
   const ls = labels(calls);
   assert.ok(!ls.slice(ls.lastIndexOf(`second:review:${lib.DEFAULT_LENSES.at(-1)}`) + 1).some((l) => /review:/.test(l)));
@@ -270,7 +270,7 @@ test('a regression check that finds a regression or returns nothing stops before
       assert.equal(result.status, status, JSON.stringify(reply));
       assert.ok(!labels(calls).some((l) => l.includes('review:')), labels(calls).join(', '));
       if (reply) assert.deepEqual(result.regressions, regressions);
-      else assert.deepEqual(result.blocked, [{ id: 'regress:fix:f1', reason: 'agent returned nothing' }]);
+      else assert.deepEqual(result.blocked, [{ id: 'regress:fix:f1', reason: 'agent returned nothing', cause: 'nothing' }]);
     }
   }
 });
@@ -285,7 +285,7 @@ test('an unverified second-sweep finding above minor makes the result handover, 
     assert.equal(result.status, severity === 'minor' ? 'stable' : 'handover', severity);
     assert.deepEqual(
       result.blocked,
-      severity === 'minor' ? [] : [{ id: 'second:verify:second:u1', reason: 'agent returned nothing' }],
+      severity === 'minor' ? [] : [{ id: 'second:verify:second:u1', reason: 'agent returned nothing', cause: 'nothing' }],
       severity,
     );
     assert.deepEqual(result.second_sweep_findings.map((f) => [f.id, f.unverified]), [['second:u1', true]], severity);
@@ -323,7 +323,7 @@ test('a saved unverified finding is never fixed on resume', async () => {
     assert.equal(result.status, severity === 'minor' ? 'stable' : 'handover', severity);
     assert.deepEqual(
       result.blocked,
-      severity === 'minor' ? [] : [{ id: 'second:verify:second:u1', reason: 'agent returned nothing' }],
+      severity === 'minor' ? [] : [{ id: 'second:verify:second:u1', reason: 'agent returned nothing', cause: 'nothing' }],
       severity,
     );
     assert.deepEqual(result.second_sweep_findings.map((f) => [f.id, f.unverified]), [['second:u1', true]], severity);
@@ -382,5 +382,5 @@ test('a null regression agent in a later chunk still blocks its fix', async () =
     respond: responder({ regress: (id) => (id === 'h3' ? null : { status: 'done', regressions: [] }) }),
   });
   assert.equal(result.status, 'blocked');
-  assert.deepEqual(result.blocked, [{ id: 'regress:fix:h3', reason: 'agent returned nothing' }]);
+  assert.deepEqual(result.blocked, [{ id: 'regress:fix:h3', reason: 'agent returned nothing', cause: 'nothing' }]);
 });

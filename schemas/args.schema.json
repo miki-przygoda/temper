@@ -16,6 +16,34 @@
     "build_rule": { "type": "string", "description": "Optional. The project's build rule (project.md's ## Build rule), passed to every agent as data." },
     "attempt": { "type": "integer", "minimum": 0, "description": "Optional. The build's attempt counter, bumped on every resume; missing means 0. It ends the checkpoint and later phase prompts, so a resume reruns them live." },
     "flaky": { "type": "array", "items": { "type": "string" }, "description": "Optional. Known flaky tests (project.md's flaky:), which a quick gate may rerun once." },
+    "task_checks": { "type": "string", "enum": ["each", "none"], "description": "Optional. each (the default) runs a checker after every implementer, with one retry; none leaves review to stage 4's sweep." },
+    "gate_slots": { "type": "integer", "minimum": 1, "description": "Optional. How many of a wave's tasks run at once: the wave is chunked to this size, with one merge per wave. Missing means the whole wave at once." },
+    "stop_after": { "type": "string", "pattern": "^(wave:(0|[1-9][0-9]*)|waves|checkpoint|behaviour-spec|acceptance)$", "description": "Optional. Where the build returns status stopped, with {at, done_now, commits, flaky_reruns}. It reaches no prompt, so a later launch without it replays what this one ran. The workflow also refuses a wave no task is in." },
+    "impl_cause": { "type": "boolean", "description": "Optional. true adds an optional cause enum to the implementer schema and one line to its prompt; a blocked entry keeps a listed cause." },
+    "baseline": { "type": "string", "enum": ["launch", "off"], "description": "Optional. launch runs the baseline gate on tip once, in a throwaway worktree, before the first wave with pending tasks. A red tip returns blocked {id: baseline, cause: base-red} before any implementer. off or missing runs nothing." },
+    "tip": { "type": "string", "pattern": "^[0-9a-f]{7,64}$", "description": "The epic branch's sha this launch is for, read by the head. Required when baseline is launch: a branch at any other commit blocks with cause tip-mismatch." },
+    "baseline_attempt": { "type": "integer", "minimum": 0, "description": "Optional. Ends the baseline prompt, so bumping it reruns the check when the tip hasn't moved. Missing means 0." },
+    "owns_widen": {
+      "type": "object",
+      "description": "Optional. Lets an implementer ask for files outside its owns once in a run. With it absent, schemas and prompts don't mention it. Also refused: a path of the wrong shape, one under the built-in protected globs, and one a same-wave task owns or widened.",
+      "properties": {
+        "max": { "type": "integer", "minimum": 1, "maximum": 3, "description": "At most this many paths per request. Missing means 3, and more than 3 is refused." },
+        "protected": { "type": "array", "items": { "type": "string" }, "description": "The project's protected globs (project.md's owns_protected), using only * ** and ?. A name with no slash means that path at the repo root: write **/name for any depth." }
+      }
+    },
+    "owns_widened": {
+      "type": "array",
+      "description": "Optional. What earlier launches widened: the run skill appends each result's owns_widened entries, so a relaunch can't widen a task twice and the merge still checks its paths.",
+      "items": {
+        "type": "object",
+        "required": ["id", "paths"],
+        "properties": {
+          "id": { "type": "string" },
+          "paths": { "type": "array", "items": { "type": "string" } },
+          "why": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
     "host": {
       "oneOf": [
         {
@@ -40,7 +68,8 @@
       "required": ["quick", "full"],
       "properties": {
         "quick": { "type": "string", "minLength": 1 },
-        "full": { "type": "string", "minLength": 1 }
+        "full": { "type": "string", "minLength": 1 },
+        "baseline": { "type": "string", "minLength": 1, "description": "Optional. The gate the baseline agent runs; missing means quick." }
       }
     },
     "tasks": {

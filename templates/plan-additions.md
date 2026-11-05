@@ -47,6 +47,8 @@ A list of the behaviour groups the stage 3 behaviour spec is written in, each a 
 | the `## Build rule` section of `.temper/project.md` | `build_rule`: its text without the HTML comment, `""` when empty; never copied into `tasks[].text` |
 | `flaky` in `.temper/project.md` | `flaky`: the comma-separated names as an array of strings, `[]` when empty; never copied into `tasks[].text` |
 | `gate_slots` in `.temper/project.md` | no field of its own; no wave holds more tasks than it (empty means 1) |
+| `baseline`, `gate_baseline` and `impl_cause` in `.temper/project.md` | `baseline`, `gates.baseline` and `impl_cause`, each left out when its line is empty |
+| `owns_widen` and `owns_protected` in `.temper/project.md` | `owns_widen`: `{max, protected}`, left out when `owns_widen` is empty |
 | each task's id and heading | `tasks[].id`, `tasks[].title` |
 | each task's `Wave:` line | `tasks[].wave` |
 | each task's `Owns:` line | `tasks[].owns` |

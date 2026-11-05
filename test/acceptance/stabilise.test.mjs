@@ -883,7 +883,7 @@ test('STABILISE-29 a verify that returns nothing leaves its finding unverified, 
   assert.equal(sweep.result.refuted, 0);
   assert.deepEqual(sweep.result.findings.map((f) => f.id), ['a1']);
   assert.deepEqual(sweep.result.unverified.map((f) => [f.id, f.unverified]), [['u1', true], ['m1', true]]);
-  assert.deepEqual(sweep.result.blocked, [{ id: 'verify:u1', reason: 'agent returned nothing' }]);
+  assert.deepEqual(sweep.result.blocked, [{ id: 'verify:u1', reason: 'agent returned nothing', cause: 'nothing' }]);
 
   // Second sweep: an unverified important finding is never fixed, keeps the result from stable, and is
   // saved marked; a resume with the saved findings keeps it unverified and unfixed.
@@ -894,7 +894,7 @@ test('STABILISE-29 a verify that returns nothing leaves its finding unverified, 
   });
   assert.equal(fix.result.status, 'handover');
   assert.ok(!labels(fix.calls).includes('fix:second:s1'));
-  assert.deepEqual(fix.result.blocked, [{ id: 'second:verify:second:s1', reason: 'agent returned nothing' }]);
+  assert.deepEqual(fix.result.blocked, [{ id: 'second:verify:second:s1', reason: 'agent returned nothing', cause: 'nothing' }]);
   assert.deepEqual(fix.result.second_sweep_findings.map((f) => [f.id, f.unverified]), [['second:s1', true]]);
 
   const resumed = await runWorkflow(WF, {

@@ -10,7 +10,7 @@ const publishDone = args.done;
 // spec 3.1: {docs?, evidence?}, the sha each agent reported, never an empty one; on every result from here.
 // Only a hex sha goes in (spec 8); any other reported value blocks its id.
 const commits = {};
-const blockedAt = (id, reason) => ({ status: 'blocked', blocked: [{ id, reason }], commits });
+const blockedAt = (id, reason, cause) => ({ status: 'blocked', blocked: [blockedEntry(id, reason, cause)], commits });
 
 // spec "Phase results", the order of checks for a non-null docs or evidence result r: the agent's
 // own blocked status (its sha commit still recorded), then a reported non-sha commit.
@@ -38,7 +38,7 @@ phase('Docs');
 let docs = null;
 if (!publishDone.includes('docs')) {
   docs = await agent(docsPrompt(args), { schema: DOCS_SCHEMA, label: 'docs', phase: 'Docs' });
-  if (docs === null || docs === undefined) return blockedAt('docs', 'agent returned nothing');
+  if (docs === null || docs === undefined) return blockedAt('docs', NOTHING, 'nothing');
   const docsIssue = phaseIssue('docs', docs);
   if (docsIssue) return docsIssue;
 }
@@ -46,7 +46,7 @@ if (!publishDone.includes('docs')) {
 let evidence = null;
 if (!publishDone.includes('evidence')) {
   evidence = await agent(evidencePrompt(args), { schema: EVIDENCE_SCHEMA, label: 'evidence', phase: 'Docs' });
-  if (evidence === null || evidence === undefined) return blockedAt('evidence', 'agent returned nothing');
+  if (evidence === null || evidence === undefined) return blockedAt('evidence', NOTHING, 'nothing');
   const evidenceIssue = phaseIssue('evidence', evidence);
   if (evidenceIssue) return evidenceIssue;
 }
