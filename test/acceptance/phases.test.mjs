@@ -210,7 +210,7 @@ test('PHASES-06 a phase agent returning null blocks with "agent returned nothing
   for (const { id, run } of PHASES) {
     const { result, calls } = await run({ [id]: null });
     assert.equal(result.status, 'blocked', `${id}: ${JSON.stringify(result)}`);
-    assert.deepEqual(result.blocked, [{ id, reason: 'agent returned nothing' }], id);
+    assert.deepEqual(result.blocked, [{ id, reason: 'agent returned nothing', cause: 'nothing' }], id);
     assertStoppedAt(calls, id);
   }
 });

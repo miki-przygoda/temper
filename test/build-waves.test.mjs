@@ -192,7 +192,7 @@ test('a null at any later step is blocked with agent returned nothing', async ()
   ]) {
     const { result } = await runWorkflow(WF, { args: buildArgs(), respond: responder(over) });
     assert.equal(result.status, 'blocked', JSON.stringify(over));
-    assert.deepEqual(result.blocked, [{ id: 'a', reason: 'agent returned nothing' }], JSON.stringify(over));
+    assert.deepEqual(result.blocked, [{ id: 'a', reason: 'agent returned nothing', cause: 'nothing' }], JSON.stringify(over));
   }
 });
 

@@ -130,7 +130,7 @@ test('a verify that returns nothing keeps its finding unverified, never refuted'
   assert.equal(result.refuted, 0);
   assert.deepEqual(result.unverified.map((f) => [f.id, f.severity, f.unverified]), [['f2', 'important', true]]);
   // An unverified finding above minor leaves the list unclean, like a review that returns nothing.
-  assert.deepEqual(result.blocked, [{ id: 'verify:f2', reason: 'agent returned nothing' }]);
+  assert.deepEqual(result.blocked, [{ id: 'verify:f2', reason: 'agent returned nothing', cause: 'nothing' }]);
 });
 
 test('a sweep where every verify ran has no unverified findings', async () => {
@@ -185,7 +185,7 @@ test('a review that returns nothing is reported as blocked, never as a clean len
   const respond = (q) => (q.label === 'review:failure paths and lifecycle' ? null : base(q));
   const { result } = await runWorkflow(WF, { args: sweepArgs(), respond });
   assert.equal(result.status, 'list');
-  assert.deepEqual(result.blocked, [{ id: 'review:failure paths and lifecycle', reason: 'agent returned nothing' }]);
+  assert.deepEqual(result.blocked, [{ id: 'review:failure paths and lifecycle', reason: 'agent returned nothing', cause: 'nothing' }]);
 });
 
 test('a sweep where every review ran has nothing blocked', async () => {

@@ -9,7 +9,7 @@ You are the head session. This stage turns one epic's `spec.md` into `plan.md` a
 
 ## 0. Read the inputs
 
-- The state directory is `$CLAUDE_CONFIG_DIR/temper/` when `CLAUDE_CONFIG_DIR` is set and non-empty, else `~/.claude/temper/`. Read `<state>/preferences.md` (for `overnight_without_plan_review`) and `.temper/project.md` (for `specs_dir`, default `docs/temper`, plus `gate_quick`, `gate_full`, `host`, `host_clone`, `board`, `gate_slots`, `flaky` and the `## Build rule` section). If either is missing, invoke `temper:setup` first.
+- The state directory is `$CLAUDE_CONFIG_DIR/temper/` when `CLAUDE_CONFIG_DIR` is set and non-empty, else `~/.claude/temper/`. Read `<state>/preferences.md` (for `overnight_without_plan_review`) and `.temper/project.md` (for `specs_dir`, default `docs/temper`, plus `gate_quick`, `gate_full`, `host`, `host_clone`, `board`, `baseline`, `gate_baseline`, `impl_cause`, `owns_widen`, `owns_protected`, `gate_slots`, `flaky` and the `## Build rule` section). If either is missing, invoke `temper:setup` first.
 - Read `<specs_dir>/<epic>/spec.md`. If it has open questions, stop and invoke `temper:ground` for that epic instead: a spec is planned only when it has none.
 - Read `<specs_dir>/<epic>/research.md` and the epic's row and contracts in `<specs_dir>/epics.md`.
 - If `gate_quick` or `gate_full` is empty in `project.md`, ask the user for the commands and save them there before planning.
@@ -52,6 +52,9 @@ Write `<specs_dir>/<epic>/args.json`, following `${CLAUDE_PLUGIN_ROOT}/schemas/a
 - `build_rule`: the text of `project.md`'s `## Build rule` section without its HTML comment, trimmed, or `""` when it is empty or missing;
 - `flaky`: the `flaky:` line of `project.md`, split on commas and each name trimmed, empty names left out, or `[]` when the line is empty or missing. Write both fields every time, without asking the user: an empty value is a valid value;
 - `task_checks`: the `task_checks:` line of `project.md`, `each` or `none`; leave the field out when the line is missing or empty (the build then checks each task);
+- `baseline`: the `baseline:` line of `project.md`, `launch` or `off`, and `gates.baseline`: its `gate_baseline:` line; leave each out when its line is missing or empty. The `run` skill sets `tip` at each launch;
+- `impl_cause`: `true` when the `impl_cause:` line of `project.md` says so; otherwise leave it out;
+- `owns_widen`: `{"max": <the `owns_widen:` line>, "protected": <the `owns_protected:` line, split on commas and each glob trimmed>}`, with `max` at most 3, when the `owns_widen:` line has a number; leave it out when that line is missing or empty, whatever `owns_protected:` holds. Widening stays off until the project sets a number;
 - `tasks`: one entry per task, with `id`, `title`, `wave`, `owns`, `uses`, `provides` and `text` (the task's full section text);
 - `behaviour_groups`: `[{"key": …, "title": …}]` from the list;
 - `done`: `[]` for a new epic (the `run` skill refills it from the branch's trailers before every launch);
@@ -72,6 +75,8 @@ The build workflow checks `args.json` with `validateBuildArgs` and refuses to st
 - `build_rule` is a string and `flaky` an array of strings;
 - every behaviour group `key` matches the id pattern and has a `title`;
 - `gates.quick` and `gates.full` are non-empty and name no privileged command anywhere in them, even as an argument (spec 8; the validator refuses a gate that does, wherever the word is), and `host` is `local`, or `ssh` with a non-empty `name`, and a `root` and a `clone` that are both absolute or both `~/` paths, with the clone outside `<root>/<epic>/` once `.`, `..` and repeated slashes are collapsed.
+- `baseline` is `launch` or `off`, `gates.baseline` is non-empty and names no privileged command, and no task's `id` is `baseline` when `baseline` is `launch`;
+- `owns_widen.max` is 1, 2 or 3, and each `owns_widen.protected` glob is relative and uses only `*`, `**` and `?`;
 - `branch` is not the same as `base` or `default_branch`, however they are spelled (`refs/heads/main`, `origin/main` and `Main` all name `main`), since temper builds on its own epic branch and never merges into the base.
 
 When a rule fails, fix the plan, not the check: move a task to a later wave, split a file between tasks, or add the missing contract to an earlier task. Then regenerate `args.json` so the plan and `args.json` agree.

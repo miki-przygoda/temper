@@ -271,7 +271,7 @@ test("STABILISE-08 a regression agent that returns nothing blocks its fix as reg
     args: fixArgs({ selected: sel, sweeps: 1 }),
     respond: responder({ regress: (id) => (id === 'security-01' ? undefined : { status: 'done', regressions: [] }) }),
   });
-  assert.deepEqual(result.blocked, [{ id: 'regress:fix:security-01', reason: 'agent returned nothing' }]);
+  assert.deepEqual(result.blocked, [{ id: 'regress:fix:security-01', reason: 'agent returned nothing', cause: 'nothing' }]);
 });
 
 test('STABILISE-08 a second-sweep regression agent that returns nothing blocks its fix too', async () => {
@@ -286,7 +286,7 @@ test('STABILISE-08 a second-sweep regression agent that returns nothing blocks i
         regress: (id) => (id === 'second:security-07' ? undefined : { status: 'done', regressions: [] }),
       }),
     });
-    assert.deepEqual(result.blocked, [{ id: 'regress:fix:second:security-07', reason: 'agent returned nothing' }]);
+    assert.deepEqual(result.blocked, [{ id: 'regress:fix:second:security-07', reason: 'agent returned nothing', cause: 'nothing' }]);
   }
   // A second-sweep fix trailer with its saved findings lost: the committed fix is still checked.
   {
@@ -458,7 +458,7 @@ test("STABILISE-18 an unverified finding above minor blocks as verify:<id> (seco
         verdicts: { 'security-01': null, 'security-02': null },
       }),
     });
-    assert.deepEqual(result.blocked, [{ id: 'verify:security-01', reason: 'agent returned nothing' }]);
+    assert.deepEqual(result.blocked, [{ id: 'verify:security-01', reason: 'agent returned nothing', cause: 'nothing' }]);
   }
   {
     const { result } = await runWorkflow(WF, {
@@ -468,7 +468,7 @@ test("STABILISE-18 an unverified finding above minor blocks as verify:<id> (seco
         verdicts: { 'second:security-08': null, 'second:security-09': null },
       }),
     });
-    assert.deepEqual(result.blocked, [{ id: 'second:verify:second:security-08', reason: 'agent returned nothing' }]);
+    assert.deepEqual(result.blocked, [{ id: 'second:verify:second:security-08', reason: 'agent returned nothing', cause: 'nothing' }]);
     assert.notEqual(result.status, 'stable');
   }
 });
@@ -508,7 +508,7 @@ test('STABILISE-20 part sweep with a verifier that returned nothing: unverified 
   assert.equal(result.status, 'list');
   assert.deepEqual(result.findings.map((f) => f.id), ['security-01']);
   assert.deepEqual(result.unverified.map((f) => f.id), ['security-02']);
-  assert.deepEqual(result.blocked, [{ id: 'verify:security-02', reason: 'agent returned nothing' }]);
+  assert.deepEqual(result.blocked, [{ id: 'verify:security-02', reason: 'agent returned nothing', cause: 'nothing' }]);
 });
 
 test('STABILISE-21 a first-sweep blocked verify:<id> whose finding the user selected does not stop part fix; the finding is fixed', async () => {

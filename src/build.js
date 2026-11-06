@@ -2,8 +2,6 @@
 // The waves: per task implement -> check -> (one retry -> recheck), then one merge per wave.
 // A null agent result is always blocked ("agent returned nothing"), never done.
 
-const NOTHING = 'agent returned nothing';
-
 // spec 3.1: {[phaseId]: sha} for every phase agent that reported a commit; never an empty sha.
 // It goes on every result after validation, the blocked ones included. Only a hex sha goes in
 // (spec 8): recordCommit returns true for any other reported value, and the phase blocks.
@@ -19,24 +17,74 @@ function recordReruns(id, result) {
   flaky_reruns.push(...flakyRerunsOf(id, result));
 }
 
-function blockedEntry(id, reason) {
-  return { id, reason };
+// owns widening (opt-in, owns_widen). widened maps a task id to the paths it widened, in this run or,
+// from args.owns_widened, an earlier launch: a task gets one widening, however often it is relaunched.
+// owns_widened lists this run's, and goes on every result after validation while widening is on.
+const widened = new Map();
+const owns_widened = [];
+const widenExtra = () => (isWidenOn(args) ? { owns_widened } : {});
+
+// A grant the implementer or the merge then refused at a symlink. It stays listed, so the task can't ask
+// again, and marked, so the run skill keeps its paths out of owns. An agent's task id only ever matches here.
+function markRefused(id) {
+  for (const entry of owns_widened) {
+    if (entry.id === id) entry.refused = true;
+  }
+}
+
+// An implementer's own cause only under impl_cause, and only a listed one: agent text is data. `owns
+// symlink:` is the fixed question the widening prompts make it send when a path doesn't resolve to itself.
+function implCause(impl) {
+  const q = impl.question;
+  if (isWidenOn(args) && typeof q === 'string' && q.startsWith('owns symlink:')) return 'owns-refused';
+  return args.impl_cause === true && IMPL_CAUSES.includes(impl.cause) ? impl.cause : undefined;
 }
 
 // Turns an implementer result into a blocked entry, or null when it is done.
 function implBlocked(task, impl) {
-  if (impl === null || impl === undefined) return blockedEntry(task.id, NOTHING);
+  if (impl === null || impl === undefined) return nothingEntry(task.id);
   if (impl.status !== 'done') {
-    return blockedEntry(task.id, typeof impl.question === 'string' && impl.question !== '' ? impl.question : `implementer returned status ${impl.status}`);
+    const cause = implCause(impl);
+    if (cause === 'owns-refused') markRefused(task.id);
+    return blockedEntry(task.id, typeof impl.question === 'string' && impl.question !== '' ? impl.question : `implementer returned status ${impl.status}`, cause);
   }
   return null;
 }
 
 async function implement(task, retryReport) {
   const label = retryReport === undefined ? `impl:${task.id}` : `retry:${task.id}`;
-  const r = await agent(implementerPrompt(task, args, retryReport), { schema: IMPL_SCHEMA, label, phase: 'Waves' });
+  // A later launch or a retry keeps a held widening's on-disk check, as the widen:<id> run has it.
+  const held = heldWidened(task, widened.get(task.id) ?? []);
+  const r = await agent(implementerPrompt(task, args, retryReport, held.length > 0 ? held : undefined), { schema: implSchemaOf(args), label, phase: 'Waves' });
   recordReruns(label, r);
   return r;
+}
+
+// Settles an implementer result into {task, impl, blocked}. Only with widening on and status needs_owns
+// does anything happen here: a refusal blocks; a grant widens this run's copy of the task (args stay as
+// given), logs it, and runs the implementer once more as widen:<id>. The check and the grant sit in one
+// synchronous stretch, so two tasks of a wave can't both be granted a path.
+async function settleImpl(task, impl, retryReport) {
+  if (!isWidenOn(args) || !impl || impl.status !== 'needs_owns') return { task, impl, blocked: implBlocked(task, impl) };
+  if (widened.has(task.id)) {
+    return { task, impl, blocked: blockedEntry(task.id, 'a second needs_owns: this task already widened its owns once', 'owns') };
+  }
+  const decision = widenDecision(task, impl.owns_add, args, widened);
+  if (decision.refused !== undefined) {
+    log(`owns_refused:${task.id}`);
+    return { task, impl, blocked: blockedEntry(task.id, `owns widening refused: ${decision.refused}`, 'owns-refused') };
+  }
+  widened.set(task.id, decision.paths);
+  owns_widened.push({ id: task.id, paths: decision.paths, why: decision.why });
+  log(`owns_widened:${task.id}:${decision.paths.join(',')}`);
+  const wider = { ...task, owns: [...task.owns, ...decision.paths] };
+  const label = `widen:${task.id}`;
+  const again = await agent(implementerPrompt(wider, args, retryReport, decision.paths), { schema: implSchemaOf(args), label, phase: 'Waves' });
+  recordReruns(label, again);
+  if (again && again.status === 'needs_owns') {
+    return { task: wider, impl: again, blocked: blockedEntry(task.id, 'a second needs_owns: this task already widened its owns once', 'owns') };
+  }
+  return { task: wider, impl: again, blocked: implBlocked(wider, again) };
 }
 
 async function check(task, impl, label) {
@@ -51,8 +99,7 @@ function problemsOf(result) {
 
 // Pipeline stages. Each passes on {task, impl?, check?, blocked?}; a blocked state skips the later stages.
 async function implStage(task) {
-  const impl = await implement(task);
-  return { task, impl, blocked: implBlocked(task, impl) };
+  return settleImpl(task, await implement(task));
 }
 
 // A checker that returned blocked (its throwaway worktree could not be used, for one) never
@@ -66,69 +113,114 @@ async function checkStage(state) {
   if (state.blocked) return state;
   const label = `check:${state.task.id}`;
   const result = await check(state.task, state.impl, label);
-  if (result === null || result === undefined) return { ...state, blocked: blockedEntry(state.task.id, NOTHING) };
+  if (result === null || result === undefined) return { ...state, blocked: nothingEntry(state.task.id) };
   return { ...state, check: result, blocked: checkBlocked(label, result) };
 }
 
 async function retryStage(state) {
   if (state.blocked || state.check.pass === true) return state;
-  const { task } = state;
-  const impl = await implement(task, problemsOf(state.check).join('\n'));
-  const blocked = implBlocked(task, impl);
-  if (blocked) return { ...state, impl, blocked };
+  const report = problemsOf(state.check).join('\n');
+  const { task, impl, blocked } = await settleImpl(state.task, await implement(state.task, report), report);
+  if (blocked) return { ...state, task, impl, blocked };
   const label = `recheck:${task.id}`;
   const result = await check(task, impl, label);
-  if (result === null || result === undefined) return { ...state, impl, blocked: blockedEntry(task.id, NOTHING) };
+  if (result === null || result === undefined) return { ...state, task, impl, blocked: nothingEntry(task.id) };
   const recheckBlocked = checkBlocked(label, result);
-  if (recheckBlocked) return { ...state, impl, check: result, blocked: recheckBlocked };
+  if (recheckBlocked) return { ...state, task, impl, check: result, blocked: recheckBlocked };
   if (result.pass !== true) {
-    return { ...state, impl, check: result, blocked: blockedEntry(task.id, `failed the check twice: ${problemsOf(result).join('; ')}`) };
+    return { ...state, task, impl, check: result, blocked: blockedEntry(task.id, `failed the check twice: ${problemsOf(result).join('; ')}`) };
   }
-  return { ...state, impl, check: result };
+  return { ...state, task, impl, check: result };
 }
 
+// The cause is read from the fields the merge prompt asks for. Its prompt sends a failed gate back as
+// status blocked with gate_passed false, so a blocked merge with no conflict counts as gate-after-merge;
+// that also covers a merge agent blocked for another reason, whose result looks the same.
 function mergeBlocked(id, merge) {
-  if (merge === null || merge === undefined) return blockedEntry(id, NOTHING);
+  if (merge === null || merge === undefined) return nothingEntry(id);
+  const refused = Array.isArray(merge.owns_refused) ? merge.owns_refused.filter(isObject) : [];
+  if (refused.length > 0) {
+    for (const r of refused) markRefused(r.task);
+    return blockedEntry(id, `widened path refused at merge: ${refused.map((r) => `task ${r.task}: ${r.path}: ${r.why}`).join('; ')}`, 'owns-refused');
+  }
   if (merge.status !== 'merged') {
     const c = merge.conflict;
-    const reason = c && typeof c === 'object'
-      ? `merge conflict on task ${c.task}: ${Array.isArray(c.files) ? c.files.join(', ') : ''}`
-      : `merge returned status ${merge.status}`;
-    return blockedEntry(id, reason);
+    if (c && typeof c === 'object') {
+      return blockedEntry(id, `merge conflict on task ${c.task}: ${Array.isArray(c.files) ? c.files.join(', ') : ''}`, 'merge-conflict');
+    }
+    return blockedEntry(id, `merge returned status ${merge.status}`, merge.gate_passed === false ? 'gate-after-merge' : undefined);
   }
-  if (merge.gate_passed !== true) return blockedEntry(id, 'the quick gate failed after a merge');
+  if (merge.gate_passed !== true) return blockedEntry(id, 'the quick gate failed after a merge', 'gate-after-merge');
   return null;
 }
 
-// Runs every wave in order. Returns a blocked result, or null when all waves merged.
+// Whether two spellings name one commit: agent text is checked as a sha first, and a short args.tip
+// matches the full sha the agent reports.
+const sameSha = (a, b) => isSha(a) && isSha(b) && (a.startsWith(b) || b.startsWith(a));
+
+// The tip check (baseline: launch). Returns a blocked build result, or null when the tip is green.
+async function runBaseline(doneNow) {
+  const r = await agent(baselinePrompt(args), { schema: BASELINE_SCHEMA, label: 'baseline', phase: 'Waves' });
+  recordReruns('baseline', r);
+  if (r === null || r === undefined) return phaseBlocked('baseline', NOTHING, doneNow, 'nothing');
+  const reason = phaseBlockedReason(r);
+  if (reason !== null) return phaseBlocked('baseline', reason, doneNow);
+  if (!sameSha(r.tip, args.tip)) {
+    return phaseBlocked('baseline', `the branch tip is ${quoted(r.tip)}, and this launch was for ${args.tip}`, doneNow, 'tip-mismatch');
+  }
+  if (r.passed !== true || r.exit_status !== 0) {
+    return phaseBlocked('baseline', `the gate failed on tip ${args.tip} (exit status ${r.exit_status}): failed ${arr(r.failed).join(', ') || 'none named'}; log ${r.log_path}`, doneNow, 'base-red');
+  }
+  log(`baseline: ${args.tip} is green`);
+  return null;
+}
+
+const stoppedAt = (at, doneNow) => ({ status: 'stopped', at, done_now: doneNow, commits, flaky_reruns, ...widenExtra() });
+
+// Runs every wave in order. Returns a blocked or stopped result, or null when all waves merged.
 // A blocked wave still merges the tasks that passed and lists them in done_now (A9).
 async function runWaves(doneNow) {
   phase('Waves');
+  let baselineDue = args.baseline === 'launch';
   for (const { wave, tasks } of wavesOf(args.tasks)) {
     const todo = pending(tasks, args.done);
     if (todo.length === 0) {
       log(`wave ${wave}: every task already done`);
+      if (args.stop_after === `wave:${wave}`) return stoppedAt(args.stop_after, doneNow);
       continue;
+    }
+    if (baselineDue) {
+      baselineDue = false;
+      const red = await runBaseline(doneNow);
+      if (red) return red;
     }
     log(`wave ${wave}: ${todo.map((t) => t.id).join(', ')}`);
     const stages = args.task_checks === 'none' ? [implStage] : [implStage, checkStage, retryStage];
-    const states = await pipeline(todo, ...stages);
+    // One pipeline per chunk of gateSlotsOf(args), as regressEach in stabilise.js; with no gate_slots
+    // the size is Infinity and the whole wave is one pipeline. One merge per wave either way.
+    const size = gateSlotsOf(args);
+    const states = [];
+    for (let start = 0; start < todo.length; start += size) {
+      states.push(...await pipeline(todo.slice(start, start + size), ...stages));
+    }
     const blocked = [];
     const passed = [];
     states.forEach((s, i) => {
-      if (s === null || s === undefined) blocked.push(blockedEntry(todo[i].id, NOTHING));
+      if (s === null || s === undefined) blocked.push(nothingEntry(todo[i].id));
       else if (s.blocked) blocked.push(s.blocked);
       else passed.push(s.task);
     });
     if (passed.length > 0) {
       const id = `merge:wave${wave}`;
-      const merge = await agent(mergePrompt(passed, args), { schema: MERGE_SCHEMA, label: id, phase: 'Waves' });
+      const widenedHere = passed.filter((t) => widened.has(t.id)).map((t) => ({ task: t, paths: widened.get(t.id) }));
+      const merge = await agent(mergePrompt(passed, args, widenedHere), { schema: widenedHere.length > 0 ? MERGE_SCHEMA_WIDEN : MERGE_SCHEMA, label: id, phase: 'Waves' });
       recordReruns(id, merge);
       const mergeIssue = mergeBlocked(id, merge);
       if (mergeIssue) blocked.push(mergeIssue);
       else doneNow.push(...passed.map((t) => t.id));
     }
-    if (blocked.length > 0) return { status: 'blocked', wave, blocked, done_now: doneNow, commits, flaky_reruns };
+    if (blocked.length > 0) return { status: 'blocked', wave, blocked, done_now: doneNow, commits, flaky_reruns, ...widenExtra() };
+    if (args.stop_after === `wave:${wave}`) return stoppedAt(args.stop_after, doneNow);
   }
   return null;
 }
@@ -141,8 +233,8 @@ const MAX_GREEN_ROUNDS = 2;
 const isDone = (id) => args.done.includes(id);
 const arr = (v) => (Array.isArray(v) ? v : []);
 
-function phaseBlocked(id, reason, doneNow) {
-  return { status: 'blocked', blocked: [blockedEntry(id, reason)], done_now: doneNow, commits, flaky_reruns };
+function phaseBlocked(id, reason, doneNow, cause) {
+  return { status: 'blocked', blocked: [blockedEntry(id, reason, cause)], done_now: doneNow, commits, flaky_reruns, ...widenExtra() };
 }
 
 // spec "Phase results", the order of checks for a non-null phase result r: the agent's own blocked
@@ -166,7 +258,7 @@ async function runCheckpoint(doneNow) {
   }
   phase('Checkpoint');
   const cp = await agent(checkpointPrompt(args), { schema: CHECKPOINT_SCHEMA, label: 'checkpoint', phase: 'Checkpoint' });
-  if (cp === null || cp === undefined) return { blocked: phaseBlocked('checkpoint', NOTHING, doneNow) };
+  if (cp === null || cp === undefined) return { blocked: phaseBlocked('checkpoint', NOTHING, doneNow, 'nothing') };
   const cpIssue = phaseIssue('checkpoint', cp, doneNow);
   if (cpIssue) return { blocked: cpIssue };
   if (cp.gate_passed !== true) return { blocked: phaseBlocked('checkpoint', 'full gate failed: ' + cp.gate_log, doneNow) };
@@ -184,7 +276,7 @@ async function runBehaviourSpec(doneNow) {
   }
   phase('Behaviour');
   const b = await agent(behaviourSpecPrompt(args), { schema: BEHAVIOUR_SCHEMA, label: 'behaviour-spec', phase: 'Behaviour' });
-  if (b === null || b === undefined) return { blocked: phaseBlocked('behaviour-spec', NOTHING, doneNow) };
+  if (b === null || b === undefined) return { blocked: phaseBlocked('behaviour-spec', NOTHING, doneNow, 'nothing') };
   const bIssue = phaseIssue('behaviour-spec', b, doneNow);
   if (bIssue) return { blocked: bIssue };
   return { groups: arr(b.groups) };
@@ -204,7 +296,7 @@ async function runAcceptance(groups, doneNow) {
     const spec = groups.find((g) => g && g.key === group.key);
     const behaviours = spec ? arr(spec.behaviours) : [];
     const r = await agent(acceptancePrompt(group, behaviours, args), { schema: ACCEPTANCE_SCHEMA, label: id, phase: 'Behaviour' });
-    if (r === null || r === undefined) return { blocked: phaseBlocked(id, NOTHING, doneNow) };
+    if (r === null || r === undefined) return { blocked: phaseBlocked(id, NOTHING, doneNow, 'nothing') };
     const issue = phaseIssue(id, r, doneNow);
     if (issue) return { blocked: issue };
     out.passing += arr(r.passing).length;
@@ -229,7 +321,7 @@ async function runGreen(failing, markedToo, doneNow) {
       continue;
     }
     const g = await agent(greenPrompt(left, r, args, markedToo), { schema: GREEN_SCHEMA, label: id, phase: 'Green' });
-    if (g === null || g === undefined) return { blocked: phaseBlocked(id, NOTHING, doneNow) };
+    if (g === null || g === undefined) return { blocked: phaseBlocked(id, NOTHING, doneNow, 'nothing') };
     recordReruns(id, g);
     const issue = phaseIssue(id, g, doneNow);
     if (issue) return { blocked: issue };
@@ -251,18 +343,26 @@ async function runGreen(failing, markedToo, doneNow) {
 const errors = validateBuildArgs(args);
 if (errors.length > 0) return { status: 'invalid', errors };
 
+if (isWidenOn(args)) {
+  for (const { id, paths } of args.owns_widened ?? []) widened.set(id, [...(widened.get(id) ?? []), ...paths]);
+}
+
 const done_now = [];
-const wavesBlocked = await runWaves(done_now);
-if (wavesBlocked) return wavesBlocked;
+const wavesEnded = await runWaves(done_now);
+if (wavesEnded) return wavesEnded;
+if (args.stop_after === 'waves') return stoppedAt('waves', done_now);
 
 const cp = await runCheckpoint(done_now);
 if (cp.blocked) return cp.blocked;
+if (args.stop_after === 'checkpoint') return stoppedAt('checkpoint', done_now);
 
 const behaviourSpec = await runBehaviourSpec(done_now);
 if (behaviourSpec.blocked) return behaviourSpec.blocked;
+if (args.stop_after === 'behaviour-spec') return stoppedAt('behaviour-spec', done_now);
 
 const acc = await runAcceptance(behaviourSpec.groups, done_now);
 if (acc.blocked) return acc.blocked;
+if (args.stop_after === 'acceptance') return stoppedAt('acceptance', done_now);
 
 const green = await runGreen(acc.failing, acc.earlier, done_now);
 if (green.blocked) return green.blocked;
@@ -277,4 +377,5 @@ return {
   done_now,
   commits,
   flaky_reruns,
+  ...widenExtra(),
 };

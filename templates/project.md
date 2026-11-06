@@ -27,6 +27,16 @@ gate_slots:
 task_checks:
 # Known flaky tests, comma-separated, named as the test runner prints them; a quick gate that fails only on these is rerun once.
 flaky:
+# Check the epic branch's tip before the first wave with pending tasks: launch or off. A red tip blocks before any task starts. Empty means off.
+baseline:
+# The gate that check runs, when it should differ from gate_quick (the whole quick set, say, without fail-fast). Empty means gate_quick.
+gate_baseline:
+# Let a blocked implementer name its cause (owns, dependency, contract, tests, privileged, security, spec, other): true or empty.
+impl_cause:
+# Let an implementer ask for files outside its Owns once per task: the most paths per task, 1 to 3. Empty means off.
+owns_widen:
+# Paths widening may never reach, comma-separated, e.g. package-lock.json, migrations/**, settings/*.sample.ini, **/keyring*. Only * ** and ?; a name with no slash means the repo root.
+owns_protected:
 ---
 
 # Project settings for temper

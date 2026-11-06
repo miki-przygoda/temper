@@ -53,6 +53,7 @@ In this order:
 2. Then `git branch -d <branch>`. Never `-D`. If `-d` refuses, stop for that branch and tell the user.
 3. For a detached worktree whose check exited 0, `git worktree remove <path>` (on the host over ssh for an ssh worktree), never `--force`. There is no branch to delete. A detached worktree is removed only on exit 0.
 4. When every worktree under the host's `<root>/<epic>/` has passed and been removed, delete that per-epic build directory on the host with `rmdir`, which fails unless it is empty. Run, in order: `ssh <host> 'rmdir <root>/<epic>/tmp'` when `<root>/<epic>/tmp` exists, then `ssh <host> 'rmdir <root>/<epic>'` (amendment A8). If any worktree under it failed its check, nothing is deleted there. Never delete it recursively: if `rmdir` refuses, something other than a passed worktree is still in it, so leave it and tell the user. The host clone lies outside it (A7) and is never deleted.
+5. When every worktree of the epic has passed and been removed, delete the epic's baseline log with `rm -f`, on the host over ssh for an ssh host: `.temper/worktrees/<epic>.baseline.log`, or `<root>/<epic>.baseline.log`. It is a gate's log and holds no work.
 
 Never delete a remote branch, and never work around a refusal: no `--force`, no `-D`, no `rm` of a worktree or of the epic directory, no `git reset` or `git clean` to make a check pass. When a check says exit 1, nothing is deleted and the user decides what to do with the work.
 

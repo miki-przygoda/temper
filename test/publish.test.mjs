@@ -97,7 +97,7 @@ test('a docs or evidence agent that returns nothing blocks the run before the ga
   for (const id of ['docs', 'evidence']) {
     const { result, calls } = await runWorkflow(WF, { args: args(), respond: responder({ [id]: null }) });
     assert.equal(result.status, 'blocked', id);
-    assert.deepEqual(result.blocked, [{ id, reason: 'agent returned nothing' }]);
+    assert.deepEqual(result.blocked, [{ id, reason: 'agent returned nothing', cause: 'nothing' }]);
     assert.ok(!labels(calls).includes('gate'), id);
   }
 });

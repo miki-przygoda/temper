@@ -34,12 +34,13 @@ function badValues(node) {
   if (node.minimum !== undefined) out.push(['below the minimum', node.minimum - 1]);
   if (node.pattern !== undefined) out.push(['not matching its pattern', 'Not A_Pattern']);
   if (node.const !== undefined) out.push(['not its const', `${node.const}-other`]);
+  if (node.enum !== undefined) out.push(['not in its enum', `${node.enum[0]}-other`]);
   return out;
 }
 
 // A valid sample for a plain string or array-of-strings node with no other constraints; else undefined.
 function sampleFor(node) {
-  const plain = (n) => n && n.type === 'string' && n.pattern === undefined && n.const === undefined;
+  const plain = (n) => n && n.type === 'string' && n.pattern === undefined && n.const === undefined && n.enum === undefined;
   if (plain(node)) return 'x';
   if (node.type === 'array' && plain(node.items)) return ['x'];
   return undefined;

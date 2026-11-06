@@ -60,7 +60,7 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
   let refuted = 0;
   for (const [i, lensResult] of perLens.entries()) {
     if (!lensResult) {
-      blocked.push({ id: `${labelPrefix}review:${lenses[i]}`, reason: 'agent returned nothing' });
+      blocked.push(nothingEntry(`${labelPrefix}review:${lenses[i]}`));
       continue;
     }
     if (lensResult.reviewBlocked) {
@@ -94,7 +94,9 @@ async function sweepAndVerify(lenses, alreadyFixed, labelPrefix) {
   const findings = sortFindings(dedupeFindings(kept));
   const unverified = sortFindings(dedupeAgainst(dedupeFindings(raw), findings)).map((f) => ({ ...f, unverified: true }));
   for (const f of unverified) {
-    if (f.severity !== 'minor') blocked.push({ id: `${labelPrefix}verify:${f.id}`, reason: verifyReasons.get(f.id) ?? 'agent returned nothing' });
+    if (f.severity === 'minor') continue;
+    const id = `${labelPrefix}verify:${f.id}`;
+    blocked.push(verifyReasons.has(f.id) ? blockedEntry(id, verifyReasons.get(f.id)) : nothingEntry(id));
   }
   return { findings, refuted, blocked, unverified };
 }
@@ -135,7 +137,7 @@ async function fixLoop(findings, out) {
     out.flaky_reruns.push(...flakyRerunsOf(`fix:${f.id}`, r));
     // spec 3.1, 8: the sha each fix agent reported, only a hex sha; any other value blocks the fix.
     if (recordSha(out.commits, `fix:${f.id}`, r)) out.blocked.push({ id: f.id, reason: NOT_A_SHA });
-    else if (!r) out.blocked.push({ id: f.id, reason: 'agent returned nothing' });
+    else if (!r) out.blocked.push(nothingEntry(f.id));
     else if (r.status === 'fixed') { out.fixed.push(f.id); handled.push(f.id); }
     else if (r.status === 'reverted') out.reverted.push(f.id);
     else if (r.status === 'contract') out.contract_items.push(f.id);
@@ -172,7 +174,7 @@ async function regressEach(ids, phaseTitle = 'Fix') {
   const regressions = [];
   const blocked = [];
   for (const [i, r] of results.entries()) {
-    if (!r) blocked.push({ id: `regress:fix:${ids[i]}`, reason: 'agent returned nothing' });
+    if (!r) blocked.push(nothingEntry(`regress:fix:${ids[i]}`));
     else if (phaseBlockedReason(r) !== null) blocked.push({ id: `regress:fix:${ids[i]}`, reason: phaseBlockedReason(r) });
     else if (Array.isArray(r.regressions)) regressions.push(...r.regressions);
   }
@@ -251,7 +253,7 @@ if (savedSecond) {
   secondFindings = sortFindings(savedSecond.filter((f) => f.unverified !== true));
   unverified = sortFindings(savedSecond.filter((f) => f.unverified === true));
   const unclean = unverified.filter((f) => f.severity !== 'minor');
-  out.blocked.push(...unclean.map((f) => ({ id: `second:verify:${f.id}`, reason: 'agent returned nothing' })));
+  out.blocked.push(...unclean.map((f) => nothingEntry(`second:verify:${f.id}`)));
   unreviewed = unclean.length > 0;
 } else {
   const alreadyFixed = [...doneIds(toFix), ...out.fixed];

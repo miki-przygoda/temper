@@ -200,7 +200,7 @@ test('a phase agent that returns nothing is blocked, never done (Review Focus 1)
   ]) {
     const { result, calls } = await runWorkflow(WF, { args: buildArgs(), respond: responder(over) });
     assert.equal(result.status, 'blocked', label);
-    assert.deepEqual(result.blocked, [{ id: label, reason: 'agent returned nothing' }], label);
+    assert.deepEqual(result.blocked, [{ id: label, reason: 'agent returned nothing', cause: 'nothing' }], label);
     assert.equal(labels(calls).at(-1), label, `nothing runs after ${label}`);
   }
 });
