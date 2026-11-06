@@ -658,9 +658,9 @@ test('the run skill handles stopped, baseline, causes and widening', () => {
   assert.match(s, /`owns-refused`[^.]*user/);
 });
 
-test('the changelog has an Unreleased section that lists task_checks and every new field', () => {
+test('the changelog section for 0.4.0 lists task_checks and every new field', () => {
   const text = read('CHANGELOG.md');
-  const i = text.indexOf('## Unreleased');
+  const i = text.indexOf('## 0.4.0 (');
   assert.ok(i > 0);
   const section = text.slice(i, text.indexOf('## 0.3.1'));
   for (const k of ['task_checks', 'stop_after', 'gate_slots', 'run_script.py', 'blocks_report.py', 'cause', 'baseline', 'owns_widen']) assert.ok(section.includes(k), k);

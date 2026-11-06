@@ -100,7 +100,7 @@ In your project, after `/temper:setup`:
 
 ## Status
 
-v0.3.1, early. temper has done real jobs:
+v0.4.0, early. temper has done real jobs:
 - a 29-task epic in a Rust project, built on an ssh build host from plan to a merged PR;
 - its own v0.2 and v0.3.
 

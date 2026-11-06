@@ -2,7 +2,7 @@
 
 Each release's full record is in `docs/temper/<version>/` (spec, plan, log and PR body), and the design changes are the amendments in `docs/specs/2026-10-24-temper-design.md`.
 
-## Unreleased
+## 0.4.0 (6 Nov 2026)
 
 Every addition is opt-in. With none of the new fields, every prompt and schema is byte-identical to the previous commit's, so runs in flight keep their resume caches. One thing changes with no field: blocked entries gain `cause`. Upgrade between runs.
 
